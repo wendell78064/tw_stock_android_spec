@@ -1,0 +1,64 @@
+name: tw-market-ledger
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: twstock
+      POSTGRES_USER: twstock
+      POSTGRES_PASSWORD: twstock
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U twstock -d twstock"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: INFO
+      DATABASE_URL: postgresql+asyncpg://twstock:twstock@postgres:5432/twstock
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  android-builder:
+    image: ghcr.io/cirruslabs/android-sdk:35
+    profiles: ["build"]
+    working_dir: /workspace/android-app
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+
+volumes:
+  postgres-data:
+  redis-data:
+  gradle-cache:

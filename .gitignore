@@ -1,0 +1,11 @@
+.env
+.idea/
+.gradle/
+**/build/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+*.pyc
+backend/.venv/
+
