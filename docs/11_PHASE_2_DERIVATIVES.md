@@ -55,4 +55,8 @@ Backend fixture 測試涵蓋 mapping、schema guard、ingestion 冪等、契約�
 
 ## 驗證紀錄
 
-本節在本機全套驗證及 GitHub API 35 x86_64 `android-instrumentation` 綠燈後補入 run date 與 workflow link。
+2026-08-10 驗證結果：Backend Ruff 與 32 項 Pytest、Docker image、OpenAPI validation／Kotlin generation、Android lint／unit tests／Debug APK／instrumentation APK、Alembic downgrade/upgrade、PostgreSQL／Redis／Backend health、60+ 交易日 Fake backfill、API smoke 與索引查詢計畫均通過。
+
+GitHub Actions API 35 x86_64 emulator 的 `connectedDebugAndroidTest` 已通過；run #6：<https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31354579169>。
+
+封版 Gate 尚未全部通過：TAIFEX 官方 OpenAPI 沒有可合法保存的 TAIWAN VIX 歷史端點；TWSE 公開 OpenAPI 目前僅揭示「當日可借券賣出股數」，不足以當成借券成交／餘額歷史。兩者維持 unavailable，未使用爬蟲或 Fake 冒充正式資料，因此尚未建立 `phase-2-slice-2-complete` tag。

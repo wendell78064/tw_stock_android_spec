@@ -2,7 +2,7 @@
 
 ## Phase 2／Slice 2：臺灣衍生品日資料
 
-狀態：**實作完成，等待完整本機與 GitHub instrumentation 封版驗證。**
+狀態：**核心實作與 GitHub instrumentation 已通過；等待授權 VIX 與 TWSE 借券歷史來源後封版。**
 
 - TAIFEX TX/MTX/TMF/TE/TF 實際契約、日 OHLC/volume/OI 與基差。
 - 法人期貨部位、Top 5/10 集中度、TXO Put/Call、履約價 OI 與 Max Pain。
