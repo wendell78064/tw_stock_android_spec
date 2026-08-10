@@ -50,6 +50,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MarketOverviewEnvelope"
+  /market/indexes:
+    get:
+      operationId: getMarketIndexes
+      tags: [Market]
+      responses:
+        "200": { description: Latest TAIEX and OTC index records }
+  /market/indexes/{indexCode}:
+    get:
+      operationId: getMarketIndex
+      tags: [Market]
+      parameters:
+        - { in: path, name: indexCode, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Latest market index }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /market/indexes/{indexCode}/candles:
+    get:
+      operationId: getMarketIndexCandles
+      tags: [Market]
+      parameters:
+        - { in: path, name: indexCode, required: true, schema: { type: string } }
+        - { in: query, name: range, schema: { type: string, enum: [5D, 10D, 30D, 1Y, 5Y], default: 30D } }
+      responses:
+        "200": { description: Daily index candles }
+  /market/breadth:
+    get:
+      operationId: getMarketBreadth
+      tags: [Market]
+      parameters:
+        - { in: query, name: market, schema: { $ref: "#/components/schemas/MarketCode" } }
+        - { in: query, name: date, schema: { type: string, format: date } }
+        - { in: query, name: from, schema: { type: string, format: date } }
+        - { in: query, name: to, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Market breadth series }
+  /market/institutional/spot:
+    get:
+      operationId: getMarketInstitutionalSpot
+      tags: [Market]
+      parameters:
+        - { in: query, name: market, required: true, schema: { $ref: "#/components/schemas/MarketCode" } }
+        - { $ref: "#/components/parameters/TradingWindow" }
+        - { in: query, name: institution, schema: { $ref: "#/components/schemas/InstitutionType" } }
+      responses:
+        "200": { description: Market institutional spot series }
+  /market/credit:
+    get:
+      operationId: getMarketCredit
+      tags: [Market]
+      parameters:
+        - { in: query, name: market, required: true, schema: { $ref: "#/components/schemas/MarketCode" } }
+        - { $ref: "#/components/parameters/TradingWindow" }
+      responses:
+        "200": { description: "Market margin, short and lending series" }
   /securities/search:
     get:
       operationId: searchSecurities
@@ -222,10 +276,12 @@ paths:
           $ref: "#/components/responses/NotFound"
   /securities/{code}/institutional:
     get:
+      operationId: getSecurityInstitutionalSpot
       tags: [Securities]
       summary: Get spot institutional trading
       parameters:
         - $ref: "#/components/parameters/SecurityCode"
+        - { in: query, name: market, required: true, schema: { $ref: "#/components/schemas/MarketCode" } }
         - in: query
           name: window
           schema:
@@ -241,10 +297,13 @@ paths:
                 $ref: "#/components/schemas/InstitutionSeriesEnvelope"
   /securities/{code}/credit:
     get:
+      operationId: getSecurityCredit
       tags: [Securities]
       summary: Get margin, short and lending data
       parameters:
         - $ref: "#/components/parameters/SecurityCode"
+        - { in: query, name: market, required: true, schema: { $ref: "#/components/schemas/MarketCode" } }
+        - { $ref: "#/components/parameters/TradingWindow" }
       responses:
         "200":
           description: Credit trading snapshot
@@ -456,6 +515,10 @@ components:
       schema:
         type: string
         pattern: "^[A-Za-z0-9.-]{2,16}$"
+    TradingWindow:
+      in: query
+      name: window
+      schema: { type: integer, enum: [1, 5, 10, 20, 60], default: 20 }
     PortfolioId:
       in: path
       name: portfolioId
@@ -486,6 +549,9 @@ components:
     MarketCode:
       type: string
       enum: [TWSE, TPEX]
+    InstitutionType:
+      type: string
+      enum: [FOREIGN, INVESTMENT_TRUST, DEALER, TOTAL]
     SecurityType:
       type: string
       enum: [COMMON_STOCK]

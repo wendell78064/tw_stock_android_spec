@@ -98,12 +98,46 @@ interface ChartDao {
     suspend fun technicals(market: String, code: String, basis: String): List<TechnicalEntity>
 }
 
+@Entity(tableName = "market_index_cache", primaryKeys = ["code", "tradeDate"])
+data class MarketIndexEntity(val code: String, val name: String, val market: String, val tradeDate: String,
+    val open: String?, val high: String?, val low: String?, val close: String?, val change: String?,
+    val changePercent: String?, val turnoverAmount: String?, val volume: Long?, val asOf: String,
+    val dataStatus: String)
+@Entity(tableName = "market_breadth_cache", primaryKeys = ["market", "tradeDate"])
+data class MarketBreadthEntity(val market: String, val tradeDate: String, val advancers: Int?,
+    val decliners: Int?, val unchanged: Int?, val limitUp: Int?, val limitDown: Int?,
+    val totalTraded: Int?, val turnoverAmount: String?, val asOf: String, val dataStatus: String)
+@Entity(tableName = "institutional_cache", primaryKeys = ["dataset", "market", "security", "window", "tradeDate", "institution", "dealerSubtype"])
+data class InstitutionalEntity(val dataset: String, val market: String, val security: String,
+    val window: Int, val tradeDate: String, val institution: String, val dealerSubtype: String,
+    val buy: String?, val sell: String?, val net: String?, val cumulativeNet: String?,
+    val consecutiveDays: Int, val asOf: String, val dataStatus: String)
+@Entity(tableName = "credit_cache", primaryKeys = ["dataset", "market", "security", "window", "tradeDate"])
+data class CreditEntity(val dataset: String, val market: String, val security: String, val window: Int,
+    val tradeDate: String, val balance: Long?, val change: Long?, val secondaryBalance: Long?,
+    val secondaryChange: Long?, val ratio: String?, val asOf: String, val dataStatus: String)
+
+@Dao
+interface MarketDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertIndexes(items: List<MarketIndexEntity>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertBreadth(items: List<MarketBreadthEntity>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertInstitutional(items: List<InstitutionalEntity>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertCredit(items: List<CreditEntity>)
+    @Query("SELECT * FROM market_index_cache WHERE tradeDate=(SELECT MAX(tradeDate) FROM market_index_cache) ORDER BY code") suspend fun latestIndexes(): List<MarketIndexEntity>
+    @Query("SELECT * FROM market_breadth_cache WHERE tradeDate=(SELECT MAX(tradeDate) FROM market_breadth_cache) ORDER BY market") suspend fun latestBreadth(): List<MarketBreadthEntity>
+    @Query("SELECT * FROM institutional_cache WHERE dataset=:dataset AND market=:market AND security=:security AND window=:window ORDER BY tradeDate,institution,dealerSubtype") suspend fun institutional(dataset: String, market: String, security: String, window: Int): List<InstitutionalEntity>
+    @Query("SELECT * FROM credit_cache WHERE dataset=:dataset AND market=:market AND security=:security AND window=:window ORDER BY tradeDate") suspend fun credit(dataset: String, market: String, security: String, window: Int): List<CreditEntity>
+}
+
 @Database(
-    entities = [SecurityEntity::class, CandleEntity::class, TechnicalEntity::class],
-    version = 2,
+    entities = [SecurityEntity::class, CandleEntity::class, TechnicalEntity::class,
+        MarketIndexEntity::class, MarketBreadthEntity::class, InstitutionalEntity::class,
+        CreditEntity::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class TWMarketDatabase : RoomDatabase() {
     abstract fun securityDao(): SecurityDao
     abstract fun chartDao(): ChartDao
+    abstract fun marketDao(): MarketDao
 }

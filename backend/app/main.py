@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.health import router as health_router
+from app.api.market import router as market_router
 from app.api.securities import router as securities_router
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging
@@ -22,6 +23,7 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    app.state.redis = redis
     app.state.readiness_checker = ReadinessChecker(engine, redis)
     app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
     yield
@@ -33,6 +35,7 @@ app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_exception_handler(AppError, app_error_handler)
 app.include_router(health_router, prefix="/v1")
 app.include_router(securities_router, prefix="/v1")
+app.include_router(market_router, prefix="/v1")
 
 
 @app.middleware("http")

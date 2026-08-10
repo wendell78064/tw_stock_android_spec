@@ -16,9 +16,10 @@ from app.api.schemas import (
     TechnicalSeriesEnvelope,
     meta_for,
 )
-from app.core.dependencies import price_repository, security_repository
+from app.core.dependencies import market_spot_repository, price_repository, security_repository
 from app.core.errors import AppError
 from app.domain.market_data import DataStatus
+from app.domain.market_spot import InstitutionType, MarketSpotRepository
 from app.domain.pricing import (
     CandleInterval,
     ChartRange,
@@ -29,6 +30,7 @@ from app.domain.pricing import (
 )
 from app.domain.security import MarketCode, SecurityRepository, SecurityType
 from app.services.candle_aggregation import CandleAggregationService, range_start
+from app.services.market_spot import CreditTradingService, InstitutionalService
 from app.services.technical_indicators import (
     REQUEST_ALGORITHM_VERSION,
     TechnicalIndicatorService,
@@ -283,3 +285,44 @@ async def get_technicals(
     return TechnicalSeriesEnvelope(
         data=[TechnicalPointResponse.from_domain(item, selected) for item in snapshots], meta=meta
     )
+
+
+@router.get("/{code}/institutional", operation_id="getSecurityInstitutionalSpot")
+async def get_security_institutional(
+    code: str,
+    securities: Annotated[SecurityRepository, Depends(security_repository)],
+    repository: Annotated[MarketSpotRepository, Depends(market_spot_repository)],
+    market: MarketCode,
+    window: int = 20,
+    from_date: Annotated[date | None, Query(alias="from")] = None,
+    to: date | None = None,
+    institution: InstitutionType | None = None,
+):
+    await _require_security(securities, code, market)
+    try:
+        data = await InstitutionalService(repository).series(
+            market, SecurityKey(market, code), window, from_date, to, institution
+        )
+    except ValueError as error:
+        raise AppError("INVALID_WINDOW", str(error), 422) from error
+    return {"data": data}
+
+
+@router.get("/{code}/credit", operation_id="getSecurityCredit")
+async def get_security_credit(
+    code: str,
+    securities: Annotated[SecurityRepository, Depends(security_repository)],
+    repository: Annotated[MarketSpotRepository, Depends(market_spot_repository)],
+    market: MarketCode,
+    window: int = 60,
+    from_date: Annotated[date | None, Query(alias="from")] = None,
+    to: date | None = None,
+):
+    await _require_security(securities, code, market)
+    try:
+        data = await CreditTradingService(repository).series(
+            market, SecurityKey(market, code), window, from_date, to
+        )
+    except ValueError as error:
+        raise AppError("INVALID_WINDOW", str(error), 422) from error
+    return {"data": data}

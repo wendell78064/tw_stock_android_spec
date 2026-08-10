@@ -32,8 +32,11 @@ async def test_insert_update_revision_idempotency_and_range_backfill() -> None:
     provider = FakeMarketDataProvider()
     repository = MemoryRepository()
     service = DailyPriceIngestionService(FakeSession(), repository)
-    kwargs = {"security": SecurityKey(MarketCode.TWSE, "1234"),
-              "start_date": date(2026, 8, 3), "end_date": date(2026, 8, 7)}
+    kwargs = {
+        "security": SecurityKey(MarketCode.TWSE, "1234"),
+        "start_date": date(2026, 8, 3),
+        "end_date": date(2026, 8, 7),
+    }
     first = await service.synchronize(provider, **kwargs)
     second = await service.synchronize(provider, **kwargs)
     assert first.inserted_count == 5 and second.inserted_count + second.updated_count == 0
@@ -52,16 +55,19 @@ async def test_insert_update_revision_idempotency_and_range_backfill() -> None:
 @pytest.mark.asyncio
 async def test_duplicate_and_invalid_ohlc_are_partial_not_batch_failure() -> None:
     base = FakeMarketDataProvider()
-    items = await base.get_daily_prices(security=SecurityKey(MarketCode.TWSE, "1234"),
-        start_date=date(2026, 8, 6), end_date=date(2026, 8, 7))
+    items = await base.get_daily_prices(
+        security=SecurityKey(MarketCode.TWSE, "1234"),
+        start_date=date(2026, 8, 6),
+        end_date=date(2026, 8, 7),
+    )
     invalid = replace(items[1], high=items[1].low - 1)
 
     class PartialProvider(FakeMarketDataProvider):
         async def get_daily_prices(self, *args, **kwargs):
             return [items[0], items[0], invalid]
 
-    run = await DailyPriceIngestionService(
-        FakeSession(), MemoryRepository()
-    ).synchronize(PartialProvider())
+    run = await DailyPriceIngestionService(FakeSession(), MemoryRepository()).synchronize(
+        PartialProvider()
+    )
     assert run.status == "PARTIAL" and run.inserted_count == 1 and run.rejected_count == 2
     assert validate_price(invalid) == "INVALID_OHLC"

@@ -1,4 +1,4 @@
-.PHONY: up down logs backend-test backend-lint backend-build android-build android-test android-lint android-ui-test-apk openapi-validate openapi-generate test build health migrate migrate-up migrate-down sync-securities sync-daily-prices backfill-security calculate-technicals
+.PHONY: up down logs backend-test backend-lint backend-build android-build android-test android-lint android-ui-test-apk openapi-validate openapi-generate test build health migrate migrate-up migrate-down sync-securities sync-daily-prices sync-market-spot backfill-market-spot backfill-security calculate-technicals
 
 up:
 	docker compose up --build -d
@@ -62,3 +62,9 @@ backfill-security:
 
 calculate-technicals:
 	docker compose exec backend python -m app.cli.sync_daily_prices --provider fake --code $(CODE) --market $(MARKET) --start 2025-01-01 --end 2026-08-07
+
+sync-market-spot:
+	docker compose exec backend python -m app.cli.sync_market_spot --date $(DATE)
+
+backfill-market-spot:
+	docker compose exec backend python -m app.cli.sync_market_spot --start $(FROM) --end $(TO)

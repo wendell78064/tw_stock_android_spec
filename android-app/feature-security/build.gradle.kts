@@ -21,6 +21,7 @@ dependencies {
     implementation(project(":core-model"))
     implementation(project(":core-network"))
     implementation(project(":core-database"))
+    implementation(project(":feature-market"))
     implementation("androidx.compose.material3:material3:1.3.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

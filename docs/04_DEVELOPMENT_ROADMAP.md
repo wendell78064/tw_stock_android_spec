@@ -208,3 +208,10 @@
 - 技術指標數值參數編輯、驗證、保存與重設：完成
 - 預設 snapshot／自訂 request-time calculation：完成
 - Android emulator instrumentation workflow：完成建置，執行結果以 CI run 為準
+
+# Phase 2 / Slice 1：市場現貨、法人與信用交易
+
+- market index／breadth、三大法人現貨、融資融券與借券 Domain/DB/API：完成
+- deterministic Fake ingestion、冪等與 60 交易日趨勢：完成
+- Android 市場首頁、個股籌碼/信用 Tab、Room offline cache：完成
+- API 35 x86_64 instrumentation：feature commit 推送後以實際 GitHub Actions 結果封版

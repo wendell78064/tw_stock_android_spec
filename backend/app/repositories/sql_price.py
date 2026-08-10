@@ -194,16 +194,20 @@ class SqlPriceRepository:
                 statement.order_by(TechnicalSnapshotModel.trade_date.desc()).limit(1500)
             )
         ).all()
-        return list(reversed([
-            TechnicalSnapshot(
-                security,
-                item.trade_date,
-                basis,
-                {name: getattr(item, column) for name, column in INDICATOR_COLUMNS.items()},
-                item.algorithm_version,
-                item.as_of,
-                item.received_at,
-                DataStatus(item.data_status),
+        return list(
+            reversed(
+                [
+                    TechnicalSnapshot(
+                        security,
+                        item.trade_date,
+                        basis,
+                        {name: getattr(item, column) for name, column in INDICATOR_COLUMNS.items()},
+                        item.algorithm_version,
+                        item.as_of,
+                        item.received_at,
+                        DataStatus(item.data_status),
+                    )
+                    for item in models
+                ]
             )
-            for item in models
-        ]))
+        )

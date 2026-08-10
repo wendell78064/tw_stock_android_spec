@@ -2,8 +2,9 @@
 
 Revision ID: 0001_phase0
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "0001_phase0"
 down_revision = None
@@ -16,10 +17,11 @@ def upgrade() -> None:
         "service_metadata",
         sa.Column("key", sa.String(64), primary_key=True),
         sa.Column("value", sa.String(255), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
     )
 
 
 def downgrade() -> None:
     op.drop_table("service_metadata")
-

@@ -131,16 +131,48 @@ fun SecurityDetailRoute(
     code: String,
     market: MarketCode,
     viewModel: SecurityDetailViewModel = hiltViewModel(),
+    spotViewModel: SecuritySpotViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var tab by remember { mutableIntStateOf(0) }
     LaunchedEffect(code, market) { viewModel.load(code, market) }
+    LaunchedEffect(code, market) { spotViewModel.load(code, market) }
+    val institutional by spotViewModel.institutional.collectAsStateWithLifecycle()
+    val credit by spotViewModel.credit.collectAsStateWithLifecycle()
+    val window by spotViewModel.window.collectAsStateWithLifecycle()
     Column {
         Row {
             TextButton(onClick = { tab = 0 }) { Text("走勢") }
-            TextButton(onClick = { tab = 1 }) { Text("基本資料") }
+            TextButton(onClick = { tab = 1 }) { Text("籌碼") }
+            TextButton(onClick = { tab = 2 }) { Text("信用") }
+            TextButton(onClick = { tab = 3 }) { Text("基本資料") }
         }
-        if (tab == 0) SecurityChartRoute(code, market) else SecurityDetailScreen(state)
+        when (tab) { 0 -> SecurityChartRoute(code, market)
+            1 -> SecurityInstitutionalScreen(institutional, window, spotViewModel::loadInstitutional)
+            2 -> SecurityCreditScreen(credit)
+            else -> SecurityDetailScreen(state) }
+    }
+}
+
+@Composable fun SecurityInstitutionalScreen(state: SecuritySpotUiState, window: Int, onWindow: (Int) -> Unit) {
+    Column(Modifier.fillMaxSize().padding(12.dp).testTag("security-institutional"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row { listOf(1,5,10,20,60).forEach { FilterChip(selected = window == it, onClick = { onWindow(it) }, label = { Text("$it") }) } }
+        when (state) { SecuritySpotUiState.Loading -> CircularProgressIndicator(); SecuritySpotUiState.Empty -> Text("此期間沒有法人資料")
+            is SecuritySpotUiState.Error -> Text("籌碼載入失敗：${state.message}"); is SecuritySpotUiState.Offline -> Text("Offline / Stale：${state.message}")
+            is SecuritySpotUiState.Institutional -> { state.points.takeLast(12).forEach { Text("${it.tradeDate} ${it.institutionType} ${it.dealerSubtype ?: ""} 淨 ${it.net ?: "--"} 累計 ${it.cumulativeNet ?: "--"}") }
+                state.points.lastOrNull()?.let { Text("連續方向 ${it.consecutiveDirectionDays} 個交易日 · ${it.dataStatus}") } }
+            is SecuritySpotUiState.Credit -> Text("資料型態錯誤") }
+    }
+}
+
+@Composable fun SecurityCreditScreen(state: SecuritySpotUiState) {
+    Column(Modifier.fillMaxSize().padding(12.dp).testTag("security-credit"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        when (state) { SecuritySpotUiState.Loading -> CircularProgressIndicator(); SecuritySpotUiState.Empty -> Text("目前沒有信用交易資料")
+            is SecuritySpotUiState.Error -> Text("信用載入失敗：${state.message}"); is SecuritySpotUiState.Offline -> Text("Offline / Stale：${state.message}")
+            is SecuritySpotUiState.Credit -> { Text("融資", style = androidx.compose.material3.MaterialTheme.typography.titleMedium); state.credit.margins.lastOrNull()?.let { Text("餘額 ${it.marginBalance ?: "--"} 今日增減 ${it.marginBalanceChange ?: "--"}") }
+                Text("融券", style = androidx.compose.material3.MaterialTheme.typography.titleMedium); state.credit.margins.lastOrNull()?.let { Text("餘額 ${it.shortBalance ?: "--"} 今日增減 ${it.shortBalanceChange ?: "--"} 券資比 ${it.shortMarginRatio ?: "--"}") }
+                Text("借券", style = androidx.compose.material3.MaterialTheme.typography.titleMedium); state.credit.lending.lastOrNull()?.let { Text("賣出 ${it.lendingSell ?: "--"} 餘額 ${it.lendingBalance ?: "--"} 今日增減 ${it.lendingBalanceChange ?: "--"}") } }
+            is SecuritySpotUiState.Institutional -> Text("資料型態錯誤") }
     }
 }
 

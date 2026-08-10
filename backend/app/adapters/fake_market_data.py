@@ -2,6 +2,16 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from app.domain.market_data import DataStatus, MarketSnapshot
+from app.domain.market_spot import (
+    DealerSubtype,
+    InstitutionalRecord,
+    InstitutionType,
+    LendingRecord,
+    MarginRecord,
+    MarketBreadthRecord,
+    MarketIndexRecord,
+    SourceMetadata,
+)
 from app.domain.pricing import DailyPriceRecord, SecurityKey
 from app.domain.security import Industry, MarketCode, SecurityRecord, SecurityStatus, SecurityType
 
@@ -96,3 +106,168 @@ class FakeMarketDataProvider:
                 sequence += 1
             current += timedelta(days=1)
         return result
+
+    source_code = "FAKE_MARKET_SPOT"
+
+    @staticmethod
+    def _metadata(trade_date: date, market: MarketCode) -> SourceMetadata:
+        timestamp = datetime.combine(trade_date, datetime.min.time(), tzinfo=UTC)
+        return SourceMetadata(
+            f"FAKE_{market.value}_SPOT",
+            timestamp,
+            timestamp + timedelta(hours=8),
+            DataStatus.FINAL,
+            "fixture-v1",
+        )
+
+    async def get_market_indexes(self, trade_date: date) -> list[MarketIndexRecord]:
+        day = Decimal((trade_date - date(2026, 1, 1)).days)
+        return [
+            MarketIndexRecord(
+                code,
+                name,
+                market,
+                trade_date,
+                base + day,
+                base + day + 80,
+                base + day - 60,
+                base + day + 25,
+                Decimal(25),
+                Decimal("0.12"),
+                Decimal("320000000000") + day * 1000000,
+                8_000_000_000 + int(day) * 1000,
+                self._metadata(trade_date, market),
+            )
+            for code, name, market, base in (
+                ("TAIEX", "加權指數", MarketCode.TWSE, Decimal(22000)),
+                ("OTC", "櫃買指數", MarketCode.TPEX, Decimal(260)),
+            )
+        ]
+
+    async def get_market_breadth(self, trade_date: date) -> list[MarketBreadthRecord]:
+        return [
+            MarketBreadthRecord(
+                market,
+                trade_date,
+                500 - offset,
+                350 + offset,
+                100,
+                25,
+                8,
+                950,
+                Decimal("320000000000") - offset * 100000000,
+                self._metadata(trade_date, market),
+            )
+            for offset, market in enumerate(MarketCode)
+        ]
+
+    def _institutional(
+        self, trade_date: date, security: SecurityKey | None
+    ) -> list[InstitutionalRecord]:
+        markets = [security.market] if security else list(MarketCode)
+        result = []
+        for market in markets:
+            multiplier = Decimal(1 if market is MarketCode.TWSE else 2)
+            rows = (
+                (InstitutionType.FOREIGN, None, 120, 100),
+                (InstitutionType.INVESTMENT_TRUST, None, 45, 35),
+                (InstitutionType.DEALER, DealerSubtype.PROPRIETARY, 20, 18),
+                (InstitutionType.DEALER, DealerSubtype.HEDGE, 30, 35),
+                (InstitutionType.DEALER, DealerSubtype.TOTAL, 50, 53),
+                (InstitutionType.TOTAL, None, 215, 188),
+            )
+            for kind, subtype, buy, sell in rows:
+                if security:
+                    buy_value, sell_value = (
+                        int(Decimal(buy * 1000) * multiplier),
+                        int(Decimal(sell * 1000) * multiplier),
+                    )
+                else:
+                    buy_value, sell_value = (
+                        Decimal(buy * 1_000_000_000) * multiplier,
+                        Decimal(sell * 1_000_000_000) * multiplier,
+                    )
+                result.append(
+                    InstitutionalRecord(
+                        market,
+                        trade_date,
+                        kind,
+                        subtype,
+                        buy_value,
+                        sell_value,
+                        buy_value - sell_value,
+                        self._metadata(trade_date, market),
+                        security,
+                        not bool(security),
+                    )
+                )
+        return result
+
+    async def get_market_institutional_spot(self, trade_date: date) -> list[InstitutionalRecord]:
+        return self._institutional(trade_date, None)
+
+    async def get_security_institutional_spot(self, trade_date: date) -> list[InstitutionalRecord]:
+        return self._institutional(
+            trade_date, SecurityKey(MarketCode.TWSE, "1234")
+        ) + self._institutional(trade_date, SecurityKey(MarketCode.TPEX, "5678"))
+
+    def _margins(self, trade_date: date, security: bool) -> list[MarginRecord]:
+        keys = (
+            [SecurityKey(MarketCode.TWSE, "1234"), SecurityKey(MarketCode.TPEX, "5678")]
+            if security
+            else [None, None]
+        )
+        return [
+            MarginRecord(
+                market,
+                trade_date,
+                120000,
+                100000,
+                1000,
+                8_000_000,
+                19000,
+                30000,
+                25000,
+                500,
+                800000,
+                4500,
+                Decimal("10.0"),
+                self._metadata(trade_date, market),
+                key,
+                Decimal("55.0") if key else None,
+                Decimal("15.0") if key else None,
+            )
+            for market, key in zip(MarketCode, keys, strict=True)
+        ]
+
+    async def get_market_margin_trading(self, trade_date: date) -> list[MarginRecord]:
+        return self._margins(trade_date, False)
+
+    async def get_security_margin_trading(self, trade_date: date) -> list[MarginRecord]:
+        return self._margins(trade_date, True)
+
+    def _lending(self, trade_date: date, security: bool) -> list[LendingRecord]:
+        keys = (
+            [SecurityKey(MarketCode.TWSE, "1234"), SecurityKey(MarketCode.TPEX, "5678")]
+            if security
+            else [None, None]
+        )
+        return [
+            LendingRecord(
+                market,
+                trade_date,
+                50000,
+                15000,
+                2_000_000,
+                35000,
+                self._metadata(trade_date, market),
+                key,
+            )
+            for market, key in zip(MarketCode, keys, strict=True)
+        ]
+
+    async def get_market_securities_lending(self, trade_date: date) -> list[LendingRecord]:
+        return self._lending(trade_date, False)
+
+    async def get_security_securities_lending(self, trade_date: date) -> list[LendingRecord]:
+        return self._lending(trade_date, True)

@@ -147,3 +147,189 @@ class TechnicalSnapshotModel(Base):
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+
+
+class MarketIndexModel(Base):
+    __tablename__ = "market_indexes"
+    __table_args__ = (UniqueConstraint("market_code", "code"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    code: Mapped[str] = mapped_column(String(16))
+    name: Mapped[str] = mapped_column(String(80))
+    market_code: Mapped[str] = mapped_column(String(16))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class MarketIndexDailyModel(Base):
+    __tablename__ = "market_index_daily"
+    __table_args__ = (UniqueConstraint("index_id", "trade_date"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    index_id: Mapped[UUID] = mapped_column(ForeignKey("market_indexes.id", ondelete="CASCADE"))
+    trade_date: Mapped[date] = mapped_column(Date)
+    open: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    high: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    low: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    close: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    change: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    change_percent: Mapped[object | None] = mapped_column(Numeric(16, 8))
+    turnover_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    volume: Mapped[int | None] = mapped_column(BigInteger)
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class MarketBreadthModel(Base):
+    __tablename__ = "market_breadth"
+    __table_args__ = (UniqueConstraint("market_code", "trade_date"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    market_code: Mapped[str] = mapped_column(String(16))
+    trade_date: Mapped[date] = mapped_column(Date)
+    advancers: Mapped[int | None] = mapped_column(Integer)
+    decliners: Mapped[int | None] = mapped_column(Integer)
+    unchanged: Mapped[int | None] = mapped_column(Integer)
+    limit_up: Mapped[int | None] = mapped_column(Integer)
+    limit_down: Mapped[int | None] = mapped_column(Integer)
+    total_traded: Mapped[int | None] = mapped_column(Integer)
+    turnover_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class MarketInstitutionalSpotModel(Base):
+    __tablename__ = "market_institutional_spot"
+    __table_args__ = (
+        UniqueConstraint("market_code", "trade_date", "institution_type", "dealer_subtype"),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    market_code: Mapped[str] = mapped_column(String(16))
+    trade_date: Mapped[date] = mapped_column(Date)
+    institution_type: Mapped[str] = mapped_column(String(32))
+    dealer_subtype: Mapped[str] = mapped_column(String(24), default="NONE")
+    buy_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    sell_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    net_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class InstitutionSpotTradingModel(Base):
+    __tablename__ = "institution_spot_trading"
+    __table_args__ = (
+        UniqueConstraint("security_id", "trade_date", "institution_type", "dealer_subtype"),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    security_id: Mapped[UUID] = mapped_column(ForeignKey("securities.id", ondelete="CASCADE"))
+    trade_date: Mapped[date] = mapped_column(Date)
+    institution_type: Mapped[str] = mapped_column(String(32))
+    dealer_subtype: Mapped[str] = mapped_column(String(24), default="NONE")
+    buy_shares: Mapped[int | None] = mapped_column(BigInteger)
+    sell_shares: Mapped[int | None] = mapped_column(BigInteger)
+    net_shares: Mapped[int | None] = mapped_column(BigInteger)
+    buy_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    sell_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    net_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class MarketMarginTradingModel(Base):
+    __tablename__ = "market_margin_trading"
+    __table_args__ = (UniqueConstraint("market_code", "trade_date"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    market_code: Mapped[str] = mapped_column(String(16))
+    trade_date: Mapped[date] = mapped_column(Date)
+    margin_buy: Mapped[int | None] = mapped_column(BigInteger)
+    margin_sell: Mapped[int | None] = mapped_column(BigInteger)
+    margin_cash_repayment: Mapped[int | None] = mapped_column(BigInteger)
+    margin_balance: Mapped[int | None] = mapped_column(BigInteger)
+    margin_balance_change: Mapped[int | None] = mapped_column(BigInteger)
+    short_sell: Mapped[int | None] = mapped_column(BigInteger)
+    short_cover: Mapped[int | None] = mapped_column(BigInteger)
+    short_stock_repayment: Mapped[int | None] = mapped_column(BigInteger)
+    short_balance: Mapped[int | None] = mapped_column(BigInteger)
+    short_balance_change: Mapped[int | None] = mapped_column(BigInteger)
+    short_margin_ratio: Mapped[object | None] = mapped_column(Numeric(16, 8))
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class MarginTradingModel(Base):
+    __tablename__ = "margin_trading"
+    __table_args__ = (UniqueConstraint("security_id", "trade_date"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    security_id: Mapped[UUID] = mapped_column(ForeignKey("securities.id", ondelete="CASCADE"))
+    trade_date: Mapped[date] = mapped_column(Date)
+    margin_buy: Mapped[int | None] = mapped_column(BigInteger)
+    margin_sell: Mapped[int | None] = mapped_column(BigInteger)
+    margin_cash_repayment: Mapped[int | None] = mapped_column(BigInteger)
+    margin_balance: Mapped[int | None] = mapped_column(BigInteger)
+    margin_balance_change: Mapped[int | None] = mapped_column(BigInteger)
+    short_sell: Mapped[int | None] = mapped_column(BigInteger)
+    short_cover: Mapped[int | None] = mapped_column(BigInteger)
+    short_stock_repayment: Mapped[int | None] = mapped_column(BigInteger)
+    short_balance: Mapped[int | None] = mapped_column(BigInteger)
+    short_balance_change: Mapped[int | None] = mapped_column(BigInteger)
+    short_margin_ratio: Mapped[object | None] = mapped_column(Numeric(16, 8))
+    margin_utilization: Mapped[object | None] = mapped_column(Numeric(16, 8))
+    short_utilization: Mapped[object | None] = mapped_column(Numeric(16, 8))
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class MarketSecuritiesLendingModel(Base):
+    __tablename__ = "market_securities_lending"
+    __table_args__ = (UniqueConstraint("market_code", "trade_date"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    market_code: Mapped[str] = mapped_column(String(16))
+    trade_date: Mapped[date] = mapped_column(Date)
+    lending_sell: Mapped[int | None] = mapped_column(BigInteger)
+    lending_return: Mapped[int | None] = mapped_column(BigInteger)
+    lending_balance: Mapped[int | None] = mapped_column(BigInteger)
+    lending_balance_change: Mapped[int | None] = mapped_column(BigInteger)
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class SecuritiesLendingModel(Base):
+    __tablename__ = "securities_lending"
+    __table_args__ = (UniqueConstraint("security_id", "trade_date"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    security_id: Mapped[UUID] = mapped_column(ForeignKey("securities.id", ondelete="CASCADE"))
+    trade_date: Mapped[date] = mapped_column(Date)
+    lending_sell: Mapped[int | None] = mapped_column(BigInteger)
+    lending_return: Mapped[int | None] = mapped_column(BigInteger)
+    lending_balance: Mapped[int | None] = mapped_column(BigInteger)
+    lending_balance_change: Mapped[int | None] = mapped_column(BigInteger)
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))

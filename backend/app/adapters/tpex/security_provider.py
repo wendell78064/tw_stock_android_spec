@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 import httpx
 
 from app.adapters.daily_price_mapping import RawPriceRow, make_daily_price
+from app.adapters.market_spot_mapping import map_index, map_lending, map_margin
 from app.adapters.security_mapping import RawRow, make_record
 from app.domain.pricing import DailyPriceRecord, SecurityKey
 from app.domain.security import MarketCode, SecurityRecord
@@ -63,6 +64,66 @@ class TpexSecurityProvider:
             turnover=row.get("TransactionAmount", row.get("成交金額", "")),
             source_code="TPEX_DAILY",
             received_at=received_at,
+        )
+
+    def map_index_row(self, row, *, trade_date: date, received_at: datetime):
+        return map_index(
+            row,
+            market=MarketCode.TPEX,
+            code="OTC",
+            name="櫃買指數",
+            trade_date=trade_date,
+            received_at=received_at,
+            source="TPEX_INDEX",
+            keys={
+                "open": "Open",
+                "high": "High",
+                "low": "Low",
+                "close": "Close",
+                "change": "Change",
+                "change_percent": "ChangePercent",
+                "turnover": "TransactionAmount",
+                "volume": "TransactionCount",
+            },
+        )
+
+    def map_margin_row(self, row, *, trade_date: date, received_at: datetime):
+        code = str(row.get("SecuritiesCompanyCode", "")) or None
+        return map_margin(
+            row,
+            market=MarketCode.TPEX,
+            trade_date=trade_date,
+            received_at=received_at,
+            source="TPEX_MARGIN",
+            keys={
+                "margin_buy": "MarginPurchase",
+                "margin_sell": "MarginSale",
+                "margin_cash_repayment": "CashRedemption",
+                "margin_balance": "MarginBalance",
+                "short_sell": "ShortSale",
+                "short_cover": "ShortCover",
+                "short_stock_repayment": "StockRedemption",
+                "short_balance": "ShortBalance",
+                "short_margin_ratio": "ShortMarginRatio",
+            },
+            security_code=code,
+        )
+
+    def map_lending_row(self, row, *, trade_date: date, received_at: datetime):
+        code = str(row.get("SecuritiesCompanyCode", "")) or None
+        return map_lending(
+            row,
+            market=MarketCode.TPEX,
+            trade_date=trade_date,
+            received_at=received_at,
+            source="TPEX_LENDING",
+            keys={
+                "lending_sell": "LendingSale",
+                "lending_return": "LendingReturn",
+                "lending_balance": "LendingBalance",
+                "lending_balance_change": "LendingChange",
+            },
+            security_code=code,
         )
 
     async def get_daily_prices(

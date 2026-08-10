@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 import httpx
 
 from app.adapters.daily_price_mapping import RawPriceRow, make_daily_price
+from app.adapters.market_spot_mapping import map_index, map_lending, map_margin
 from app.adapters.security_mapping import RawRow, make_record
 from app.domain.pricing import DailyPriceRecord, SecurityKey
 from app.domain.security import MarketCode, SecurityRecord
@@ -64,6 +65,66 @@ class TwseSecurityProvider:
             turnover=row.get("成交金額", row.get("TradeValue", "")),
             source_code="TWSE_DAILY",
             received_at=received_at,
+        )
+
+    def map_index_row(self, row, *, trade_date: date, received_at: datetime):
+        return map_index(
+            row,
+            market=MarketCode.TWSE,
+            code="TAIEX",
+            name="加權指數",
+            trade_date=trade_date,
+            received_at=received_at,
+            source="TWSE_MI_INDEX",
+            keys={
+                "open": "開盤指數",
+                "high": "最高指數",
+                "low": "最低指數",
+                "close": "收盤指數",
+                "change": "漲跌點數",
+                "change_percent": "漲跌百分比",
+                "turnover": "成交金額",
+                "volume": "成交筆數",
+            },
+        )
+
+    def map_margin_row(self, row, *, trade_date: date, received_at: datetime):
+        code = str(row.get("股票代號", "")) or None
+        return map_margin(
+            row,
+            market=MarketCode.TWSE,
+            trade_date=trade_date,
+            received_at=received_at,
+            source="TWSE_MARGIN",
+            keys={
+                "margin_buy": "融資買進",
+                "margin_sell": "融資賣出",
+                "margin_cash_repayment": "現金償還",
+                "margin_balance": "融資今日餘額",
+                "short_sell": "融券賣出",
+                "short_cover": "融券買進",
+                "short_stock_repayment": "現券償還",
+                "short_balance": "融券今日餘額",
+                "short_margin_ratio": "券資比",
+            },
+            security_code=code,
+        )
+
+    def map_lending_row(self, row, *, trade_date: date, received_at: datetime):
+        code = str(row.get("股票代號", "")) or None
+        return map_lending(
+            row,
+            market=MarketCode.TWSE,
+            trade_date=trade_date,
+            received_at=received_at,
+            source="TWSE_LENDING",
+            keys={
+                "lending_sell": "借券賣出",
+                "lending_return": "借券還券",
+                "lending_balance": "借券餘額",
+                "lending_balance_change": "借券餘額異動",
+            },
+            security_code=code,
         )
 
     async def get_daily_prices(
