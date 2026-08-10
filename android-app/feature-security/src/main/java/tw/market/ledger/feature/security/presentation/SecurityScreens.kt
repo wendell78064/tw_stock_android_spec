@@ -21,9 +21,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -44,6 +47,7 @@ import tw.market.ledger.model.Candle
 import tw.market.ledger.model.ChartRange
 import tw.market.ledger.model.PriceBasis
 import tw.market.ledger.model.TechnicalPoint
+import tw.market.ledger.model.*
 
 @Composable
 fun SecuritySearchRoute(
@@ -178,10 +182,16 @@ fun SecurityChartRoute(
     val basis by viewModel.basis.collectAsStateWithLifecycle()
     val indicators by viewModel.indicators.collectAsStateWithLifecycle()
     val selected by viewModel.selected.collectAsStateWithLifecycle()
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
+    val settingsState by viewModel.settingsUiState.collectAsStateWithLifecycle()
+    var settingsOpen by remember { mutableStateOf(false) }
     LaunchedEffect(code, market) { viewModel.load(code, market) }
     SecurityChartScreen(state, range, basis, indicators, selected,
         viewModel::selectRange, viewModel::selectBasis, viewModel::toggleIndicator,
-        viewModel::selectCandle)
+        viewModel::selectCandle, onSettings = { settingsOpen = true })
+    if (settingsOpen) IndicatorSettingsDialog(preferences, settingsState,
+        onDismiss = { settingsOpen = false }, onSave = viewModel::savePreferences,
+        onResetAll = viewModel::resetAllPreferences)
 }
 
 @Composable
@@ -195,6 +205,7 @@ fun SecurityChartScreen(
     onBasis: (PriceBasis) -> Unit,
     onIndicator: (String) -> Unit,
     onSelect: (Candle?) -> Unit,
+    onSettings: () -> Unit = {},
 ) {
     Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -202,6 +213,7 @@ fun SecurityChartScreen(
                 FilterChip(selected = range == item, onClick = { onRange(item) }, label = { Text(item.label()) })
             }
         }
+        Button(onClick = onSettings, modifier = Modifier.testTag("indicator-settings")) { Text("指標設定") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PriceBasis.entries.forEach { item ->
                 FilterChip(selected = basis == item, onClick = { onBasis(item) }, label = { Text(item.name) })
@@ -232,6 +244,77 @@ fun SecurityChartScreen(
                 Text("最後更新 ${state.asOf}")
             }
         }
+    }
+}
+
+@Composable
+fun IndicatorSettingsDialog(
+    current: TechnicalIndicatorPreferences,
+    state: IndicatorSettingsUiState,
+    onDismiss: () -> Unit,
+    onSave: (TechnicalIndicatorPreferences) -> Unit,
+    onResetAll: () -> Unit,
+) {
+    var draft by remember(current) { mutableStateOf(current) }
+    var editing by remember { mutableStateOf<String?>(null) }
+    val error = (state as? IndicatorSettingsUiState.ValidationError)?.message
+    AlertDialog(
+        modifier = Modifier.testTag("indicator-settings-dialog"), onDismissRequest = onDismiss,
+        title = { Text(if (editing == null) "技術指標參數" else editing!!) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (editing == null) {
+                    listOf(
+                        "MA" to draft.ma.periods.joinToString(" / "), "EMA" to draft.ema.periods.joinToString(" / "),
+                        "Bollinger" to "${draft.bollinger.period} / ${draft.bollinger.standardDeviationMultiplier}",
+                        "MACD" to "${draft.macd.fast} / ${draft.macd.slow} / ${draft.macd.signal}",
+                        "RSI" to draft.rsi.period.toString(), "KD" to "${draft.kd.rsvPeriod} / ${draft.kd.kSmoothing} / ${draft.kd.dSmoothing}",
+                        "ATR" to draft.atr.period.toString(), "OBV" to "無數值參數",
+                        "Williams %R" to draft.williamsR.period.toString(),
+                    ).forEach { (name, value) ->
+                        Row(Modifier.fillMaxWidth().clickable { if (name != "OBV") editing = name }
+                            .padding(8.dp).testTag("setting-$name"), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(name); Text(value)
+                        }
+                    }
+                    error?.let { Text(it, color = Color.Red, modifier = Modifier.testTag("settings-validation-error")) }
+                    TextButton(onClick = { draft = TechnicalIndicatorPreferences.Default; onResetAll() }) { Text("全部重設預設值") }
+                } else {
+                    IndicatorEditor(editing!!, draft) { draft = it }
+                    TextButton(onClick = {
+                        draft = when (editing) {
+                            "MA" -> draft.copy(ma = MaSettings()); "EMA" -> draft.copy(ema = EmaSettings())
+                            "Bollinger" -> draft.copy(bollinger = BollingerSettings()); "MACD" -> draft.copy(macd = MacdSettings())
+                            "RSI" -> draft.copy(rsi = RsiSettings()); "KD" -> draft.copy(kd = KdSettings())
+                            "ATR" -> draft.copy(atr = AtrSettings()); else -> draft.copy(williamsR = WilliamsRSettings())
+                        }
+                    }) { Text("重設此指標") }
+                    error?.let { Text(it, color = Color.Red, modifier = Modifier.testTag("settings-validation-error")) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { if (editing == null) onSave(draft) else editing = null },
+            modifier = Modifier.testTag("settings-save")) { Text(if (editing == null) "儲存" else "完成") } },
+        dismissButton = { TextButton(onClick = { if (editing == null) onDismiss() else editing = null }) { Text("取消") } },
+    )
+}
+
+@Composable
+private fun IndicatorEditor(name: String, value: TechnicalIndicatorPreferences,
+                            update: (TechnicalIndicatorPreferences) -> Unit) {
+    @Composable fun Field(label: String, text: String, change: (String) -> Unit) = OutlinedTextField(
+        value = text, onValueChange = change, label = { Text(label) }, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth().testTag("parameter-$label"))
+    when (name) {
+        "MA" -> Field("MA periods", value.ma.periods.joinToString(",")) { raw -> update(value.copy(ma = MaSettings(raw.split(",").mapNotNull { it.trim().toIntOrNull() }))) }
+        "EMA" -> Field("EMA periods", value.ema.periods.joinToString(",")) { raw -> update(value.copy(ema = EmaSettings(raw.split(",").mapNotNull { it.trim().toIntOrNull() }))) }
+        "RSI" -> Field("RSI period", value.rsi.period.toString()) { update(value.copy(rsi = RsiSettings(it.toIntOrNull() ?: 0))) }
+        "ATR" -> Field("ATR period", value.atr.period.toString()) { update(value.copy(atr = AtrSettings(it.toIntOrNull() ?: 0))) }
+        "Williams %R" -> Field("Williams period", value.williamsR.period.toString()) { update(value.copy(williamsR = WilliamsRSettings(it.toIntOrNull() ?: 0))) }
+        "Bollinger" -> { Field("Bollinger period", value.bollinger.period.toString()) { update(value.copy(bollinger = value.bollinger.copy(period = it.toIntOrNull() ?: 0))) }; Field("Stddev multiplier", value.bollinger.standardDeviationMultiplier) { update(value.copy(bollinger = value.bollinger.copy(standardDeviationMultiplier = it))) } }
+        "MACD" -> { Field("MACD fast", value.macd.fast.toString()) { update(value.copy(macd = value.macd.copy(fast = it.toIntOrNull() ?: 0))) }; Field("MACD slow", value.macd.slow.toString()) { update(value.copy(macd = value.macd.copy(slow = it.toIntOrNull() ?: 0))) }; Field("MACD signal", value.macd.signal.toString()) { update(value.copy(macd = value.macd.copy(signal = it.toIntOrNull() ?: 0))) } }
+        "KD" -> { Field("RSV period", value.kd.rsvPeriod.toString()) { update(value.copy(kd = value.kd.copy(rsvPeriod = it.toIntOrNull() ?: 0))) }; Field("K smoothing", value.kd.kSmoothing.toString()) { update(value.copy(kd = value.kd.copy(kSmoothing = it.toIntOrNull() ?: 0))) }; Field("D smoothing", value.kd.dSmoothing.toString()) { update(value.copy(kd = value.kd.copy(dSmoothing = it.toIntOrNull() ?: 0))) } }
     }
 }
 

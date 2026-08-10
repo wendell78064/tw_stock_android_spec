@@ -171,6 +171,47 @@ paths:
           name: indicators
           description: Comma-separated indicator names
           schema: { type: string }
+        - in: query
+          name: ma_periods
+          description: Positive, unique, comma-separated MA periods; supplying any parameter uses request-time calculation
+          schema: { type: string, example: "5,10,20" }
+        - in: query
+          name: ema_periods
+          schema: { type: string, example: "12,26" }
+        - in: query
+          name: rsi_period
+          schema: { type: integer, minimum: 1, default: 14 }
+        - in: query
+          name: macd_fast
+          schema: { type: integer, minimum: 1, default: 12 }
+        - in: query
+          name: macd_slow
+          description: Must be greater than macd_fast
+          schema: { type: integer, minimum: 1, default: 26 }
+        - in: query
+          name: macd_signal
+          schema: { type: integer, minimum: 1, default: 9 }
+        - in: query
+          name: kd_period
+          schema: { type: integer, minimum: 1, default: 9 }
+        - in: query
+          name: kd_k_smoothing
+          schema: { type: integer, minimum: 1, default: 3 }
+        - in: query
+          name: kd_d_smoothing
+          schema: { type: integer, minimum: 1, default: 3 }
+        - in: query
+          name: bollinger_period
+          schema: { type: integer, minimum: 1, default: 20 }
+        - in: query
+          name: bollinger_stddev
+          schema: { type: string, pattern: "^[0-9]+(\\.[0-9]+)?$", default: "2" }
+        - in: query
+          name: atr_period
+          schema: { type: integer, minimum: 1, default: 14 }
+        - in: query
+          name: williams_period
+          schema: { type: integer, minimum: 1, default: 14 }
       responses:
         "200":
           description: Technical indicator series

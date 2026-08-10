@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -18,9 +19,21 @@ from app.api.schemas import (
 from app.core.dependencies import price_repository, security_repository
 from app.core.errors import AppError
 from app.domain.market_data import DataStatus
-from app.domain.pricing import CandleInterval, ChartRange, PriceBasis, PriceRepository, SecurityKey
+from app.domain.pricing import (
+    CandleInterval,
+    ChartRange,
+    PriceBasis,
+    PriceRepository,
+    SecurityKey,
+    TechnicalSnapshot,
+)
 from app.domain.security import MarketCode, SecurityRepository, SecurityType
 from app.services.candle_aggregation import CandleAggregationService, range_start
+from app.services.technical_indicators import (
+    REQUEST_ALGORITHM_VERSION,
+    TechnicalIndicatorService,
+    TechnicalParameters,
+)
 
 router = APIRouter(prefix="/securities", tags=["Securities"])
 
@@ -168,10 +181,97 @@ async def get_technicals(
     from_date: Annotated[date | None, Query(alias="from")] = None,
     to: date | None = None,
     indicators: str | None = None,
+    ma_periods: str | None = None,
+    ema_periods: str | None = None,
+    rsi_period: int | None = None,
+    macd_fast: int | None = None,
+    macd_slow: int | None = None,
+    macd_signal: int | None = None,
+    kd_period: int | None = None,
+    kd_k_smoothing: int | None = None,
+    kd_d_smoothing: int | None = None,
+    bollinger_period: int | None = None,
+    bollinger_stddev: Decimal | None = None,
+    atr_period: int | None = None,
+    williams_period: int | None = None,
 ) -> TechnicalSeriesEnvelope:
     await _require_security(securities, code, market)
     start, end = (date_value, date_value) if date_value else (from_date, to)
-    snapshots = await prices.list_technicals(SecurityKey(market, code), price_basis, start, end)
+    custom_values = (
+        ma_periods,
+        ema_periods,
+        rsi_period,
+        macd_fast,
+        macd_slow,
+        macd_signal,
+        kd_period,
+        kd_k_smoothing,
+        kd_d_smoothing,
+        bollinger_period,
+        bollinger_stddev,
+        atr_period,
+        williams_period,
+    )
+    if any(value is not None for value in custom_values):
+        defaults = TechnicalParameters()
+        try:
+
+            def parse_periods(value: str | None, fallback: tuple[int, ...]) -> tuple[int, ...]:
+                return (
+                    tuple(int(item.strip()) for item in value.split(","))
+                    if value is not None
+                    else fallback
+                )
+
+            parameters = TechnicalParameters(
+                ma_periods=parse_periods(ma_periods, defaults.ma_periods),
+                ema_periods=parse_periods(ema_periods, defaults.ema_periods),
+                rsi_period=rsi_period if rsi_period is not None else defaults.rsi_period,
+                macd_fast=macd_fast if macd_fast is not None else defaults.macd_fast,
+                macd_slow=macd_slow if macd_slow is not None else defaults.macd_slow,
+                macd_signal=macd_signal if macd_signal is not None else defaults.macd_signal,
+                kd_period=kd_period if kd_period is not None else defaults.kd_period,
+                kd_k_smoothing=kd_k_smoothing
+                if kd_k_smoothing is not None
+                else defaults.kd_k_smoothing,
+                kd_d_smoothing=kd_d_smoothing
+                if kd_d_smoothing is not None
+                else defaults.kd_d_smoothing,
+                bollinger_period=bollinger_period
+                if bollinger_period is not None
+                else defaults.bollinger_period,
+                bollinger_stddev=bollinger_stddev
+                if bollinger_stddev is not None
+                else defaults.bollinger_stddev,
+                atr_period=atr_period if atr_period is not None else defaults.atr_period,
+                williams_period=williams_period
+                if williams_period is not None
+                else defaults.williams_period,
+            )
+            parameters.validate()
+        except (ValueError, ArithmeticError) as error:
+            raise AppError("INVALID_TECHNICAL_PARAMETERS", str(error), 422) from error
+        records = await prices.list_prices(SecurityKey(market, code), None, end)
+        candles = CandleAggregationService().aggregate(records, CandleInterval.DAY, price_basis)
+        series = TechnicalIndicatorService().calculate(candles, parameters)
+        record_by_date = {item.trade_date: item for item in records}
+        snapshots = [
+            TechnicalSnapshot(
+                SecurityKey(market, code),
+                candle.trade_date,
+                price_basis,
+                values,
+                REQUEST_ALGORITHM_VERSION,
+                record_by_date[candle.trade_date].as_of,
+                record_by_date[candle.trade_date].received_at,
+                record_by_date[candle.trade_date].data_status,
+                parameters.response_parameters(),
+            )
+            for candle, values in zip(candles, series.values, strict=True)
+            if start is None or candle.trade_date >= start
+        ]
+    else:
+        snapshots = await prices.list_technicals(SecurityKey(market, code), price_basis, start, end)
     selected = {item.strip().upper() for item in indicators.split(",")} if indicators else None
     now = datetime.now(UTC)
     meta = MetaResponse(

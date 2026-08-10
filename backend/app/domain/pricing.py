@@ -82,6 +82,7 @@ class TechnicalSnapshot:
     as_of: datetime
     received_at: datetime
     data_status: DataStatus
+    parameters: dict[str, dict[str, int | str]] | None = None
 
 
 class PriceAdjustmentProvider(Protocol):

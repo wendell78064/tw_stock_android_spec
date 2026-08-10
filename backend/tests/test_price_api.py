@@ -145,3 +145,33 @@ def test_technicals_and_validation_errors(price_client) -> None:
         ).status_code
         == 404
     )
+
+
+def test_custom_technicals_are_calculated_without_replacing_snapshots(price_client) -> None:
+    response = price_client.get(
+        "/v1/securities/1234/technicals",
+        params={
+            "market": "TWSE",
+            "indicators": "RSI12,MACD,BBANDS_UPPER",
+            "rsi_period": 12,
+            "macd_fast": 10,
+            "macd_slow": 24,
+            "macd_signal": 8,
+            "bollinger_period": 15,
+            "bollinger_stddev": "2.5",
+        },
+    )
+    assert response.status_code == 200
+    last = response.json()["data"][-1]
+    assert last["algorithm_version"] == "twml-technical-v1-request"
+    by_name = {item["name"]: item for item in last["indicators"]}
+    assert by_name["RSI12"]["parameters"] == {"period": 12}
+    assert by_name["MACD"]["parameters"] == {"fast": 10, "slow": 24, "signal": 8}
+    assert by_name["BBANDS_UPPER"]["parameters"]["stddev"] == "2.5"
+    assert isinstance(by_name["RSI12"]["value"], str)
+    invalid = price_client.get(
+        "/v1/securities/1234/technicals",
+        params={"market": "TWSE", "macd_fast": 26, "macd_slow": 12},
+    )
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "INVALID_TECHNICAL_PARAMETERS"

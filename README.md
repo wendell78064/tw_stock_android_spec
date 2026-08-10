@@ -82,3 +82,6 @@ make backfill-security CODE=1234 MARKET=TWSE FROM=2025-01-01 TO=2026-08-07
 curl 'http://localhost:8000/v1/securities/search?q=12'
 curl 'http://localhost:8000/v1/securities/1234/candles?market=TWSE&range=1Y&interval=1d&adjustment=ADJUSTED'
 ```
+# Phase 1 / Slice 2 Hardening
+
+技術指標設定現已支援型別化數值參數、DataStore 保存、單項／全部重設，以及自訂參數即時計算。Emulator CI 與操作細節見 [docs/09_PHASE_1_SLICE_2_HARDENING.md](docs/09_PHASE_1_SLICE_2_HARDENING.md)。

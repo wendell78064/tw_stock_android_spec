@@ -9,3 +9,4 @@ __pycache__/
 .coverage
 *.pyc
 backend/.venv/
+.gradle-ci/

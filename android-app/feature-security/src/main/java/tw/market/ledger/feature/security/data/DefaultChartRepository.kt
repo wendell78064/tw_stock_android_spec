@@ -12,6 +12,7 @@ import tw.market.ledger.model.IndicatorValue
 import tw.market.ledger.model.MarketCode
 import tw.market.ledger.model.PriceBasis
 import tw.market.ledger.model.TechnicalPoint
+import tw.market.ledger.model.TechnicalIndicatorPreferences
 import tw.market.ledger.network.ChartApi
 
 class DefaultChartRepository(
@@ -20,11 +21,16 @@ class DefaultChartRepository(
 ) : ChartRepository {
     override suspend fun load(
         code: String, market: MarketCode, range: ChartRange, interval: CandleInterval,
-        basis: PriceBasis, indicators: Set<String>,
+        basis: PriceBasis, preferences: TechnicalIndicatorPreferences,
     ): ChartOutcome = try {
         val apiRange = range.apiValue()
         val candleEnvelope = api.candles(code, market.name, apiRange, interval.apiValue, basis.name)
-        val technicalEnvelope = api.technicals(code, market.name, basis.name, indicators.joinToString(","))
+        val names = preferences.enabled.map { name ->
+            when { name.startsWith("RSI") -> "RSI${preferences.rsi.period}"
+                name.startsWith("ATR") -> "ATR${preferences.atr.period}" else -> name }
+        }.toSet()
+        val technicalEnvelope = api.technicals(code, market.name, basis.name,
+            names.joinToString(","), preferences.queryParameters())
         val candles = candleEnvelope.data.map { it.toDomain() }
         val technicals = technicalEnvelope.data.map { it.toDomain() }
         dao.clearCandles(market.name, code, apiRange, interval.apiValue, basis.name)

@@ -15,6 +15,7 @@ import tw.market.ledger.model.ChartRange
 import tw.market.ledger.model.DataStatus
 import tw.market.ledger.model.MarketCode
 import tw.market.ledger.model.PriceBasis
+import tw.market.ledger.model.TechnicalIndicatorPreferences
 import tw.market.ledger.network.CandleDto
 import tw.market.ledger.network.CandleEnvelopeDto
 import tw.market.ledger.network.ChartApi
@@ -28,7 +29,7 @@ class ChartRepositoryTest {
         val dao = FakeChartDao()
         val outcome = DefaultChartRepository(FakeChartApi(), dao).load(
             "1234", MarketCode.TWSE, ChartRange.ONE_YEAR, CandleInterval.DAY,
-            PriceBasis.ADJUSTED, setOf("MA20"),
+            PriceBasis.ADJUSTED, TechnicalIndicatorPreferences.Default.copy(enabled = setOf("MA20")),
         )
         assertFalse(outcome.fromCache)
         assertEquals("41.0", outcome.candles.candles.single().close)
@@ -44,7 +45,7 @@ class ChartRepositoryTest {
         }
         val outcome = DefaultChartRepository(FakeChartApi(true), dao).load(
             "1234", MarketCode.TWSE, ChartRange.ONE_YEAR, CandleInterval.DAY,
-            PriceBasis.RAW, emptySet(),
+            PriceBasis.RAW, TechnicalIndicatorPreferences.Default.copy(enabled = emptySet()),
         )
         assertTrue(outcome.fromCache)
         assertEquals(DataStatus.STALE, outcome.candles.dataStatus)
@@ -57,7 +58,8 @@ private class FakeChartApi(private val fail: Boolean = false) : ChartApi {
         if (fail) throw IOException("offline")
         return CandleEnvelopeDto(listOf(CandleDto("2026-08-07T00:00:00+08:00", "40.0", "42.0", "39.0", "41.0", 1000, null)), meta, interval, adjustment, "日 K")
     }
-    override suspend fun technicals(code: String, market: String, basis: String, indicators: String) =
+    override suspend fun technicals(code: String, market: String, basis: String, indicators: String,
+                                    parameters: Map<String, String>) =
         TechnicalEnvelopeDto(listOf(TechnicalPointDto("2026-08-07", basis, "v1",
             listOf(IndicatorValueDto("MA20", "40.5")), meta.asOf, "FINAL")), meta)
 }

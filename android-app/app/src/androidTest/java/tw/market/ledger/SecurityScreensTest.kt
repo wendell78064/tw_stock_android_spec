@@ -3,6 +3,8 @@ package tw.market.ledger
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import tw.market.ledger.feature.security.presentation.SecurityDetailScreen
@@ -24,11 +26,14 @@ class SecurityScreensTest {
     )
 
     @Test fun searchResultHappyPathIsVisible() {
+        var opened: Security? = null
         composeRule.setContent {
-            SecuritySearchScreen("測試", SecuritySearchUiState.Success(listOf(security), security.asOf), {}, {}, {}, {})
+            SecuritySearchScreen("測試", SecuritySearchUiState.Success(listOf(security), security.asOf), {}, {}, {}, { opened = it })
         }
         composeRule.onNodeWithText("1234 測試科技").assertIsDisplayed()
         composeRule.onNodeWithText("資料狀態：FINAL").assertIsDisplayed()
+        composeRule.onNodeWithText("1234 測試科技").performClick()
+        assertEquals(security, opened)
     }
 
     @Test fun basicDetailExplicitlyExcludesLaterFeatures() {
@@ -37,4 +42,3 @@ class SecurityScreensTest {
         composeRule.onNodeWithText("股價、K 線、法人與技術指標尚未在本階段提供").assertIsDisplayed()
     }
 }
-

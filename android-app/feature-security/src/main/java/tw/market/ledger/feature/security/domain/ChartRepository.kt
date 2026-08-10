@@ -6,6 +6,7 @@ import tw.market.ledger.model.ChartRange
 import tw.market.ledger.model.MarketCode
 import tw.market.ledger.model.PriceBasis
 import tw.market.ledger.model.TechnicalPoint
+import tw.market.ledger.model.TechnicalIndicatorPreferences
 
 data class ChartOutcome(
     val candles: CandleResult,
@@ -20,7 +21,7 @@ interface ChartRepository {
         range: ChartRange,
         interval: CandleInterval,
         basis: PriceBasis,
-        indicators: Set<String>,
+        preferences: TechnicalIndicatorPreferences,
     ): ChartOutcome
 }
 
@@ -30,9 +31,9 @@ class GetSecurityChartUseCase(private val repository: ChartRepository) {
         market: MarketCode,
         range: ChartRange,
         basis: PriceBasis,
-        indicators: Set<String>,
+        preferences: TechnicalIndicatorPreferences,
     ): ChartOutcome {
         val interval = if (range == ChartRange.FIVE_YEARS) CandleInterval.WEEK else CandleInterval.DAY
-        return repository.load(code, market, range, interval, basis, indicators)
+        return repository.load(code, market, range, interval, basis, preferences)
     }
 }

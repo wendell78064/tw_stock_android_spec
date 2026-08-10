@@ -1,8 +1,10 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
 from app.domain.pricing import Candle
-from app.services.technical_indicators import TechnicalIndicatorService
+from app.services.technical_indicators import TechnicalIndicatorService, TechnicalParameters
 
 
 def fixture(count: int = 260) -> list[Candle]:
@@ -57,3 +59,30 @@ def test_all_indicators_are_deterministic_and_long_ma_requires_history() -> None
 def test_sequence_uses_rows_not_natural_day_interpolation() -> None:
     result = TechnicalIndicatorService().calculate(fixture(5)).values
     assert result[-1]["MA5"] == Decimal("103")
+
+
+def test_custom_parameters_and_validation() -> None:
+    parameters = TechnicalParameters(
+        ma_periods=(3,),
+        ema_periods=(4,),
+        rsi_period=12,
+        macd_fast=10,
+        macd_slow=24,
+        macd_signal=8,
+        kd_period=7,
+        kd_k_smoothing=2,
+        kd_d_smoothing=4,
+        bollinger_period=15,
+        bollinger_stddev=Decimal("2.5"),
+        atr_period=10,
+        williams_period=11,
+    )
+    last = TechnicalIndicatorService().calculate(fixture(), parameters).values[-1]
+    assert last["MA3"] is not None and last["EMA4"] is not None and last["RSI12"] is not None
+    assert last["ATR10"] is not None and last["WILLIAMS_R"] is not None
+    with pytest.raises(ValueError, match="slow"):
+        TechnicalParameters(macd_fast=26, macd_slow=12).validate()
+    with pytest.raises(ValueError, match="Bollinger"):
+        TechnicalParameters(bollinger_stddev=Decimal(0)).validate()
+    with pytest.raises(ValueError, match="duplicates"):
+        TechnicalParameters(ma_periods=(5, 5)).validate()

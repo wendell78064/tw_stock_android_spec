@@ -143,7 +143,7 @@ class TechnicalPointResponse(BaseModel):
     def from_domain(
         cls, snapshot: TechnicalSnapshot, selected: set[str] | None
     ) -> "TechnicalPointResponse":
-        parameters = {
+        parameters = snapshot.parameters or {
             "MACD": {"fast": 12, "slow": 26, "signal": 9},
             "KD_K": {"period": 9, "smoothing": 3},
             "KD_D": {"period": 9, "smoothing": 3},

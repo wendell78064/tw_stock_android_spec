@@ -4,6 +4,7 @@ import com.squareup.moshi.Json
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.QueryMap
 
 data class CandleDto(
     val time: String,
@@ -50,5 +51,6 @@ interface ChartApi {
         @Query("market") market: String,
         @Query("price_basis") basis: String,
         @Query("indicators") indicators: String,
+        @QueryMap parameters: Map<String, String>,
     ): TechnicalEnvelopeDto
 }

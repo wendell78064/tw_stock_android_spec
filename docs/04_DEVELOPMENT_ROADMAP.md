@@ -203,3 +203,8 @@
 不得開始下一個切片，不得使用未授權網頁爬蟲，不得捏造真實行情。
 最後提供 build/test 結果與尚未完成項目。
 ```
+# Phase 1 / Slice 2 Hardening
+
+- 技術指標數值參數編輯、驗證、保存與重設：完成
+- 預設 snapshot／自訂 request-time calculation：完成
+- Android emulator instrumentation workflow：完成建置，執行結果以 CI run 為準
