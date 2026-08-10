@@ -23,7 +23,7 @@ class Phase2MarketInstrumentationTest {
         compose.onNodeWithTag("index-TAIEX").assertIsDisplayed(); compose.onNodeWithTag("index-OTC").assertIsDisplayed()
         compose.onNodeWithText("5日").performClick(); assertEquals(5, selected)
     }
-    @Test fun futuresCardNavigatesAndDetailChangesRangeAndRollMethod() {
+    @Test fun futuresCardNavigates() {
         val product = FuturesProduct("TX", "臺股期貨", "200", "TWD", true)
         val quote = FuturesQuote("TX202608", "202608", "2026-08-07", "23000", "23200",
             "22900", "23100", "23110", "100", "0.43", 1000, 5000, "120",
@@ -35,7 +35,14 @@ class Phase2MarketInstrumentationTest {
         compose.setContent { MarketDashboardScreen(MarketDashboardUiState.Success(overview), 1,
             futures=futures, onFuturesClick={opened=it}) }
         compose.onNodeWithTag("futures-card-TX").performClick(); assertEquals("TX", opened)
+    }
 
+    @Test fun futuresDetailChangesRangeAndRollMethod() {
+        val product = FuturesProduct("TX", "臺股期貨", "200", "TWD", true)
+        val quote = FuturesQuote("TX202608", "202608", "2026-08-07", "23000", "23200",
+            "22900", "23100", "23110", "100", "0.43", 1000, 5000, "120",
+            DataStatus.FINAL, "2026-08-07T00:00:00Z")
+        val futures = FuturesOverview(product, quote, quote.copy(contractCode="TX202609"), DataStatus.FINAL)
         var range = FuturesRange.D30; var roll = RollMethod.OPEN_INTEREST
         compose.setContent { FuturesDetailScreen("TX", FuturesDetailUiState.Loaded(futures,
             emptyList(), emptyList()), range, roll, { range=it }, { roll=it }) }
