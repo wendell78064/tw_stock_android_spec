@@ -101,10 +101,16 @@ paths:
           $ref: "#/components/responses/AmbiguousSecurity"
   /securities/{code}/candles:
     get:
+      operationId: getSecurityCandles
+      security: []
       tags: [Securities]
-      summary: Get security candles
+      summary: Get RAW or ADJUSTED daily, weekly, or monthly candles
       parameters:
         - $ref: "#/components/parameters/SecurityCode"
+        - in: query
+          name: market
+          required: true
+          schema: { $ref: "#/components/schemas/MarketCode" }
         - in: query
           name: range
           required: true
@@ -115,13 +121,19 @@ paths:
           required: true
           schema:
             type: string
-            enum: [1m, 5m, 1d, 1w, 1mo]
+            enum: [1d, 1w, 1mo]
         - in: query
           name: adjustment
           schema:
             type: string
             enum: [RAW, ADJUSTED]
             default: ADJUSTED
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
       responses:
         "200":
           description: Candle series
@@ -129,6 +141,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CandleSeriesEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /securities/{code}/technicals:
+    get:
+      operationId: getSecurityTechnicals
+      security: []
+      tags: [Securities]
+      summary: Get deterministic technical indicator series
+      parameters:
+        - $ref: "#/components/parameters/SecurityCode"
+        - in: query
+          name: market
+          required: true
+          schema: { $ref: "#/components/schemas/MarketCode" }
+        - in: query
+          name: date
+          schema: { type: string, format: date }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: price_basis
+          schema: { $ref: "#/components/schemas/PriceBasis" }
+        - in: query
+          name: indicators
+          description: Comma-separated indicator names
+          schema: { type: string }
+      responses:
+        "200":
+          description: Technical indicator series
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TechnicalSeriesEnvelope" }
+        "404":
+          $ref: "#/components/responses/NotFound"
   /securities/{code}/institutional:
     get:
       tags: [Securities]
@@ -412,6 +462,9 @@ components:
     ChartRange:
       type: string
       enum: [1D, 5D, 10D, 30D, 1Y, 5Y]
+    PriceBasis:
+      type: string
+      enum: [RAW, ADJUSTED]
     DecimalString:
       type: string
       pattern: "^-?[0-9]+(\\.[0-9]+)?$"
@@ -509,20 +562,58 @@ components:
         meta: { $ref: "#/components/schemas/Meta" }
     Candle:
       type: object
-      required: [time, open, high, low, close]
+      required: [time, open, high, low, close, volume_shares]
       properties:
         time: { type: string, format: date-time }
         open: { $ref: "#/components/schemas/DecimalString" }
         high: { $ref: "#/components/schemas/DecimalString" }
         low: { $ref: "#/components/schemas/DecimalString" }
         close: { $ref: "#/components/schemas/DecimalString" }
-        volume_shares: { type: integer, format: int64 }
+        volume_shares: { type: [integer, "null"], format: int64 }
+        turnover_amount:
+          oneOf:
+            - $ref: "#/components/schemas/DecimalString"
+            - type: "null"
     CandleSeriesEnvelope:
       type: object
+      required: [data, meta, interval, adjustment]
       properties:
         data:
           type: array
           items: { $ref: "#/components/schemas/Candle" }
+        meta: { $ref: "#/components/schemas/Meta" }
+        interval: { type: string, enum: [1d, 1w, 1mo] }
+        adjustment: { $ref: "#/components/schemas/PriceBasis" }
+        display_note: { type: [string, "null"] }
+    IndicatorValue:
+      type: object
+      required: [name, parameters, value]
+      properties:
+        name: { type: string }
+        parameters: { type: object, additionalProperties: true }
+        value:
+          oneOf:
+            - $ref: "#/components/schemas/DecimalString"
+            - type: "null"
+    TechnicalPoint:
+      type: object
+      required: [trade_date, price_basis, algorithm_version, indicators, as_of, data_status]
+      properties:
+        trade_date: { type: string, format: date }
+        price_basis: { $ref: "#/components/schemas/PriceBasis" }
+        algorithm_version: { type: string }
+        indicators:
+          type: array
+          items: { $ref: "#/components/schemas/IndicatorValue" }
+        as_of: { type: string, format: date-time }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+    TechnicalSeriesEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/TechnicalPoint" }
         meta: { $ref: "#/components/schemas/Meta" }
     InstitutionSnapshot:
       type: object

@@ -2,12 +2,14 @@ from datetime import date, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Date,
     DateTime,
     Enum,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -87,3 +89,61 @@ class SecurityIndustryModel(Base):
         ForeignKey("industries.id", ondelete="CASCADE"), primary_key=True
     )
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class DailyPriceModel(Base):
+    __tablename__ = "daily_prices"
+    __table_args__ = (UniqueConstraint("security_id", "trade_date"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    security_id: Mapped[UUID] = mapped_column(ForeignKey("securities.id", ondelete="CASCADE"))
+    trade_date: Mapped[date] = mapped_column(Date)
+    open: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    high: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    low: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    close: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    adjusted_open: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    adjusted_high: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    adjusted_low: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    adjusted_close: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    volume_shares: Mapped[int | None] = mapped_column(BigInteger)
+    turnover_amount: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    source_code: Mapped[str] = mapped_column(String(32))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    source_revision: Mapped[str | None] = mapped_column(String(64))
+    missing_reason: Mapped[str | None] = mapped_column(String(128))
+    ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class TechnicalSnapshotModel(Base):
+    __tablename__ = "technical_snapshots"
+    __table_args__ = (UniqueConstraint("security_id", "trade_date", "price_basis"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    security_id: Mapped[UUID] = mapped_column(ForeignKey("securities.id", ondelete="CASCADE"))
+    trade_date: Mapped[date] = mapped_column(Date)
+    price_basis: Mapped[str] = mapped_column(String(16))
+    ma5: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    ma10: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    ma20: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    ma60: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    ma120: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    ma240: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    ema12: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    ema26: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    rsi14: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    macd: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    macd_signal: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    macd_histogram: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    kd_k: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    kd_d: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    atr14: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    obv: Mapped[object | None] = mapped_column(Numeric(28, 4))
+    bollinger_upper: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    bollinger_middle: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    bollinger_lower: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    williams_r: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    algorithm_version: Mapped[str] = mapped_column(String(64))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))

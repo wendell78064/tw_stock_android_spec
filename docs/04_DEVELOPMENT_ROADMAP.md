@@ -43,6 +43,8 @@
 
 ### 垂直切片 2：日 K 與技術指標
 
+狀態：**已完成實作；驗證與操作紀錄見 `docs/08_PHASE_1_DAILY_PRICES_TECHNICALS.md`。**
+
 - 日行情 ingestion。
 - 1M／1Y／5Y 日、週、月聚合。
 - MA、RSI、KD、MACD、ATR、OBV、BBands。

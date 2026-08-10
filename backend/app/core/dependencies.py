@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.sql_price import SqlPriceRepository
 from app.repositories.sql_security import SqlSecurityRepository
 from app.services.readiness import ReadinessChecker
 
@@ -21,3 +22,9 @@ async def security_repository(
     session: Annotated[AsyncSession, Depends(database_session)],
 ) -> SqlSecurityRepository:
     return SqlSecurityRepository(session)
+
+
+async def price_repository(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> SqlPriceRepository:
+    return SqlPriceRepository(session)

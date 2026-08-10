@@ -71,12 +71,14 @@ tw-stock-app/
 
 ## 實作狀態
 
-Phase 0 Monorepo 基礎已建立並保持通過驗證；操作方式請見 [`docs/06_PHASE_0_OPERATIONS.md`](docs/06_PHASE_0_OPERATIONS.md)。Phase 1 垂直切片 1「股票主檔與搜尋」已完成，包含 TWSE／TPEx Provider、冪等同步、搜尋 API、Android 搜尋及個股基本頁；操作與邊界請見 [`docs/07_PHASE_1_SECURITY_MASTER.md`](docs/07_PHASE_1_SECURITY_MASTER.md)。日 K、技術指標及其他後續功能尚未實作。
+Phase 0 Monorepo 基礎與 Phase 1 垂直切片 1「股票主檔與搜尋」已完成並保持驗證。Phase 1 垂直切片 2 已加入日 K、日／週／月聚合、RAW／ADJUSTED 邊界、可重現技術指標 API，以及 Android 個股走勢頁。操作與限制請見 [`docs/07_PHASE_1_SECURITY_MASTER.md`](docs/07_PHASE_1_SECURITY_MASTER.md) 與 [`docs/08_PHASE_1_DAILY_PRICES_TECHNICALS.md`](docs/08_PHASE_1_DAILY_PRICES_TECHNICALS.md)。分鐘、即時行情及其他後續功能尚未實作。
 
 快速啟動與固定 Fixture 同步：
 
 ```bash
 make up
 make sync-securities
+make backfill-security CODE=1234 MARKET=TWSE FROM=2025-01-01 TO=2026-08-07
 curl 'http://localhost:8000/v1/securities/search?q=12'
+curl 'http://localhost:8000/v1/securities/1234/candles?market=TWSE&range=1Y&interval=1d&adjustment=ADJUSTED'
 ```

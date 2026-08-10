@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from app.domain.pricing import DailyPriceRecord, SecurityKey
     from app.domain.security import SecurityRecord
 
 
@@ -34,3 +35,11 @@ class MarketDataProvider(Protocol):
     async def get_snapshot(self, symbol: str) -> MarketSnapshot: ...
 
     async def list_securities(self) -> list["SecurityRecord"]: ...
+
+    async def get_daily_prices(
+        self,
+        trade_date: date | None = None,
+        security: "SecurityKey | None" = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list["DailyPriceRecord"]: ...

@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.market_data import DataStatus
+from app.domain.pricing import Candle, PriceBasis, TechnicalSnapshot
 from app.domain.security import MarketCode, Security, SecurityStatus, SecurityType
 
 
@@ -89,3 +90,86 @@ def meta_for(securities: list[Security]) -> MetaResponse:
         else DataStatus.PARTIAL,
         source=",".join(sorted({item.source_code for item in securities})),
     )
+
+
+class CandleResponse(BaseModel):
+    time: datetime
+    open: str
+    high: str
+    low: str
+    close: str
+    volume_shares: int | None
+    turnover_amount: str | None
+
+    @classmethod
+    def from_domain(cls, candle: Candle) -> "CandleResponse":
+        from datetime import time
+        from zoneinfo import ZoneInfo
+
+        return cls(
+            time=datetime.combine(candle.trade_date, time(), ZoneInfo("Asia/Taipei")),
+            open=str(candle.open),
+            high=str(candle.high),
+            low=str(candle.low),
+            close=str(candle.close),
+            volume_shares=candle.volume_shares,
+            turnover_amount=None if candle.turnover_amount is None else str(candle.turnover_amount),
+        )
+
+
+class CandleSeriesEnvelope(BaseModel):
+    data: list[CandleResponse]
+    meta: MetaResponse
+    interval: str
+    adjustment: PriceBasis
+    display_note: str | None = None
+
+
+class IndicatorValueResponse(BaseModel):
+    name: str
+    parameters: dict[str, int | str]
+    value: str | None
+
+
+class TechnicalPointResponse(BaseModel):
+    trade_date: date
+    price_basis: PriceBasis
+    algorithm_version: str
+    indicators: list[IndicatorValueResponse]
+    as_of: datetime
+    data_status: DataStatus
+
+    @classmethod
+    def from_domain(
+        cls, snapshot: TechnicalSnapshot, selected: set[str] | None
+    ) -> "TechnicalPointResponse":
+        parameters = {
+            "MACD": {"fast": 12, "slow": 26, "signal": 9},
+            "KD_K": {"period": 9, "smoothing": 3},
+            "KD_D": {"period": 9, "smoothing": 3},
+            "BBANDS_UPPER": {"period": 20, "stddev": "2"},
+            "BBANDS_MIDDLE": {"period": 20, "stddev": "2"},
+            "BBANDS_LOWER": {"period": 20, "stddev": "2"},
+        }
+        items = [
+            IndicatorValueResponse(
+                name=name,
+                parameters=parameters.get(name, {}),
+                value=None if value is None else str(value),
+            )
+            for name, value in snapshot.values.items()
+            if selected is None or name in selected
+        ]
+        return cls(
+            trade_date=snapshot.trade_date,
+            price_basis=snapshot.price_basis,
+            algorithm_version=snapshot.algorithm_version,
+            indicators=items,
+            as_of=snapshot.as_of,
+            data_status=snapshot.data_status,
+        )
+
+
+class TechnicalSeriesEnvelope(BaseModel):
+    data: list[TechnicalPointResponse]
+    meta: MetaResponse
