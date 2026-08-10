@@ -20,10 +20,19 @@ GitHub Actions `android-instrumentation` 使用 Ubuntu、KVM、API 35、Google A
 
 ```bash
 cd android-app
-./gradlew connectedDebugAndroidTest
+./gradlew :app:connectedDebugAndroidTest
 ```
 
 本機亦可在已啟動且 `adb devices` 可見的 emulator 上執行相同命令。
+
+### 實際驗證紀錄
+
+- Run date：2026-08-10
+- Runner：GitHub-hosted Ubuntu runner with KVM
+- Emulator：Android API 35、Google APIs、x86_64
+- Command：`./gradlew --no-daemon :app:connectedDebugAndroidTest`
+- Result：Success，App instrumentation tests 6/6 通過
+- Workflow run：[CI run 31350993150](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31350993150)
 
 ## 已知限制與授權邊界
 
