@@ -1,4 +1,4 @@
-.PHONY: up down logs backend-test backend-lint backend-build android-build android-test android-lint android-ui-test-apk openapi-validate openapi-generate test build health migrate migrate-up migrate-down sync-securities sync-daily-prices sync-market-spot backfill-market-spot backfill-security calculate-technicals
+.PHONY: up down logs backend-test backend-lint backend-build android-build android-test android-lint android-ui-test-apk openapi-validate openapi-generate test build health migrate migrate-up migrate-down sync-securities sync-daily-prices sync-market-spot backfill-market-spot backfill-security calculate-technicals sync-derivatives sync-futures sync-futures-institutional sync-options sync-vix
 
 up:
 	docker compose up --build -d
@@ -64,7 +64,22 @@ calculate-technicals:
 	docker compose exec backend python -m app.cli.sync_daily_prices --provider fake --code $(CODE) --market $(MARKET) --start 2025-01-01 --end 2026-08-07
 
 sync-market-spot:
-	docker compose exec backend python -m app.cli.sync_market_spot --date $(DATE)
+	docker compose exec backend python -m app.cli.sync_market_spot --provider $(or $(PROVIDER),fake) --date $(DATE)
 
 backfill-market-spot:
 	docker compose exec backend python -m app.cli.sync_market_spot --start $(FROM) --end $(TO)
+
+sync-derivatives:
+	docker compose exec backend python -m app.cli.sync_derivatives --provider $(or $(PROVIDER),fake) --date $(DATE)
+
+sync-futures:
+	docker compose exec backend python -m app.cli.sync_derivatives --provider $(or $(PROVIDER),fake) --date $(DATE) --dataset FUTURES_PRODUCTS --dataset FUTURES_CONTRACTS --dataset FUTURES_DAILY
+
+sync-futures-institutional:
+	docker compose exec backend python -m app.cli.sync_derivatives --provider $(or $(PROVIDER),fake) --date $(DATE) --dataset FUTURES_INSTITUTIONAL --dataset TRADER_CONCENTRATION
+
+sync-options:
+	docker compose exec backend python -m app.cli.sync_derivatives --provider $(or $(PROVIDER),fake) --date $(DATE) --dataset OPTION_PUT_CALL --dataset OPTION_STRIKE_OI
+
+sync-vix:
+	docker compose exec backend python -m app.cli.sync_derivatives --provider $(or $(PROVIDER),fake) --date $(DATE) --dataset VOLATILITY_INDEX

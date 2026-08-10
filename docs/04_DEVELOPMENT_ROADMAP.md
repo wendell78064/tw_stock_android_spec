@@ -1,5 +1,14 @@
 # 04 — Development Roadmap
 
+## Phase 2／Slice 2：臺灣衍生品日資料
+
+狀態：**實作完成，等待完整本機與 GitHub instrumentation 封版驗證。**
+
+- TAIFEX TX/MTX/TMF/TE/TF 實際契約、日 OHLC/volume/OI 與基差。
+- 法人期貨部位、Top 5/10 集中度、TXO Put/Call、履約價 OI 與 Max Pain。
+- VOLUME/OI/EXPIRY 連續期貨與 Android Futures Detail／Offline cache。
+- 補齊 TWSE／TPEx Slice 1 正式 Provider；授權 VIX 歷史來源仍待配置。
+
 ## Phase 0：專案基礎
 
 ### 任務

@@ -104,6 +104,121 @@ paths:
         - { $ref: "#/components/parameters/TradingWindow" }
       responses:
         "200": { description: "Market margin, short and lending series" }
+  /futures/products:
+    get:
+      operationId: getFuturesProducts
+      tags: [Futures]
+      responses:
+        "200": { description: Supported TAIFEX futures products }
+  /futures/products/{productCode}/overview:
+    get:
+      operationId: getFuturesOverview
+      tags: [Futures]
+      parameters:
+        - { $ref: "#/components/parameters/FuturesProductCode" }
+      responses:
+        "200":
+          description: Near and next contract overview with basis
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FuturesOverviewEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /futures/products/{productCode}/contracts:
+    get:
+      operationId: getFuturesContracts
+      tags: [Futures]
+      parameters:
+        - { $ref: "#/components/parameters/FuturesProductCode" }
+      responses:
+        "200": { description: Actual delivery-month contracts }
+  /futures/contracts/{contractCode}/candles:
+    get:
+      operationId: getFuturesContractCandles
+      tags: [Futures]
+      parameters:
+        - { in: path, name: contractCode, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/DerivativesRange" }
+      responses:
+        "200": { description: "Contract daily OHLC, volume and open interest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /futures/products/{productCode}/continuous-candles:
+    get:
+      operationId: getContinuousFuturesCandles
+      tags: [Futures]
+      parameters:
+        - { $ref: "#/components/parameters/FuturesProductCode" }
+        - { $ref: "#/components/parameters/DerivativesRange" }
+        - { in: query, name: roll_method, schema: { type: string, enum: [VOLUME, OPEN_INTEREST, EXPIRY], default: OPEN_INTEREST } }
+      responses:
+        "200": { description: Unadjusted continuous daily series with source contract and roll metadata }
+  /futures/products/{productCode}/open-interest:
+    get:
+      operationId: getFuturesOpenInterest
+      tags: [Futures]
+      parameters:
+        - { $ref: "#/components/parameters/FuturesProductCode" }
+        - { $ref: "#/components/parameters/TradingWindow" }
+      responses:
+        "200": { description: Contract open-interest history }
+  /futures/products/{productCode}/institutional-positions:
+    get:
+      operationId: getFuturesInstitutionalPositions
+      tags: [Futures]
+      parameters:
+        - { $ref: "#/components/parameters/FuturesProductCode" }
+        - { $ref: "#/components/parameters/TradingWindow" }
+      responses:
+        "200":
+          description: "Institutional futures volume, amount and open-interest series"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FuturesInstitutionSeriesEnvelope" }
+  /futures/products/{productCode}/trader-concentration:
+    get:
+      operationId: getTraderConcentration
+      tags: [Futures]
+      parameters:
+        - { $ref: "#/components/parameters/FuturesProductCode" }
+        - { $ref: "#/components/parameters/TradingWindow" }
+      responses:
+        "200": { description: Top 5 and top 10 long/short concentration }
+  /options/products/{productCode}/put-call-ratio:
+    get:
+      operationId: getPutCallRatio
+      tags: [Futures]
+      parameters:
+        - { in: path, name: productCode, required: true, schema: { type: string, enum: [TXO] } }
+        - { in: query, name: window, schema: { type: integer, enum: [1, 5, 10, 20, 60, 250], default: 20 } }
+      responses:
+        "200": { description: TXO volume and open-interest put/call ratios }
+  /options/products/{productCode}/open-interest-by-strike:
+    get:
+      operationId: getOptionStrikeOpenInterest
+      tags: [Futures]
+      parameters:
+        - { in: path, name: productCode, required: true, schema: { type: string, enum: [TXO] } }
+        - { in: query, name: expiry, schema: { type: string } }
+        - { in: query, name: date, schema: { type: string, format: date } }
+      responses:
+        "200": { description: TXO call and put open interest by strike }
+  /options/products/{productCode}/max-pain:
+    get:
+      operationId: getOptionMaxPain
+      tags: [Futures]
+      parameters:
+        - { in: path, name: productCode, required: true, schema: { type: string, enum: [TXO] } }
+        - { in: query, name: expiry, schema: { type: string } }
+        - { in: query, name: date, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Derived max-pain strike with tie handling and algorithm version }
+  /market/volatility:
+    get:
+      operationId: getMarketVolatility
+      tags: [Market, Futures]
+      parameters:
+        - { $ref: "#/components/parameters/DerivativesRange" }
+      responses:
+        "200": { description: Taiwan VIX daily history and percentiles when licensed data is available }
   /securities/search:
     get:
       operationId: searchSecurities
@@ -311,44 +426,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreditEnvelope"
-  /futures/products/{productCode}/overview:
-    get:
-      tags: [Futures]
-      summary: Get futures product overview
-      parameters:
-        - in: path
-          name: productCode
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: Futures overview
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FuturesOverviewEnvelope"
-  /futures/products/{productCode}/institutional-positions:
-    get:
-      tags: [Futures]
-      summary: Get institutional futures positions
-      parameters:
-        - in: path
-          name: productCode
-          required: true
-          schema: { type: string }
-        - in: query
-          name: window
-          schema:
-            type: integer
-            enum: [1, 5, 10, 20, 60, 250]
-            default: 20
-      responses:
-        "200":
-          description: Futures institutional positions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/FuturesInstitutionSeriesEnvelope"
   /industries:
     get:
       tags: [Industries]
@@ -519,6 +596,15 @@ components:
       in: query
       name: window
       schema: { type: integer, enum: [1, 5, 10, 20, 60], default: 20 }
+    FuturesProductCode:
+      in: path
+      name: productCode
+      required: true
+      schema: { type: string, enum: [TX, MTX, TMF, TE, TF] }
+    DerivativesRange:
+      in: query
+      name: range
+      schema: { type: string, enum: [5D, 10D, 30D, 1Y, 5Y], default: 30D }
     PortfolioId:
       in: path
       name: portfolioId

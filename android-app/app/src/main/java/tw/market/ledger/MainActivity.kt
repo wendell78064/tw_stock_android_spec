@@ -21,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
 import tw.market.ledger.feature.market.presentation.MarketDashboardRoute
+import tw.market.ledger.feature.market.presentation.FuturesDetailRoute
 import tw.market.ledger.feature.security.presentation.SecurityDetailRoute
 import tw.market.ledger.feature.security.presentation.SecuritySearchRoute
 import tw.market.ledger.model.MarketCode
@@ -63,7 +64,10 @@ private fun AppNavigation() {
             startDestination = "home",
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            composable("home") { MarketDashboardRoute() }
+            composable("home") { MarketDashboardRoute(onFuturesClick = { navController.navigate("futures/$it") }) }
+            composable("futures/{product}", arguments = listOf(navArgument("product") { type = NavType.StringType })) {
+                FuturesDetailRoute(requireNotNull(it.arguments?.getString("product")))
+            }
             composable("placeholder/{name}", arguments = listOf(navArgument("name") { type = NavType.StringType })) {
                 Text("${it.arguments?.getString("name")}尚未在本階段提供")
             }

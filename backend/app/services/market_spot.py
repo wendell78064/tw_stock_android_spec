@@ -136,8 +136,9 @@ class CreditTradingService:
 
 
 class MarketOverviewService:
-    def __init__(self, repository: MarketSpotRepository):
+    def __init__(self, repository: MarketSpotRepository, derivatives_repository=None):
         self.repository = repository
+        self.derivatives_repository = derivatives_repository
 
     async def overview(self) -> dict:
         indexes = await self.repository.indexes(None, None, None, 2)
@@ -159,6 +160,58 @@ class MarketOverviewService:
             if statuses and all(item is DataStatus.FINAL for item in statuses)
             else DataStatus.PARTIAL
         )
+        futures = None
+        institutional_futures = []
+        derivatives_risk = {"put_call": None, "vix": None, "trader_concentration": []}
+        if self.derivatives_repository:
+            from app.services.derivatives import DerivativesRiskService, FuturesService
+
+            futures = await FuturesService(
+                self.derivatives_repository, self.repository
+            ).product_overview("TX")
+            institutional_futures = await FuturesService(self.derivatives_repository).positions(
+                "TX", 1
+            )
+            put_call = await self.derivatives_repository.put_call("TXO", 1)
+            concentration = await self.derivatives_repository.concentrations("TX", 1)
+            vix = await DerivativesRiskService(self.derivatives_repository).volatility(1)
+            derivatives_risk = {
+                "put_call": (
+                    {
+                        name: encode(getattr(put_call[-1], name))
+                        for name in (
+                            "trade_date",
+                            "put_volume",
+                            "call_volume",
+                            "volume_put_call_ratio",
+                            "put_open_interest",
+                            "call_open_interest",
+                            "oi_put_call_ratio",
+                        )
+                    }
+                    if put_call
+                    else None
+                ),
+                "vix": vix[-2] if len(vix) > 1 else None,
+                "trader_concentration": [
+                    {
+                        name: encode(getattr(row, name))
+                        for name in (
+                            "contract_scope",
+                            "side",
+                            "top_n",
+                            "open_interest",
+                            "market_open_interest",
+                            "concentration_ratio",
+                        )
+                    }
+                    for row in concentration[-4:]
+                ],
+            }
+            if not futures or not put_call or not vix:
+                status = DataStatus.PARTIAL
+        else:
+            status = DataStatus.PARTIAL
         return {
             "data": {
                 "indexes": [self._index(i) for i in indexes],
@@ -166,6 +219,9 @@ class MarketOverviewService:
                 "institutional_spot": institutional,
                 "credit": credit,
                 "lending": lending,
+                "futures": futures,
+                "institutional_futures": institutional_futures,
+                "derivatives_risk": derivatives_risk,
             },
             "meta": {
                 "data_status": status.value,

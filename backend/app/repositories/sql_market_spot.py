@@ -144,7 +144,10 @@ class SqlMarketSpotRepository:
                 if record.security:
                     security_id = await self._security_id(record.security)
                     if security_id is None:
-                        raise LookupError(f"missing security {record.security}")
+                        # Official trading reports can retain an instrument absent from the
+                        # active common-stock master. It must not create an orphan or abort
+                        # the otherwise valid market dataset.
+                        continue
                     values = {
                         "security_id": security_id,
                         "trade_date": record.trade_date,
@@ -211,7 +214,7 @@ class SqlMarketSpotRepository:
                 if record.security:
                     security_id = await self._security_id(record.security)
                     if security_id is None:
-                        raise LookupError(f"missing security {record.security}")
+                        continue
                     values.update(
                         {
                             "security_id": security_id,
@@ -248,7 +251,7 @@ class SqlMarketSpotRepository:
                 if record.security:
                     security_id = await self._security_id(record.security)
                     if security_id is None:
-                        raise LookupError(f"missing security {record.security}")
+                        continue
                     values["security_id"] = security_id
                     model, where = (
                         SecuritiesLendingModel,

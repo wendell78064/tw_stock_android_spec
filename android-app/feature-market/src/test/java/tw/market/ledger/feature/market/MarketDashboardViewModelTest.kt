@@ -15,6 +15,8 @@ import org.junit.Before
 import org.junit.Test
 import tw.market.ledger.feature.market.domain.GetMarketOverviewUseCase
 import tw.market.ledger.feature.market.domain.MarketRepository
+import tw.market.ledger.feature.market.domain.DerivativesRepository
+import tw.market.ledger.feature.market.domain.GetFuturesOverviewUseCase
 import tw.market.ledger.feature.market.presentation.MarketDashboardUiState
 import tw.market.ledger.feature.market.presentation.MarketDashboardViewModel
 import tw.market.ledger.model.*
@@ -28,7 +30,8 @@ class MarketDashboardViewModelTest {
 
     @Test fun partialOverviewAndWindowSwitchArePreserved() = runTest(dispatcher) {
         val repository = FakeRepository(status = DataStatus.PARTIAL)
-        val viewModel = MarketDashboardViewModel(GetMarketOverviewUseCase(repository), repository)
+        val viewModel = MarketDashboardViewModel(GetMarketOverviewUseCase(repository), repository,
+            GetFuturesOverviewUseCase(FakeDerivativesRepository()))
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value is MarketDashboardUiState.Partial)
         viewModel.selectWindow(60); advanceUntilIdle()
@@ -38,10 +41,19 @@ class MarketDashboardViewModelTest {
 
     @Test fun offlineWithoutCacheIsExplicitError() = runTest(dispatcher) {
         val repository = FakeRepository(fail = true)
-        val viewModel = MarketDashboardViewModel(GetMarketOverviewUseCase(repository), repository)
+        val viewModel = MarketDashboardViewModel(GetMarketOverviewUseCase(repository), repository,
+            GetFuturesOverviewUseCase(FakeDerivativesRepository()))
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value is MarketDashboardUiState.Error)
     }
+}
+
+private class FakeDerivativesRepository : DerivativesRepository {
+    override suspend fun overview(product: String) = FuturesOverview(
+        FuturesProduct(product, "臺股期貨", "200", "TWD", true), null, null, DataStatus.UNAVAILABLE)
+    override suspend fun positions(product: String, window: Int) = emptyList<FuturesInstitutionalPosition>()
+    override suspend fun continuous(product: String, range: FuturesRange, rollMethod: RollMethod) =
+        emptyList<ContinuousFuturesPoint>()
 }
 
 private class FakeRepository(private val status: DataStatus = DataStatus.FINAL,

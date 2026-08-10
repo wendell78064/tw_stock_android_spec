@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.api.derivatives import router as derivatives_router
 from app.api.health import router as health_router
 from app.api.market import router as market_router
 from app.api.securities import router as securities_router
@@ -36,6 +37,7 @@ app.add_exception_handler(AppError, app_error_handler)
 app.include_router(health_router, prefix="/v1")
 app.include_router(securities_router, prefix="/v1")
 app.include_router(market_router, prefix="/v1")
+app.include_router(derivatives_router, prefix="/v1")
 
 
 @app.middleware("http")

@@ -117,6 +117,19 @@ data class CreditEntity(val dataset: String, val market: String, val security: S
     val tradeDate: String, val balance: Long?, val change: Long?, val secondaryBalance: Long?,
     val secondaryChange: Long?, val ratio: String?, val asOf: String, val dataStatus: String)
 
+@Entity(tableName = "futures_overview_cache", primaryKeys = ["productCode"])
+data class FuturesOverviewEntity(val productCode: String, val productName: String,
+    val multiplier: String, val currency: String, val contractCode: String?, val contractMonth: String?,
+    val tradeDate: String?, val close: String?, val change: String?, val changePercent: String?,
+    val volume: Long?, val openInterest: Long?, val closeBasis: String?, val asOf: String?,
+    val dataStatus: String)
+
+@Dao interface DerivativesDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(item: FuturesOverviewEntity)
+    @Query("SELECT * FROM futures_overview_cache WHERE productCode=:product LIMIT 1")
+    suspend fun overview(product: String): FuturesOverviewEntity?
+}
+
 @Dao
 interface MarketDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertIndexes(items: List<MarketIndexEntity>)
@@ -132,12 +145,13 @@ interface MarketDao {
 @Database(
     entities = [SecurityEntity::class, CandleEntity::class, TechnicalEntity::class,
         MarketIndexEntity::class, MarketBreadthEntity::class, InstitutionalEntity::class,
-        CreditEntity::class],
-    version = 3,
+        CreditEntity::class, FuturesOverviewEntity::class],
+    version = 4,
     exportSchema = false,
 )
 abstract class TWMarketDatabase : RoomDatabase() {
     abstract fun securityDao(): SecurityDao
     abstract fun chartDao(): ChartDao
     abstract fun marketDao(): MarketDao
+    abstract fun derivativesDao(): DerivativesDao
 }

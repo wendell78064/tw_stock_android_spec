@@ -5,6 +5,7 @@ from fastapi import Depends, Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.sql_derivatives import SqlDerivativesRepository
 from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.repositories.sql_price import SqlPriceRepository
 from app.repositories.sql_security import SqlSecurityRepository
@@ -40,3 +41,9 @@ async def market_spot_repository(
     session: Annotated[AsyncSession, Depends(database_session)],
 ) -> SqlMarketSpotRepository:
     return SqlMarketSpotRepository(session)
+
+
+async def derivatives_repository(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> SqlDerivativesRepository:
+    return SqlDerivativesRepository(session)

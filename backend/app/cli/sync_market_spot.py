@@ -6,15 +6,20 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.adapters.fake_market_data import FakeMarketDataProvider
+from app.adapters.official_spot import OfficialTpexProvider, OfficialTwseProvider
 from app.core.settings import get_settings
 from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.services.market_spot_ingestion import DATASETS, MarketSpotIngestionService
 
 
-async def run(start: date, end: date) -> None:
+async def run(provider_name: str, start: date, end: date) -> None:
     engine = create_async_engine(get_settings().database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    provider = FakeMarketDataProvider()
+    provider = {
+        "fake": FakeMarketDataProvider,
+        "twse": OfficialTwseProvider,
+        "tpex": OfficialTpexProvider,
+    }[provider_name]()
     current = start
     while current <= end:
         if current.weekday() < 5:
@@ -40,12 +45,13 @@ async def run(start: date, end: date) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--provider", choices=("fake", "twse", "tpex"), default="fake")
     parser.add_argument("--date", type=date.fromisoformat)
     parser.add_argument("--start", type=date.fromisoformat)
     parser.add_argument("--end", type=date.fromisoformat)
     args = parser.parse_args()
     target = args.date or date(2026, 8, 7)
-    asyncio.run(run(args.start or target, args.end or target))
+    asyncio.run(run(args.provider, args.start or target, args.end or target))
 
 
 if __name__ == "__main__":

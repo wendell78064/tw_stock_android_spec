@@ -71,7 +71,7 @@ tw-stock-app/
 
 ## 實作狀態
 
-Phase 0 與 Phase 1 已完成並保持驗證。Phase 2／Slice 1 新增大盤指數/廣度、三大法人現貨、融資融券/借券、Android 市場首頁及個股籌碼/信用 Tab。操作與限制見 [`docs/10_PHASE_2_MARKET_SPOT_INSTITUTIONAL_CREDIT.md`](docs/10_PHASE_2_MARKET_SPOT_INSTITUTIONAL_CREDIT.md)。分鐘、即時行情、期貨與選擇權仍未實作。
+Phase 0 與 Phase 1 已完成並保持驗證。Phase 2／Slice 1 新增大盤現貨與信用資料；Slice 2 新增 TAIFEX 期貨／選擇權盤後日資料、法人期貨 OI、集中度、Put/Call、履約價 OI、Max Pain、連續期貨與 Android Futures Detail。操作與限制見 [`docs/10_PHASE_2_MARKET_SPOT_INSTITUTIONAL_CREDIT.md`](docs/10_PHASE_2_MARKET_SPOT_INSTITUTIONAL_CREDIT.md) 與 [`docs/11_PHASE_2_DERIVATIVES.md`](docs/11_PHASE_2_DERIVATIVES.md)。分鐘與即時行情仍未實作。
 
 快速啟動與固定 Fixture 同步：
 

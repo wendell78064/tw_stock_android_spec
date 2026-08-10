@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tw.market.ledger.feature.market.domain.GetMarketOverviewUseCase
 import tw.market.ledger.feature.market.domain.MarketRepository
+import tw.market.ledger.feature.market.domain.GetFuturesOverviewUseCase
 import tw.market.ledger.model.*
 
 sealed interface MarketDashboardUiState {
@@ -36,11 +37,12 @@ sealed interface MarketDashboardUiState {
 
 @HiltViewModel
 class MarketDashboardViewModel @Inject constructor(private val overview: GetMarketOverviewUseCase,
-    private val repository: MarketRepository) : ViewModel() {
+    private val repository: MarketRepository, private val futuresOverview: GetFuturesOverviewUseCase) : ViewModel() {
     private val _uiState = MutableStateFlow<MarketDashboardUiState>(MarketDashboardUiState.Loading)
     val uiState: StateFlow<MarketDashboardUiState> = _uiState.asStateFlow()
     val window = MutableStateFlow(1)
     val institutional = MutableStateFlow<List<InstitutionalPoint>>(emptyList())
+    val futures = MutableStateFlow<FuturesOverview?>(null)
     init { refresh() }
     fun refresh() = viewModelScope.launch {
         _uiState.value = MarketDashboardUiState.Loading
@@ -51,6 +53,7 @@ class MarketDashboardViewModel @Inject constructor(private val overview: GetMark
                 result.dataStatus == DataStatus.PARTIAL -> MarketDashboardUiState.Partial(result)
                 else -> MarketDashboardUiState.Success(result) }
             selectWindow(window.value)
+            try { futures.value = futuresOverview("TX") } catch (_: Exception) { futures.value = null }
         } catch (error: IOException) { _uiState.value = MarketDashboardUiState.Error("目前離線且沒有市場快取") }
         catch (error: Exception) { _uiState.value = MarketDashboardUiState.Error(error.message ?: "市場載入失敗") }
     }
@@ -61,32 +64,45 @@ class MarketDashboardViewModel @Inject constructor(private val overview: GetMark
     }
 }
 
-@Composable fun MarketDashboardRoute(viewModel: MarketDashboardViewModel = hiltViewModel()) {
+@Composable fun MarketDashboardRoute(onFuturesClick: (String) -> Unit = {}, viewModel: MarketDashboardViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle(); val window by viewModel.window.collectAsStateWithLifecycle()
     val institutions by viewModel.institutional.collectAsStateWithLifecycle()
-    MarketDashboardScreen(state, window, institutions, viewModel::selectWindow)
+    val futures by viewModel.futures.collectAsStateWithLifecycle()
+    MarketDashboardScreen(state, window, institutions, viewModel::selectWindow, futures, onFuturesClick)
 }
 
 @Composable fun MarketDashboardScreen(state: MarketDashboardUiState, window: Int,
-    institutions: List<InstitutionalPoint> = emptyList(), onWindow: (Int) -> Unit = {}) {
+    institutions: List<InstitutionalPoint> = emptyList(), onWindow: (Int) -> Unit = {},
+    futures: FuturesOverview? = null, onFuturesClick: (String) -> Unit = {}) {
     when (state) {
         MarketDashboardUiState.Loading -> Box(Modifier.fillMaxSize()) { CircularProgressIndicator(Modifier.testTag("market-loading")) }
         MarketDashboardUiState.Empty -> Text("目前沒有市場資料", Modifier.testTag("market-empty"))
         is MarketDashboardUiState.Error -> Text("市場載入失敗：${state.message}", Modifier.testTag("market-error"))
-        is MarketDashboardUiState.Offline -> Dashboard(state.overview, window, institutions, onWindow, "Offline / Stale：顯示 ${state.overview.asOf} 快取")
-        is MarketDashboardUiState.Partial -> Dashboard(state.overview, window, institutions, onWindow, "Partial：部分盤後資料尚未公布")
-        is MarketDashboardUiState.Success -> Dashboard(state.overview, window, institutions, onWindow, null)
+        is MarketDashboardUiState.Offline -> Dashboard(state.overview, window, institutions, onWindow, "Offline / Stale：顯示 ${state.overview.asOf} 快取", futures, onFuturesClick)
+        is MarketDashboardUiState.Partial -> Dashboard(state.overview, window, institutions, onWindow, "Partial：部分盤後資料尚未公布", futures, onFuturesClick)
+        is MarketDashboardUiState.Success -> Dashboard(state.overview, window, institutions, onWindow, null, futures, onFuturesClick)
     }
 }
 
 @Composable private fun Dashboard(data: MarketOverview, window: Int, institutions: List<InstitutionalPoint>,
-    onWindow: (Int) -> Unit, notice: String?) {
+    onWindow: (Int) -> Unit, notice: String?, futures: FuturesOverview?, onFuturesClick: (String) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(12.dp).testTag("market-dashboard"),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Text("資料狀態：${data.dataStatus}"); notice?.let { Text(it) } }
         items(data.indexes.size) { IndexCard(data.indexes[it]) }
         item { Text("市場廣度", style = MaterialTheme.typography.titleMedium) }
         items(data.breadth.size) { BreadthCard(data.breadth[it]) }
+        item {
+            Text("期貨與衍生風險", style = MaterialTheme.typography.titleMedium)
+            Card(onClick = { onFuturesClick("TX") }, modifier = Modifier.fillMaxWidth().testTag("futures-card-TX")) {
+                Column(Modifier.padding(12.dp)) {
+                    Text("TX 臺股期貨")
+                    Text(futures?.near?.let { "${it.contractCode} ${it.close ?: "--"} · OI ${it.openInterest ?: "--"} · 基差 ${it.closeBasis ?: "--"}" }
+                        ?: "資料 unavailable / 尚未同步")
+                    Text("近月／次月 · 法人期貨 · Put/Call · 集中度 · VIX")
+                }
+            }
+        }
         item {
             Text("三大法人現貨", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(1,5,10,20,60).forEach {

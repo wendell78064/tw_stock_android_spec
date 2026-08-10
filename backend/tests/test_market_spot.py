@@ -8,7 +8,11 @@ from app.adapters.fake_market_data import FakeMarketDataProvider
 from app.adapters.market_spot_mapping import map_institution
 from app.adapters.tpex.security_provider import TpexSecurityProvider
 from app.adapters.twse.security_provider import TwseSecurityProvider
-from app.core.dependencies import market_spot_repository, security_repository
+from app.core.dependencies import (
+    derivatives_repository,
+    market_spot_repository,
+    security_repository,
+)
 from app.domain.market_spot import InstitutionType
 from app.domain.pricing import SecurityKey
 from app.domain.security import MarketCode
@@ -89,6 +93,32 @@ class MemoryMarketSpotRepository:
     async def lending(self, market, security, start, end):
         key = "SECURITY_LENDING" if security else "MARKET_LENDING"
         return [r for r in self.data[key] if r.market == market and r.security == security]
+
+
+class EmptyDerivativesRepository:
+    async def products(self, product_code=None):
+        return []
+
+    async def contracts(self, product_code):
+        return []
+
+    async def daily(self, product_code, contract_code, limit):
+        return []
+
+    async def positions(self, product_code, limit):
+        return []
+
+    async def concentrations(self, product_code, limit):
+        return []
+
+    async def put_call(self, product_code, limit):
+        return []
+
+    async def strike_oi(self, product_code, expiry, trade_date):
+        return []
+
+    async def volatility(self, code, limit):
+        return []
 
 
 def test_twse_tpex_official_field_mapping() -> None:
@@ -240,6 +270,7 @@ def market_client():
             )
         current += timedelta(days=1)
     app.dependency_overrides[market_spot_repository] = lambda: repository
+    app.dependency_overrides[derivatives_repository] = lambda: EmptyDerivativesRepository()
     app.dependency_overrides[security_repository] = lambda: securities
     try:
         with TestClient(app) as client:

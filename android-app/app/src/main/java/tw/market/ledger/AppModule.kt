@@ -19,6 +19,8 @@ import tw.market.ledger.network.SecurityApi
 import tw.market.ledger.network.ChartApi
 import tw.market.ledger.network.MarketApi
 import tw.market.ledger.database.MarketDao
+import tw.market.ledger.database.DerivativesDao
+import tw.market.ledger.network.DerivativesApi
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -32,6 +34,7 @@ object AppModule {
     @Provides fun securityDao(database: TWMarketDatabase): SecurityDao = database.securityDao()
     @Provides fun chartDao(database: TWMarketDatabase): ChartDao = database.chartDao()
     @Provides fun marketDao(database: TWMarketDatabase): MarketDao = database.marketDao()
+    @Provides fun derivativesDao(database: TWMarketDatabase): DerivativesDao = database.derivativesDao()
 
     @Provides @Singleton
     fun retrofit(): Retrofit {
@@ -48,4 +51,7 @@ object AppModule {
 
     @Provides @Singleton
     fun marketApi(retrofit: Retrofit): MarketApi = retrofit.create(MarketApi::class.java)
+
+    @Provides @Singleton
+    fun derivativesApi(retrofit: Retrofit): DerivativesApi = retrofit.create(DerivativesApi::class.java)
 }

@@ -5,8 +5,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from redis.asyncio import Redis
 
-from app.core.dependencies import market_spot_repository, redis_client
+from app.core.dependencies import derivatives_repository, market_spot_repository, redis_client
 from app.core.errors import AppError
+from app.domain.derivatives import DerivativesRepository
 from app.domain.market_spot import InstitutionType, MarketSpotRepository
 from app.domain.security import MarketCode
 from app.services.market_spot import (
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/market", tags=["Market"])
 @router.get("/overview", operation_id="getMarketOverview")
 async def overview(
     repository: Annotated[MarketSpotRepository, Depends(market_spot_repository)],
+    derivatives: Annotated[DerivativesRepository, Depends(derivatives_repository)],
     redis: Annotated[Redis, Depends(redis_client)],
 ):
     key = "market:overview:latest"
@@ -29,7 +31,7 @@ async def overview(
             return json.loads(cached)
     except Exception:
         pass
-    result = await MarketOverviewService(repository).overview()
+    result = await MarketOverviewService(repository, derivatives).overview()
     try:
         await redis.set(key, json.dumps(result), ex=21600)
     except Exception:
