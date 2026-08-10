@@ -86,4 +86,9 @@ Backend 測試涵蓋官方欄位 mapping、Fake、validation/idempotency、60 �
 
 ## CI 驗證紀錄
 
-待本 Slice feature commit 推送且 GitHub Actions 實際綠燈後補入 run date、API 35、x86_64、測試數及 workflow run link；綠燈前不宣稱通過。
+2026-08-10（Asia/Taipei），feature commit `7a1d5de` 的 [GitHub Actions run 31352537494](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31352537494) 全部通過：
+
+- `backend`：success。
+- `android`：success（OpenAPI validation/generation、lint、unit tests、Debug APK、instrumentation APK）。
+- `android-instrumentation`：success；API 35、x86_64、Google APIs emulator，執行 `:app:connectedDebugAndroidTest`，既有 6 tests 加本 Slice 3 tests，共 9/9 通過。
+- Emulator job：2026-08-10 03:25:08Z 至 03:31:23Z；[job 93345896886](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31352537494/job/93345896886)。
