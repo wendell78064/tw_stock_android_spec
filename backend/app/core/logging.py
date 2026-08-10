@@ -14,4 +14,3 @@ def configure_logging(level: str) -> None:
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelName(level)),
     )
-

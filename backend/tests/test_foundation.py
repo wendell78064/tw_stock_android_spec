@@ -25,4 +25,3 @@ def test_decimal_financial_type() -> None:
 def test_calendar_abstraction_skips_weekend() -> None:
     calendar = WeekendOnlyCalendar()
     assert calendar.previous_trading_day(date(2026, 8, 10)) == date(2026, 8, 7)
-

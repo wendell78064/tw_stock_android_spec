@@ -1,4 +1,4 @@
-.PHONY: up down logs backend-test backend-lint backend-build android-build android-test test build health migrate-up migrate-down
+.PHONY: up down logs backend-test backend-lint backend-build android-build android-test android-lint android-ui-test-apk openapi-validate openapi-generate test build health migrate-up migrate-down sync-securities
 
 up:
 	docker compose up --build -d
@@ -24,6 +24,18 @@ android-build:
 android-test:
 	docker compose --profile build run --rm android-builder ./gradlew --no-daemon testDebugUnitTest
 
+android-lint:
+	docker compose --profile build run --rm android-builder ./gradlew --no-daemon lintDebug
+
+android-ui-test-apk:
+	docker compose --profile build run --rm android-builder ./gradlew --no-daemon :app:assembleDebugAndroidTest
+
+openapi-validate:
+	docker compose --profile build run --rm android-builder ./gradlew --no-daemon openApiValidate
+
+openapi-generate:
+	docker compose --profile build run --rm android-builder ./gradlew --no-daemon openApiGenerate
+
 test: backend-test android-test
 
 build: backend-build android-build
@@ -35,5 +47,7 @@ migrate-up:
 	docker compose exec backend alembic upgrade head
 
 migrate-down:
-	docker compose exec backend alembic downgrade base
+	docker compose exec backend alembic downgrade -1
 
+sync-securities:
+	docker compose exec backend python -m app.cli.sync_securities --provider fake

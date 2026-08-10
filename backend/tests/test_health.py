@@ -25,4 +25,3 @@ def test_ready_reports_dependencies() -> None:
         app.dependency_overrides.clear()
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "checks": {"postgres": "ok", "redis": "ok"}}
-

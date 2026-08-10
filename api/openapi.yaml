@@ -52,13 +52,21 @@ paths:
                 $ref: "#/components/schemas/MarketOverviewEnvelope"
   /securities/search:
     get:
+      operationId: searchSecurities
+      security: []
       tags: [Securities]
-      summary: Search securities, industries and themes
+      summary: Search active TWSE and TPEx common stocks
       parameters:
         - in: query
           name: q
           required: true
-          schema: { type: string, minLength: 1 }
+          schema: { type: string, minLength: 2 }
+        - in: query
+          name: market
+          schema: { $ref: "#/components/schemas/MarketCode" }
+        - in: query
+          name: type
+          schema: { $ref: "#/components/schemas/SecurityType" }
         - in: query
           name: limit
           schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
@@ -71,10 +79,15 @@ paths:
                 $ref: "#/components/schemas/SecuritySearchEnvelope"
   /securities/{code}:
     get:
+      operationId: getSecurity
+      security: []
       tags: [Securities]
       summary: Get a security overview
       parameters:
         - $ref: "#/components/parameters/SecurityCode"
+        - in: query
+          name: market
+          schema: { $ref: "#/components/schemas/MarketCode" }
       responses:
         "200":
           description: Security detail
@@ -84,6 +97,8 @@ paths:
                 $ref: "#/components/schemas/SecurityEnvelope"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AmbiguousSecurity"
   /securities/{code}/candles:
     get:
       tags: [Securities]
@@ -377,6 +392,15 @@ components:
     DataStatus:
       type: string
       enum: [LIVE, DELAYED, PRELIMINARY, FINAL, STALE, PARTIAL, UNAVAILABLE]
+    MarketCode:
+      type: string
+      enum: [TWSE, TPEX]
+    SecurityType:
+      type: string
+      enum: [COMMON_STOCK]
+    SecurityStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE]
     Meta:
       type: object
       required: [as_of, received_at, data_status]
@@ -440,13 +464,21 @@ components:
         meta: { $ref: "#/components/schemas/Meta" }
     SecuritySearchItem:
       type: object
+      required: [id, code, name, market, security_type, is_active, as_of, received_at, data_status]
       properties:
-        result_type: { type: string, enum: [SECURITY, INDUSTRY, THEME] }
+        id: { type: string, format: uuid }
         code: { type: string }
         name: { type: string }
-        market: { type: string }
+        market: { $ref: "#/components/schemas/MarketCode" }
+        security_type: { $ref: "#/components/schemas/SecurityType" }
+        primary_industry: { type: [string, "null"] }
+        is_active: { type: boolean }
+        as_of: { type: string, format: date-time }
+        received_at: { type: string, format: date-time }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
     SecuritySearchEnvelope:
       type: object
+      required: [data, meta]
       properties:
         data:
           type: array
@@ -454,17 +486,24 @@ components:
         meta: { $ref: "#/components/schemas/Meta" }
     Security:
       type: object
+      required: [id, code, name, market, security_type, status, is_active, as_of, received_at, data_status]
       properties:
+        id: { type: string, format: uuid }
         code: { type: string }
         name: { type: string }
-        market: { type: string }
-        industry: { type: string }
-        themes:
-          type: array
-          items: { type: string }
-        quote: { $ref: "#/components/schemas/Quote" }
+        market: { $ref: "#/components/schemas/MarketCode" }
+        security_type: { $ref: "#/components/schemas/SecurityType" }
+        status: { $ref: "#/components/schemas/SecurityStatus" }
+        primary_industry: { type: [string, "null"] }
+        listing_date: { type: [string, "null"], format: date }
+        is_active: { type: boolean }
+        as_of: { type: string, format: date-time }
+        received_at: { type: string, format: date-time }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+        source: { type: string }
     SecurityEnvelope:
       type: object
+      required: [data, meta]
       properties:
         data: { $ref: "#/components/schemas/Security" }
         meta: { $ref: "#/components/schemas/Meta" }
@@ -668,8 +707,29 @@ components:
           minimum: 1
           maximum: 500
           default: 100
+    ErrorDetail:
+      type: object
+      required: [code, message, details, request_id]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+        request_id: { type: string }
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: "#/components/schemas/ErrorDetail" }
   responses:
     NotFound:
       description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    AmbiguousSecurity:
+      description: Security code exists in more than one market
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
     ValidationError:
       description: Validation failed

@@ -69,6 +69,14 @@ tw-stock-app/
 - 圖表仍可使用還原權息價格，以避免長期技術分析失真；這屬行情資料處理，不是持股事件管理。
 - 盤中即時行情必須透過合法授權來源，不以網頁爬蟲作為正式產品資料源。
 
-## Phase 0 實作狀態
+## 實作狀態
 
-Phase 0 Monorepo 基礎已建立。啟動、測試、Migration、健康檢查與 Android 本機 API 連線方式請見 [`docs/06_PHASE_0_OPERATIONS.md`](docs/06_PHASE_0_OPERATIONS.md)。目前刻意未實作 Phase 1 市場功能。
+Phase 0 Monorepo 基礎已建立並保持通過驗證；操作方式請見 [`docs/06_PHASE_0_OPERATIONS.md`](docs/06_PHASE_0_OPERATIONS.md)。Phase 1 垂直切片 1「股票主檔與搜尋」已完成，包含 TWSE／TPEx Provider、冪等同步、搜尋 API、Android 搜尋及個股基本頁；操作與邊界請見 [`docs/07_PHASE_1_SECURITY_MASTER.md`](docs/07_PHASE_1_SECURITY_MASTER.md)。日 K、技術指標及其他後續功能尚未實作。
+
+快速啟動與固定 Fixture 同步：
+
+```bash
+make up
+make sync-securities
+curl 'http://localhost:8000/v1/securities/search?q=12'
+```

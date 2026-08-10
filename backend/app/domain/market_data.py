@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from app.domain.security import SecurityRecord
 
 
 class DataStatus(StrEnum):
@@ -30,3 +33,4 @@ class MarketDataProvider(Protocol):
 
     async def get_snapshot(self, symbol: str) -> MarketSnapshot: ...
 
+    async def list_securities(self) -> list["SecurityRecord"]: ...

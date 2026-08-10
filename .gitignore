@@ -1,6 +1,7 @@
 .env
 .idea/
 .gradle/
+**/.kotlin/
 **/build/
 __pycache__/
 .pytest_cache/
@@ -8,4 +9,3 @@ __pycache__/
 .coverage
 *.pyc
 backend/.venv/
-

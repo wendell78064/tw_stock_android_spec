@@ -26,6 +26,8 @@
 
 ### 垂直切片 1：股票主檔與搜尋
 
+狀態：**已完成並通過 build、test、migration、同步及 API 驗證。**
+
 - TWSE／TPEx 主檔 Adapter。
 - `securities`、industry tables。
 - 搜尋 API。
@@ -36,6 +38,8 @@
 - 代號、名稱模糊搜尋。
 - 僅顯示上市／上櫃普通股。
 - 明確顯示資料日期。
+
+實作與操作紀錄：`docs/07_PHASE_1_SECURITY_MASTER.md`。本次完成範圍不包含下方垂直切片 2。
 
 ### 垂直切片 2：日 K 與技術指標
 

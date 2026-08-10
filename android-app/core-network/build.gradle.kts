@@ -11,10 +11,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    sourceSets["main"].java.srcDir(rootProject.layout.buildDirectory.dir("generated/openapi/src/main/kotlin"))
 }
 dependencies {
     api(project(":core-model"))
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.2")
+    implementation("com.squareup.moshi:moshi-adapters:1.15.2")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("com.squareup.retrofit2:converter-scalars:2.11.0")
 }
 
+tasks.named("preBuild").configure { dependsOn(rootProject.tasks.named("openApiGenerate")) }

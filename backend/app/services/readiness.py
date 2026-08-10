@@ -13,4 +13,3 @@ class ReadinessChecker:
             await connection.execute(text("SELECT 1"))
         await self.redis.ping()
         return {"postgres": "ok", "redis": "ok"}
-

@@ -12,4 +12,3 @@ class WeekendOnlyCalendar:
         while not self.is_trading_day(candidate):
             candidate -= timedelta(days=1)
         return candidate
-
