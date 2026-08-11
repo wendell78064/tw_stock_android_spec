@@ -3,9 +3,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.domain.industry import IndustryInfo, MemberSecurity, ThemeInfo
 from app.domain.market_data import DataStatus
 from app.domain.pricing import Candle, PriceBasis, TechnicalSnapshot
-from app.domain.security import MarketCode, Security, SecurityStatus, SecurityType
+from app.domain.security import MarketCode, Security, SecurityStatus, SecurityType, ThemeRef
 
 
 class MetaResponse(BaseModel):
@@ -13,6 +14,16 @@ class MetaResponse(BaseModel):
     received_at: datetime
     data_status: DataStatus
     source: str
+
+
+class ThemeRefResponse(BaseModel):
+    id: UUID
+    code: str
+    name: str
+
+    @classmethod
+    def from_domain(cls, ref: ThemeRef) -> "ThemeRefResponse":
+        return cls(id=ref.id, code=ref.code, name=ref.name)
 
 
 class SecurityResponse(BaseModel):
@@ -30,6 +41,7 @@ class SecurityResponse(BaseModel):
     received_at: datetime
     data_status: DataStatus
     source: str
+    themes: list[ThemeRefResponse] = []
 
     @classmethod
     def from_domain(cls, security: Security) -> "SecurityResponse":
@@ -47,6 +59,7 @@ class SecurityResponse(BaseModel):
             received_at=security.received_at,
             data_status=security.data_status,
             source=security.source_code,
+            themes=[ThemeRefResponse.from_domain(t) for t in security.themes],
         )
 
 
@@ -66,9 +79,10 @@ class SecuritySearchItem(BaseModel):
     def from_domain(cls, security: Security) -> "SecuritySearchItem":
         return cls(
             **SecurityResponse.from_domain(security).model_dump(
-                exclude={"status", "listing_date", "source"}
+                exclude={"status", "listing_date", "source", "themes"}
             )
         )
+
 
 
 class SecurityEnvelope(BaseModel):
@@ -168,6 +182,125 @@ class TechnicalPointResponse(BaseModel):
             as_of=snapshot.as_of,
             data_status=snapshot.data_status,
         )
+
+
+class IndustryResponse(BaseModel):
+    id: UUID
+    code: str
+    name: str
+    classification_source: str
+    member_count: int
+
+    @classmethod
+    def from_domain(cls, info: IndustryInfo) -> "IndustryResponse":
+        return cls(
+            id=info.id,
+            code=info.code,
+            name=info.name,
+            classification_source=info.classification_source,
+            member_count=info.member_count,
+        )
+
+
+class IndustryListEnvelope(BaseModel):
+    data: list[IndustryResponse]
+    meta: MetaResponse
+
+
+class IndustryEnvelope(BaseModel):
+    data: IndustryResponse
+    meta: MetaResponse
+
+
+class ThemeResponse(BaseModel):
+    id: UUID
+    code: str
+    name: str
+    description: str | None
+    classification_type: str
+    member_count: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @classmethod
+    def from_domain(cls, info: ThemeInfo) -> "ThemeResponse":
+        return cls(
+            id=info.id,
+            code=info.code,
+            name=info.name,
+            description=info.description,
+            classification_type=info.classification_type,
+            member_count=info.member_count,
+            created_at=info.created_at,
+            updated_at=info.updated_at,
+        )
+
+
+class ThemeListEnvelope(BaseModel):
+    data: list[ThemeResponse]
+    meta: MetaResponse
+
+
+class ThemeEnvelope(BaseModel):
+    data: ThemeResponse
+    meta: MetaResponse
+
+
+class MemberSecurityResponse(BaseModel):
+    security_id: UUID
+    code: str
+    name: str
+    market: MarketCode
+    security_type: SecurityType
+    is_active: bool
+    close: str | None
+    change: str | None
+    change_percent: str | None
+    as_of: datetime | None
+    data_status: DataStatus
+
+    @classmethod
+    def from_domain(cls, mem: MemberSecurity) -> "MemberSecurityResponse":
+        return cls(
+            security_id=mem.security_id,
+            code=mem.code,
+            name=mem.name,
+            market=mem.market,
+            security_type=mem.security_type,
+            is_active=mem.is_active,
+            close=str(mem.close) if mem.close is not None else None,
+            change=str(mem.change) if mem.change is not None else None,
+            change_percent=str(mem.change_percent) if mem.change_percent is not None else None,
+            as_of=mem.as_of,
+            data_status=mem.data_status,
+        )
+
+
+class IndustrySecuritiesEnvelope(BaseModel):
+    data: list[MemberSecurityResponse]
+    meta: MetaResponse
+
+
+class ThemeSecuritiesEnvelope(BaseModel):
+    data: list[MemberSecurityResponse]
+    meta: MetaResponse
+
+
+class CreateThemeInput(BaseModel):
+    code: str
+    name: str
+    description: str | None = None
+    classification_type: str = "CUSTOM"
+
+
+class UpdateThemeInput(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class AddThemeSecurityInput(BaseModel):
+    security_id: UUID
+
 
 
 class TechnicalSeriesEnvelope(BaseModel):

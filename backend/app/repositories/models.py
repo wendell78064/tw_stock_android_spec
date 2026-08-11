@@ -211,6 +211,29 @@ class SecurityIndustryModel(Base):
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class ThemeModel(Base):
+    __tablename__ = "themes"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    code: Mapped[str] = mapped_column(String(64), unique=True)
+    name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(String(500))
+    classification_type: Mapped[str] = mapped_column(String(32), default="CUSTOM")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SecurityThemeModel(Base):
+    __tablename__ = "security_themes"
+    security_id: Mapped[UUID] = mapped_column(
+        ForeignKey("securities.id", ondelete="CASCADE"), primary_key=True
+    )
+    theme_id: Mapped[UUID] = mapped_column(
+        ForeignKey("themes.id", ondelete="CASCADE"), primary_key=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+
 class DailyPriceModel(Base):
     __tablename__ = "daily_prices"
     __table_args__ = (UniqueConstraint("security_id", "trade_date"),)

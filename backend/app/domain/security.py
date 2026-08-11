@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Protocol
@@ -36,6 +36,13 @@ class Industry:
 
 
 @dataclass(frozen=True)
+class ThemeRef:
+    id: UUID
+    code: str
+    name: str
+
+
+@dataclass(frozen=True)
 class SecurityRecord:
     market: MarketCode
     code: str
@@ -66,6 +73,7 @@ class Security:
     as_of: datetime
     received_at: datetime
     data_status: DataStatus
+    themes: list[ThemeRef] = field(default_factory=list)
 
 
 class SecurityRepository(Protocol):
@@ -74,3 +82,4 @@ class SecurityRepository(Protocol):
     ) -> tuple[int, int, int]: ...
     async def search(self, query: str, market: MarketCode | None, limit: int) -> list[Security]: ...
     async def find_by_code(self, code: str, market: MarketCode | None) -> list[Security]: ...
+

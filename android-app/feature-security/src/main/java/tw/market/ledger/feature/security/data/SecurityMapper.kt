@@ -11,30 +11,32 @@ import tw.market.ledger.generated.model.Security as GeneratedSecurity
 import tw.market.ledger.generated.model.SecuritySearchItem as GeneratedSearchItem
 
 fun SecurityDto.toDomain(): Security {
+    val themeRefs = themes.map { tw.market.ledger.model.ThemeRef(it.id, it.code, it.name) }
     val statusValue = status
-    return if (statusValue != null) {
+    val domainSec = if (statusValue != null) {
         GeneratedSecurity(
-        id = java.util.UUID.fromString(id), code = code, name = name,
-        market = tw.market.ledger.generated.model.MarketCode.valueOf(market),
-        securityType = tw.market.ledger.generated.model.SecurityType.valueOf(securityType),
-        status = tw.market.ledger.generated.model.SecurityStatus.valueOf(statusValue),
-        isActive = isActive, asOf = java.time.OffsetDateTime.parse(asOf),
-        receivedAt = java.time.OffsetDateTime.parse(receivedAt),
-        dataStatus = tw.market.ledger.generated.model.DataStatus.valueOf(dataStatus),
-        primaryIndustry = primaryIndustry,
-        listingDate = listingDate?.let(java.time.LocalDate::parse),
+            id = java.util.UUID.fromString(id), code = code, name = name,
+            market = tw.market.ledger.generated.model.MarketCode.valueOf(market),
+            securityType = tw.market.ledger.generated.model.SecurityType.valueOf(securityType),
+            status = tw.market.ledger.generated.model.SecurityStatus.valueOf(statusValue),
+            isActive = isActive, asOf = java.time.OffsetDateTime.parse(asOf),
+            receivedAt = java.time.OffsetDateTime.parse(receivedAt),
+            dataStatus = tw.market.ledger.generated.model.DataStatus.valueOf(dataStatus),
+            primaryIndustry = primaryIndustry,
+            listingDate = listingDate?.let(java.time.LocalDate::parse),
         ).toDomain()
     } else {
         GeneratedSearchItem(
-        id = java.util.UUID.fromString(id), code = code, name = name,
-        market = tw.market.ledger.generated.model.MarketCode.valueOf(market),
-        securityType = tw.market.ledger.generated.model.SecurityType.valueOf(securityType),
-        isActive = isActive, asOf = java.time.OffsetDateTime.parse(asOf),
-        receivedAt = java.time.OffsetDateTime.parse(receivedAt),
-        dataStatus = tw.market.ledger.generated.model.DataStatus.valueOf(dataStatus),
-        primaryIndustry = primaryIndustry,
+            id = java.util.UUID.fromString(id), code = code, name = name,
+            market = tw.market.ledger.generated.model.MarketCode.valueOf(market),
+            securityType = tw.market.ledger.generated.model.SecurityType.valueOf(securityType),
+            isActive = isActive, asOf = java.time.OffsetDateTime.parse(asOf),
+            receivedAt = java.time.OffsetDateTime.parse(receivedAt),
+            dataStatus = tw.market.ledger.generated.model.DataStatus.valueOf(dataStatus),
+            primaryIndustry = primaryIndustry,
         ).toDomain()
     }
+    return domainSec.copy(themes = themeRefs)
 }
 
 fun GeneratedSecurity.toDomain(): Security = Security(

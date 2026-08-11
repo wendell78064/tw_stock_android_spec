@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     database_url: str = "postgresql+asyncpg://twstock:twstock@localhost:5432/twstock"
     redis_url: str = "redis://localhost:6379/0"
+    admin_api_key: str = "admin-secret-key"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

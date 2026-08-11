@@ -1,12 +1,15 @@
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, Header, Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import AppError
+from app.core.settings import Settings, get_settings
 from app.repositories.sql_alert import SqlAlertRepository
 from app.repositories.sql_derivatives import SqlDerivativesRepository
+from app.repositories.sql_industry import SqlIndustryRepository
 from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.repositories.sql_portfolio import SqlPortfolioRepository
 from app.repositories.sql_price import SqlPriceRepository
@@ -68,3 +71,18 @@ async def alert_repository(
     session: Annotated[AsyncSession, Depends(database_session)],
 ) -> SqlAlertRepository:
     return SqlAlertRepository(session)
+
+
+async def industry_repository(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> SqlIndustryRepository:
+    return SqlIndustryRepository(session)
+
+
+def require_admin_key(
+    x_admin_key: Annotated[str | None, Header(alias="X-Admin-Key")] = None,
+    settings: Annotated[Settings, Depends(get_settings)] = None,
+) -> None:
+    if not x_admin_key or x_admin_key != settings.admin_api_key:
+        raise AppError("UNAUTHORIZED", "Missing or invalid admin API key", 401)
+

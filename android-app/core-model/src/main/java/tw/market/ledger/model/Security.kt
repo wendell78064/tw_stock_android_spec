@@ -5,6 +5,12 @@ enum class SecurityType { COMMON_STOCK }
 enum class SecurityStatus { ACTIVE, INACTIVE }
 enum class DataStatus { LIVE, DELAYED, PRELIMINARY, FINAL, STALE, PARTIAL, UNAVAILABLE }
 
+data class ThemeRef(
+    val id: String,
+    val code: String,
+    val name: String,
+)
+
 data class Security(
     val id: String,
     val code: String,
@@ -18,6 +24,7 @@ data class Security(
     val asOf: String,
     val receivedAt: String,
     val dataStatus: DataStatus,
+    val themes: List<ThemeRef> = emptyList(),
 )
 
 data class SecuritySearchResult(

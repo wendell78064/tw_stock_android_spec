@@ -5,7 +5,14 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.market_data import DataStatus
-from app.domain.security import MarketCode, Security, SecurityRecord, SecurityStatus, SecurityType
+from app.domain.security import (
+    MarketCode,
+    Security,
+    SecurityRecord,
+    SecurityStatus,
+    SecurityType,
+    ThemeRef,
+)
 from app.repositories.models import IndustryModel, MarketModel, SecurityIndustryModel, SecurityModel
 
 
@@ -156,6 +163,25 @@ class SqlSecurityRepository:
             .outerjoin(IndustryModel, IndustryModel.id == SecurityIndustryModel.industry_id)
         )
 
+    async def _get_themes_for_securities(
+        self, security_ids: list[UUID]
+    ) -> dict[UUID, list[ThemeRef]]:
+        if not security_ids:
+            return {}
+        from app.repositories.models import SecurityThemeModel, ThemeModel
+
+        statement = (
+            select(SecurityThemeModel.security_id, ThemeModel.id, ThemeModel.code, ThemeModel.name)
+            .join(ThemeModel, ThemeModel.id == SecurityThemeModel.theme_id)
+            .where(SecurityThemeModel.security_id.in_(security_ids))
+            .order_by(ThemeModel.name)
+        )
+        rows = (await self.session.execute(statement)).all()
+        result: dict[UUID, list[ThemeRef]] = {sec_id: [] for sec_id in security_ids}
+        for sec_id, t_id, t_code, t_name in rows:
+            result[sec_id].append(ThemeRef(id=t_id, code=t_code, name=t_name))
+        return result
+
     async def search(self, query: str, market: MarketCode | None, limit: int) -> list[Security]:
         pattern = f"%{query}%"
         statement = self._base_query().where(
@@ -174,7 +200,10 @@ class SqlSecurityRepository:
             func.similarity(SecurityModel.name, query).desc(),
             SecurityModel.code,
         ).limit(limit)
-        return [self._to_domain(*row) for row in (await self.session.execute(statement)).all()]
+        rows = (await self.session.execute(statement)).all()
+        sec_ids = [row[0].id for row in rows]
+        themes_map = await self._get_themes_for_securities(sec_ids)
+        return [self._to_domain(*row, themes=themes_map.get(row[0].id, [])) for row in rows]
 
     async def find_by_code(self, code: str, market: MarketCode | None) -> list[Security]:
         statement = self._base_query().where(
@@ -182,10 +211,18 @@ class SqlSecurityRepository:
         )
         if market:
             statement = statement.where(MarketModel.code == market.value)
-        return [self._to_domain(*row) for row in (await self.session.execute(statement)).all()]
+        rows = (await self.session.execute(statement)).all()
+        sec_ids = [row[0].id for row in rows]
+        themes_map = await self._get_themes_for_securities(sec_ids)
+        return [self._to_domain(*row, themes=themes_map.get(row[0].id, [])) for row in rows]
 
     @staticmethod
-    def _to_domain(model: SecurityModel, market: str, industry: str | None) -> Security:
+    def _to_domain(
+        model: SecurityModel,
+        market: str,
+        industry: str | None,
+        themes: list[ThemeRef] | None = None,
+    ) -> Security:
         return Security(
             id=model.id,
             market=MarketCode(market),
@@ -200,4 +237,6 @@ class SqlSecurityRepository:
             as_of=model.as_of,
             received_at=model.received_at,
             data_status=DataStatus(model.data_status),
+            themes=themes or [],
         )
+

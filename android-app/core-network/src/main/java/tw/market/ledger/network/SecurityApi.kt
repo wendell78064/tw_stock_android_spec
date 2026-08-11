@@ -12,6 +12,12 @@ data class MetaDto(
     val source: String,
 )
 
+data class ThemeRefDto(
+    val id: String,
+    val code: String,
+    val name: String,
+)
+
 data class SecurityDto(
     val id: String,
     val code: String,
@@ -25,6 +31,7 @@ data class SecurityDto(
     @Json(name = "as_of") val asOf: String,
     @Json(name = "received_at") val receivedAt: String,
     @Json(name = "data_status") val dataStatus: String,
+    val themes: List<ThemeRefDto> = emptyList(),
 )
 
 data class SecuritySearchEnvelopeDto(val data: List<SecurityDto>, val meta: MetaDto)

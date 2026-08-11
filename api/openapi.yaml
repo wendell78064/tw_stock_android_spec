@@ -428,26 +428,161 @@ paths:
                 $ref: "#/components/schemas/CreditEnvelope"
   /industries:
     get:
+      operationId: listIndustries
       tags: [Industries]
-      summary: List industries or themes
-      parameters:
-        - in: query
-          name: type
-          schema:
-            type: string
-            enum: [OFFICIAL, THEME]
-        - in: query
-          name: sort
-          schema:
-            type: string
-            enum: [strength, cap_return, equal_return, turnover, institutional, margin]
+      summary: List official industries
       responses:
         "200":
-          description: Industries
+          description: List of industries
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/IndustryListEnvelope"
+              schema: { $ref: "#/components/schemas/IndustryListEnvelope" }
+  /industries/{id}:
+    get:
+      operationId: getIndustry
+      tags: [Industries]
+      summary: Get industry detail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Industry detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IndustryEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /industries/{id}/securities:
+    get:
+      operationId: getIndustrySecurities
+      tags: [Industries]
+      summary: Get member securities of an industry
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Member securities with price overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IndustrySecuritiesEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /themes:
+    get:
+      operationId: listThemes
+      tags: [Themes]
+      summary: List themes
+      responses:
+        "200":
+          description: List of themes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ThemeListEnvelope" }
+    post:
+      operationId: createTheme
+      tags: [Themes]
+      summary: Create a custom theme
+      parameters:
+        - { in: header, name: X-Admin-Key, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateThemeInput" }
+      responses:
+        "201":
+          description: Theme created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ThemeEnvelope" }
+  /themes/{id}:
+    get:
+      operationId: getTheme
+      tags: [Themes]
+      summary: Get theme detail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Theme detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ThemeEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: updateTheme
+      tags: [Themes]
+      summary: Update a custom theme
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Admin-Key, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateThemeInput" }
+      responses:
+        "200":
+          description: Theme updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ThemeEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteTheme
+      tags: [Themes]
+      summary: Delete a custom theme
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Admin-Key, required: false, schema: { type: string } }
+      responses:
+        "204":
+          description: Theme deleted
+        "404": { $ref: "#/components/responses/NotFound" }
+  /themes/{id}/securities:
+    get:
+      operationId: getThemeSecurities
+      tags: [Themes]
+      summary: Get member securities of a theme
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Member securities with price overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ThemeSecuritiesEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: addThemeSecurity
+      tags: [Themes]
+      summary: Add a security to a theme
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Admin-Key, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddThemeSecurityInput" }
+      responses:
+        "200":
+          description: Security added to theme
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ThemeEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /themes/{id}/securities/{security_id}:
+    delete:
+      operationId: removeThemeSecurity
+      tags: [Themes]
+      summary: Remove a security from a theme
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: security_id, required: true, schema: { type: string, format: uuid } }
+        - { in: header, name: X-Admin-Key, required: false, schema: { type: string } }
+      responses:
+        "204":
+          description: Security removed from theme
+        "404": { $ref: "#/components/responses/NotFound" }
   /portfolios:
     get:
       operationId: listPortfolios
@@ -882,6 +1017,13 @@ components:
           type: array
           items: { $ref: "#/components/schemas/SecuritySearchItem" }
         meta: { $ref: "#/components/schemas/Meta" }
+    ThemeRef:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
     Security:
       type: object
       required: [id, code, name, market, security_type, status, is_active, as_of, received_at, data_status]
@@ -899,6 +1041,107 @@ components:
         received_at: { type: string, format: date-time }
         data_status: { $ref: "#/components/schemas/DataStatus" }
         source: { type: string }
+        themes:
+          type: array
+          items: { $ref: "#/components/schemas/ThemeRef" }
+    Industry:
+      type: object
+      required: [id, code, name, classification_source, member_count]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        classification_source: { type: string }
+        member_count: { type: integer }
+    IndustryEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/Industry" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    IndustryListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Industry" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    Theme:
+      type: object
+      required: [id, code, name, classification_type, member_count]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        classification_type: { type: string }
+        member_count: { type: integer }
+        created_at: { type: [string, "null"], format: date-time }
+        updated_at: { type: [string, "null"], format: date-time }
+    ThemeEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/Theme" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    ThemeListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Theme" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    MemberSecurity:
+      type: object
+      required: [security_id, code, name, market, security_type, is_active, data_status]
+      properties:
+        security_id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        market: { $ref: "#/components/schemas/MarketCode" }
+        security_type: { $ref: "#/components/schemas/SecurityType" }
+        is_active: { type: boolean }
+        close: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        change: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        change_percent: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        as_of: { type: [string, "null"], format: date-time }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+    IndustrySecuritiesEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/MemberSecurity" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    ThemeSecuritiesEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/MemberSecurity" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    CreateThemeInput:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        classification_type: { type: string, default: "CUSTOM" }
+    UpdateThemeInput:
+      type: object
+      properties:
+        name: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+    AddThemeSecurityInput:
+      type: object
+      required: [security_id]
+      properties:
+        security_id: { type: string, format: uuid }
     SecurityEnvelope:
       type: object
       required: [data, meta]
@@ -1030,7 +1273,7 @@ components:
         strength_score: { $ref: "#/components/schemas/DecimalString" }
         cap_weight_return: { $ref: "#/components/schemas/DecimalString" }
         equal_weight_return: { $ref: "#/components/schemas/DecimalString" }
-    IndustryListEnvelope:
+    IndustryStrengthListEnvelope:
       type: object
       properties:
         data:

@@ -196,13 +196,15 @@ private fun SecurityBasicData(security: Security) {
     Text("${security.code} ${security.name}", modifier = Modifier.testTag("security-detail-title"))
     Text("市場：${if (security.market == MarketCode.TWSE) "上市" else "上櫃"}")
     Text("證券種類：普通股")
-    Text("主要產業：${security.primaryIndustry ?: "未提供"}")
+    Text("主要產業：${security.primaryIndustry ?: "未提供"}", modifier = Modifier.testTag("security-detail-industry"))
+    if (security.themes.isNotEmpty()) {
+        Text("所屬題材：${security.themes.joinToString(", ") { it.name }}", modifier = Modifier.testTag("security-detail-themes"))
+    } else {
+        Text("所屬題材：無", modifier = Modifier.testTag("security-detail-themes"))
+    }
     Text("掛牌日期：${security.listingDate ?: "未提供"}")
-    Text("有效狀態：${if (security.isActive) "有效" else "停止顯示"}")
-    Text("最後更新：${security.asOf}")
+    Text("資料時間：${security.asOf}")
     Text("資料狀態：${security.dataStatus}")
-    HorizontalDivider()
-    Text("股價、K 線、法人與技術指標尚未在本階段提供")
 }
 
 @Composable

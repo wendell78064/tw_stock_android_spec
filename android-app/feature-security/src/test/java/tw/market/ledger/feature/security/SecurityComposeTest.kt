@@ -36,7 +36,7 @@ class SecurityComposeTest {
             SecurityDetailScreen(SecurityDetailUiState.Success(security()))
         }
         composeRule.onNodeWithText("1234 測試科技").assertIsDisplayed()
-        composeRule.onNodeWithText("股價、K 線、法人與技術指標尚未在本階段提供").assertIsDisplayed()
+        composeRule.onNodeWithText("主要產業：測試科技業").assertIsDisplayed()
     }
 }
 

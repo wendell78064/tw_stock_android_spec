@@ -32,6 +32,9 @@ import tw.market.ledger.feature.alert.presentation.AlertRulesRoute
 import tw.market.ledger.feature.alert.presentation.CreateAlertScreen
 import tw.market.ledger.feature.alert.presentation.CreateAlertRoute
 import tw.market.ledger.feature.alert.presentation.NotificationCenterRoute
+import tw.market.ledger.feature.industry.presentation.IndustryDetailRoute
+import tw.market.ledger.feature.industry.presentation.IndustryLandingRoute
+import tw.market.ledger.feature.industry.presentation.ThemeDetailRoute
 import tw.market.ledger.model.MarketCode
 import tw.market.ledger.ui.TWMarketLedgerTheme
 
@@ -59,7 +62,7 @@ private fun AppNavigation() {
             )
         }, bottomBar = {
             NavigationBar {
-                listOf("市場" to "home", "產業" to "placeholder/產業", "持股" to "portfolio",
+                listOf("市場" to "home", "產業" to "industry", "持股" to "portfolio",
                     "自選" to "watchlist", "更多" to "notifications").forEach { (label, route) ->
                     NavigationBarItem(selected = false, onClick = { navController.navigate(route) },
                         icon = { Text(label.take(1)) }, label = { Text(label) })
@@ -73,6 +76,16 @@ private fun AppNavigation() {
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
             composable("home") { MarketDashboardRoute(onFuturesClick = { navController.navigate("futures/$it") }) }
+            composable("industry") { IndustryLandingRoute(
+                onIndustryClick = { navController.navigate("industry/$it") },
+                onThemeClick = { navController.navigate("theme/$it") },
+            ) }
+            composable("industry/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+                IndustryDetailRoute(onSecurityClick = { market, code -> navController.navigate("security/$market/$code") })
+            }
+            composable("theme/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) {
+                ThemeDetailRoute(onSecurityClick = { market, code -> navController.navigate("security/$market/$code") })
+            }
             composable("portfolio") { PortfolioRoute(
                 onAdd = { navController.navigate("portfolio/add") },
                 onHolding = { navController.navigate("portfolio/holding/${it.securityCode}") }) }
@@ -99,9 +112,6 @@ private fun AppNavigation() {
             }
             composable("futures/{product}", arguments = listOf(navArgument("product") { type = NavType.StringType })) {
                 FuturesDetailRoute(requireNotNull(it.arguments?.getString("product")))
-            }
-            composable("placeholder/{name}", arguments = listOf(navArgument("name") { type = NavType.StringType })) {
-                Text("${it.arguments?.getString("name")}尚未在本階段提供")
             }
             composable("security-search") {
                 SecuritySearchRoute(

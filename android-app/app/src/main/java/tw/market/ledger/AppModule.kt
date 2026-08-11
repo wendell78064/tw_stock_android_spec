@@ -30,6 +30,9 @@ import tw.market.ledger.network.WatchlistApi
 import tw.market.ledger.database.AlertDao
 import tw.market.ledger.network.AlertApi
 
+import tw.market.ledger.database.TaxonomyDao
+import tw.market.ledger.network.IndustryApi
+
 private val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `watchlist_cache` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, PRIMARY KEY(`id`))")
@@ -42,6 +45,13 @@ private val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `alert_event_cache` (`id` TEXT NOT NULL, `securityCode` TEXT NOT NULL, `securityName` TEXT NOT NULL, `triggeredAt` TEXT NOT NULL, `tradeDate` TEXT NOT NULL, `eventType` TEXT NOT NULL, `triggerPrice` TEXT NOT NULL, `referenceValue` TEXT NOT NULL, `referenceType` TEXT NOT NULL, `message` TEXT NOT NULL, `dataStatus` TEXT NOT NULL, `readAt` TEXT, PRIMARY KEY(`id`))")
     }
 }
+private val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `industry_cache` (`id` TEXT NOT NULL, `code` TEXT NOT NULL, `name` TEXT NOT NULL, `classificationSource` TEXT NOT NULL, `memberCount` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `theme_cache` (`id` TEXT NOT NULL, `code` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT, `classificationType` TEXT NOT NULL, `memberCount` INTEGER NOT NULL, `createdAt` TEXT, `updatedAt` TEXT, PRIMARY KEY(`id`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `taxonomy_member_cache` (`taxonomyId` TEXT NOT NULL, `securityId` TEXT NOT NULL, `code` TEXT NOT NULL, `name` TEXT NOT NULL, `market` TEXT NOT NULL, `securityType` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `close` TEXT, `change` TEXT, `changePercent` TEXT, `asOf` TEXT, `dataStatus` TEXT NOT NULL, PRIMARY KEY(`taxonomyId`, `securityId`))")
+    }
+}
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -49,7 +59,7 @@ object AppModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): TWMarketDatabase =
         Room.databaseBuilder(context, TWMarketDatabase::class.java, "tw-market-ledger.db")
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .build()
 
     @Provides fun securityDao(database: TWMarketDatabase): SecurityDao = database.securityDao()
@@ -59,6 +69,7 @@ object AppModule {
     @Provides fun portfolioDao(database: TWMarketDatabase): PortfolioDao = database.portfolioDao()
     @Provides fun watchlistDao(database: TWMarketDatabase): WatchlistDao = database.watchlistDao()
     @Provides fun alertDao(database: TWMarketDatabase): AlertDao = database.alertDao()
+    @Provides fun taxonomyDao(database: TWMarketDatabase): TaxonomyDao = database.taxonomyDao()
 
     @Provides @Singleton
     fun retrofit(): Retrofit {
@@ -83,4 +94,5 @@ object AppModule {
     fun portfolioApi(retrofit: Retrofit): PortfolioApi = retrofit.create(PortfolioApi::class.java)
     @Provides @Singleton fun watchlistApi(retrofit: Retrofit): WatchlistApi = retrofit.create(WatchlistApi::class.java)
     @Provides @Singleton fun alertApi(retrofit: Retrofit): AlertApi = retrofit.create(AlertApi::class.java)
+    @Provides @Singleton fun industryApi(retrofit: Retrofit): IndustryApi = retrofit.create(IndustryApi::class.java)
 }

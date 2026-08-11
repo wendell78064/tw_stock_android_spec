@@ -148,8 +148,8 @@ interface MarketDao {
         CreditEntity::class, FuturesOverviewEntity::class, PortfolioSummaryEntity::class,
         PortfolioHoldingEntity::class, PortfolioTransactionEntity::class,
         WatchlistEntity::class, WatchlistItemEntity::class, AlertRuleEntity::class,
-        AlertEventEntity::class],
-    version = 7,
+        AlertEventEntity::class, IndustryEntity::class, ThemeEntity::class, TaxonomyMemberEntity::class],
+    version = 8,
     exportSchema = false,
 )
 abstract class TWMarketDatabase : RoomDatabase() {
@@ -160,4 +160,5 @@ abstract class TWMarketDatabase : RoomDatabase() {
     abstract fun portfolioDao(): PortfolioDao
     abstract fun watchlistDao(): WatchlistDao
     abstract fun alertDao(): AlertDao
+    abstract fun taxonomyDao(): TaxonomyDao
 }
