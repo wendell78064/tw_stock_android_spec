@@ -13,71 +13,68 @@ Phase 3 COMPLETE
 Phase 3 / Slice 1 COMPLETE
 Phase 3 / Slice 2 COMPLETE
 Phase 3 / Slice 3 COMPLETE
+Phase 4 / Slice 1 COMPLETE
 ```
 
-- Current phase：Phase 3 / Slice 3 COMPLETE
-- Latest completed feature：Alert Engine + Notification Center
-- Feature commit：`509a753f4d454b57108c167ca9414f35739faab1`
-- DB head：`0008_alert_engine`
-- Latest tags：`phase-3-slice-3-complete`、`phase-3-complete`
-- GitHub Actions：backend／android／android-instrumentation PASS
+- Current phase: Phase 4 / Slice 1 COMPLETE
+- Latest completed feature: Industry & Theme Foundation
+- Feature commit: `41a7cc4`
+- DB head: `0009_industry_theme_foundation`
+- Room: version 8
+- Latest tag: `phase-4-slice-1-complete`
+- GitHub Actions: backend / android / android-instrumentation PASS (connectedDebugAndroidTest 15 tests PASS on API 35 / Google APIs / x86_64)
 
-## Completed Personal-Investment Core
+## Completed Features
 
 ### Portfolio
 
-- BUY／SELL
+- BUY / SELL transactions
 - Moving average cost
 - Positions
-- Realized／unrealized P&L
+- Realized / unrealized P&L
 - Market value
 - Portfolio summary
 
 ### Watchlist
 
 - Multiple groups and item CRUD
-- Target／Stop／Add price
-- Market／technical／institutional／credit enrichment
+- Target / Stop / Add price
+- Market / technical / institutional / credit enrichment
 - Room offline cache
 
 ### Alert
 
-- SECURITY／PORTFOLIO／WATCHLIST scopes
+- SECURITY / PORTFOLIO / WATCHLIST scopes
 - Price alerts
-- MA5／10／20／60／120／240
-- Near／Touch
-- Cross Above／Below
-- Close Above／Below
-- Consecutive Above／Below
-- Dedup／cooldown／daily limit
+- MA5 / 10 / 20 / 60 / 120 / 240
+- Near / Touch / Cross / Close / Consecutive
+- Dedup / cooldown / daily limit
 - Notification Center
-- Read／unread
+- Read / unread
 - Room offline cache
+
+### Industry & Theme Foundation (Phase 4 / Slice 1)
+
+- Official Industry (TWSE taxonomy)
+- Custom Theme (dynamic non-enum classifications)
+- Security multi-theme mapping
+- Industry / Theme APIs
+- Admin protected Theme CRUD (`X-Admin-Key`)
+- Bulk member market enrichment (SQL window function)
+- Industry Android navigation ("產業" bottom tab)
+- Industry / Theme detail screens
+- Security Detail Industry & Theme tags
+- Room offline / STALE cache (`MIGRATION_7_8`)
 
 ## External and Future
 
-- FCM remote push：`UNCONFIGURED`
-- Alert Engine and Notification Center are complete without remote FCM delivery.
-
-## Known External Data Constraints
-
-### TWSE lending availability
-
-- `lending_short_sell`：official OpenAPI supported
-- Other required fields：`UNAVAILABLE`／`LICENSE_REQUIRED`
-- Missing official fields remain `null`; no scraping or Fake fallback in formal operation.
-
-### TAIWAN VIX licensing
-
-- Official historical download exists, but automated storage／redistribution permission is unverified.
-- Formal Provider state：`UNAVAILABLE`／`LICENSE_REQUIRED`
-- External licensing does not mark completed software Slices incomplete.
+- FCM remote push: `UNCONFIGURED`
 
 ## Next
 
-Phase 4 / Slice 1 — Industry / Theme Foundation
+Phase 4 / Slice 2 — Industry Strength Ranking
 
-Do not start Phase 4 without a separate explicit request and Slice definition.
+Do not start Phase 4 / Slice 2 without a separate explicit request and Slice definition.
 
 ## Primary References
 
