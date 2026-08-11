@@ -93,4 +93,19 @@ Backend fixture 測試涵蓋 mapping、schema guard、ingestion 冪等、契約�
 
 GitHub Actions API 35 x86_64 emulator 的 `connectedDebugAndroidTest` 已通過；run #6：<https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31354579169>。
 
-封版 Gate 尚待本次 local validation 與 GitHub emulator CI 確認。外部資料 Gate 已分類：TAIFEX OpenAPI 未提供所需 VIX 歷史 API，官方下載的再利用權限尚未確認；TWSE OpenAPI 的「借券賣出股數」只映射為 `lending_short_sell`，不冒充借券成交或餘額。兩者均未使用爬蟲、Fake fallback 或 zero-fill，因此不再標記為軟體未完成；CI 通過前尚未建立 `phase-2-slice-2-complete` tag。
+### Phase 2／Slice 2 Final CI
+
+GitHub Actions（commit `217b3b7`）結果：**PASS**。
+
+```text
+backend: PASS
+android: PASS
+android-instrumentation: PASS
+
+Android Emulator:
+API 35
+Google APIs
+x86_64
+```
+
+Phase 2／Slice 2 Software Gate 與 CI Gate 已全部通過。外部資料 Gate 已分類：TAIFEX OpenAPI 未提供所需 VIX 歷史 API，官方下載的再利用權限尚未確認；TWSE OpenAPI 的「借券賣出股數」只映射為 `lending_short_sell`，不冒充借券成交或餘額。兩者均未使用爬蟲、Fake fallback 或 zero-fill，屬 external data availability，不再標記為 software incomplete。

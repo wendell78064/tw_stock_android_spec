@@ -2,7 +2,12 @@
 
 ## Phase 2／Slice 2：臺灣衍生品日資料
 
-狀態：**核心實作與 GitHub instrumentation 已通過；等待授權 VIX 與 TWSE 借券歷史來源後封版。**
+狀態：**COMPLETE**
+
+外部資料限制不影響 Software Slice 完成狀態：
+
+- TWSE lending：部分 dataset `SUPPORTED`；其他欄位為 `UNAVAILABLE`／`LICENSE_REQUIRED`。
+- TAIWAN VIX：官方下載存在，但自動保存／再利用授權未確認；正式 Provider 維持 `UNAVAILABLE`／`LICENSE_REQUIRED`。
 
 - TAIFEX TX/MTX/TMF/TE/TF 實際契約、日 OHLC/volume/OI 與基差。
 - 法人期貨部位、Top 5/10 集中度、TXO Put/Call、履約價 OI 與 Max Pain。
