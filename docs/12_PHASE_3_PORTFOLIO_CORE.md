@@ -89,6 +89,36 @@ Backend 測試涵蓋 first／multiple BUY、fee、average cost、partial／full 
 
 Android 測試涵蓋 repository cache、ViewModel states、sorting、transaction validation、dashboard、empty、holding row、add transaction、BUY／SELL、holding detail 與 transaction delete confirmation。Instrumentation 使用固定 fixture，不依賴正式 TWSE 網路。
 
+## Final Validation
+
+Local validation retained from the feature implementation:
+
+- Ruff：PASS
+- Pytest：46 passed
+- Android lint：PASS
+- Android unit：PASS
+- Debug APK：PASS
+- Instrumentation APK：PASS
+- Alembic `0005 → 0006 → 0005 → 0006`：PASS
+- 1000 transaction replay：PASS
+
+GitHub Actions final validation:
+
+- Workflow：SUCCESS
+- backend：PASS
+- android：PASS
+- android-instrumentation：PASS
+- `connectedDebugAndroidTest`：PASS
+- Android Emulator：API 35／Google APIs／x86_64
+
+Run ID／URL：not recorded; no directly verified value was available during closeout.
+
+## CI Maintenance Follow-up
+
+- Evaluate `setup-java@v5`.
+- Update GitHub Actions to runtime-compatible action versions.
+- Node.js 20 and `setup-java@v4` deprecation warnings are maintenance work, not a Portfolio Core blocker.
+
 ## Known Limitations
 
 - 不含交易稅與版本化稅規則

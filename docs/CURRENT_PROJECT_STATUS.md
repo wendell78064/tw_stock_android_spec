@@ -8,12 +8,13 @@
 Phase 0 COMPLETE
 Phase 1 COMPLETE
 Phase 2 COMPLETE
+Phase 3 / Slice 1 COMPLETE
 ```
 
 Latest completed:
 
 ```text
-Phase 2 / Slice 2
+Phase 3 / Slice 1 — Portfolio Core
 ```
 
 Database head:
@@ -25,15 +26,14 @@ Database head:
 Latest tag:
 
 ```text
-phase-2-slice-2-complete
+phase-3-slice-1-complete
 ```
 
 ## Current Release Baseline
 
 - Branch：`master`
-- Phase 2／Slice 2 feature gate commit：`e4fdb38`
-- Backend CI correction commit：`217b3b7`
-- Final closeout：以 `phase-2-slice-2-complete` tag 為準
+- Phase 3／Slice 1 feature commit：`188d12a0716220a96f18c87eac2691da2e282370`
+- Final closeout：以 `phase-3-slice-1-complete` tag 為準
 - GitHub Actions：PASS
 - Backend job：PASS
 - Android job：PASS
@@ -42,29 +42,29 @@ phase-2-slice-2-complete
 - Emulator target：Google APIs
 - Emulator architecture：x86_64
 
-## Current Working Slice
+## Current Phase
 
-- Phase：3
-- Slice：1
-- Name：Portfolio Core
-- Status：IMPLEMENTED / WAITING FOR CI
-- Feature commit：this feature commit
-- Completion tag：not created
+- Phase 3 / Slice 1：COMPLETE
+- Latest completed feature：Portfolio Core
+- Feature commit：`188d12a0716220a96f18c87eac2691da2e282370`
+- Latest completed tag：`phase-3-slice-1-complete`
+- Next：Phase 3 / Slice 2 — Watchlist
 
-## Phase 3 / Slice 1 Implemented Features
+## Completed Portfolio Capabilities
 
-- Portfolio and Default Portfolio
-- BUY／SELL transaction ledger
-- Shares-based quantity
-- Moving Average Cost accounting
-- Realized and unrealized P&L
-- Latest daily close valuation
+- Portfolio
+- BUY / SELL transactions
+- Moving average cost
+- Current positions
+- Realized P&L
+- Unrealized P&L
+- Market value
+- Return %
 - Portfolio summary
 - Security allocation
-- Android `feature-portfolio`
-- Add transaction and delete transaction UI
-- Holding detail and transaction history
-- Room offline read cache
+- Transaction history
+- Holding detail
+- Offline read cache
 
 ## Current Portfolio APIs
 
@@ -172,6 +172,7 @@ phase-2-slice-2-complete
 
 ## Primary References
 
+- `docs/12_PHASE_3_PORTFOLIO_CORE.md`
 - `docs/11_PHASE_2_DERIVATIVES.md`
 - `docs/05_DATA_SOURCES_AND_COMPLIANCE.md`
 - `docs/04_DEVELOPMENT_ROADMAP.md`
@@ -181,6 +182,8 @@ phase-2-slice-2-complete
 ## Next Work Boundary
 
 - Phase 2 is closed
+- Phase 3 / Slice 1 is closed
+- Next planned work is Phase 3 / Slice 2 — Watchlist; implementation has not started
 - Do not reopen Phase 2 solely for external licensing availability
 - Future providers may replace unavailable sources through existing boundaries
 - Any further Phase 3 work requires a separate explicit request and Slice definition

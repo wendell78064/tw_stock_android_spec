@@ -127,6 +127,12 @@
 
 ## Phase 3：產業、題材、篩選器與比較
 
+### Slice Status
+
+- Phase 3 / Slice 1 — Portfolio Core：COMPLETE
+- Next：Phase 3 / Slice 2 — Watchlist
+- Watchlist implementation：NOT STARTED
+
 ### 任務
 
 - 官方產業與自訂題材。
