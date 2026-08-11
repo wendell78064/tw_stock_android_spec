@@ -5,8 +5,14 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.market_spot import InstitutionType, SourceMetadata
-from app.domain.market_spot import LicenseStatus, ProviderPolicy, SourceCapability, SourceType
+from app.domain.market_spot import (
+    InstitutionType,
+    LicenseStatus,
+    ProviderPolicy,
+    SourceCapability,
+    SourceMetadata,
+    SourceType,
+)
 
 
 class VixSourceCapability(StrEnum):

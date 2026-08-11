@@ -6,6 +6,7 @@ import httpx
 from app.adapters.fake_derivatives import PRODUCTS, third_wednesday
 from app.adapters.official_http import OfficialJsonClient
 from app.domain.derivatives import (
+    TAIWAN_VIX_POLICY,
     ContractStatus,
     FuturesContract,
     FuturesDailyPrice,
@@ -17,9 +18,8 @@ from app.domain.derivatives import (
     PositionSide,
     SessionType,
     TraderConcentration,
-    VolatilityIndex,
-    TAIWAN_VIX_POLICY,
     VixSourceCapability,
+    VolatilityIndex,
 )
 from app.domain.market_data import DataStatus
 from app.domain.market_spot import InstitutionType, SourceMetadata

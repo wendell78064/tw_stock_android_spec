@@ -13,12 +13,15 @@ from app.core.dependencies import (
     market_spot_repository,
     security_repository,
 )
-from app.domain.market_spot import InstitutionType
-from app.domain.market_spot import SourceCapability
+from app.domain.market_spot import InstitutionType, SourceCapability
 from app.domain.pricing import SecurityKey
 from app.domain.security import MarketCode
 from app.main import app
-from app.services.market_spot import CreditTradingService, InstitutionalService, MarketOverviewService
+from app.services.market_spot import (
+    CreditTradingService,
+    InstitutionalService,
+    MarketOverviewService,
+)
 from app.services.market_spot_ingestion import DATASETS, MarketSpotIngestionService, validate_record
 from tests.fakes import FakeSession, InMemorySecurityRepository
 

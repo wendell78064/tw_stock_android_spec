@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, Query
 from app.core.dependencies import derivatives_repository, market_spot_repository
 from app.core.errors import AppError
 from app.domain.derivatives import (
+    TAIWAN_VIX_POLICY,
     DerivativesRepository,
     RollMethod,
-    TAIWAN_VIX_POLICY,
     VixSourceCapability,
 )
 from app.domain.market_spot import MarketSpotRepository

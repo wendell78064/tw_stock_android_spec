@@ -5,11 +5,10 @@ import httpx
 from app.adapters.daily_price_mapping import RawPriceRow, make_daily_price
 from app.adapters.market_spot_mapping import map_index, map_lending, map_margin
 from app.adapters.security_mapping import RawRow, make_record
-from app.domain.pricing import DailyPriceRecord, SecurityKey
-from app.domain.security import MarketCode, SecurityRecord
 from app.domain.market_data import DataStatus
 from app.domain.market_spot import LicenseStatus, ProviderPolicy, SourceCapability, SourceType
-
+from app.domain.pricing import DailyPriceRecord, SecurityKey
+from app.domain.security import MarketCode, SecurityRecord
 
 TWSE_LENDING_CAPABILITIES = {
     "borrowed_shares": SourceCapability.UNAVAILABLE,

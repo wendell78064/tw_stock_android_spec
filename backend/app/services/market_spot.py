@@ -185,7 +185,11 @@ class MarketOverviewService:
         statuses = [item.metadata.data_status for item in indexes + breadth]
         status = (
             DataStatus.FINAL
-            if statuses and all(item is DataStatus.FINAL for item in statuses) and not section_failed
+            if (
+                statuses
+                and all(item is DataStatus.FINAL for item in statuses)
+                and not section_failed
+            )
             else DataStatus.PARTIAL
         )
         futures = None
