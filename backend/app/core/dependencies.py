@@ -5,6 +5,7 @@ from fastapi import Depends, Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.sql_alert import SqlAlertRepository
 from app.repositories.sql_derivatives import SqlDerivativesRepository
 from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.repositories.sql_portfolio import SqlPortfolioRepository
@@ -61,3 +62,9 @@ async def watchlist_repository(
     session: Annotated[AsyncSession, Depends(database_session)],
 ) -> SqlWatchlistRepository:
     return SqlWatchlistRepository(session)
+
+
+async def alert_repository(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> SqlAlertRepository:
+    return SqlAlertRepository(session)

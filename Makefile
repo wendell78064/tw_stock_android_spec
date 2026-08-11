@@ -1,4 +1,4 @@
-.PHONY: up down logs backend-test backend-lint backend-build android-build android-test android-lint android-ui-test-apk openapi-validate openapi-generate test build health migrate migrate-up migrate-down sync-securities sync-daily-prices sync-market-spot backfill-market-spot backfill-security calculate-technicals sync-derivatives sync-futures sync-futures-institutional sync-options sync-vix
+.PHONY: up down logs backend-test backend-lint backend-build android-build android-test android-lint android-ui-test-apk openapi-validate openapi-generate test build health migrate migrate-up migrate-down sync-securities sync-daily-prices sync-market-spot backfill-market-spot backfill-security calculate-technicals sync-derivatives sync-futures sync-futures-institutional sync-options sync-vix evaluate-alerts
 
 up:
 	docker compose up --build -d
@@ -83,3 +83,6 @@ sync-options:
 
 sync-vix:
 	docker compose exec backend python -m app.cli.sync_derivatives --provider $(or $(PROVIDER),fake) --date $(DATE) --dataset VOLATILITY_INDEX
+
+evaluate-alerts:
+	docker compose exec backend python -m app.cli.evaluate_alerts $(if $(DATE),--date $(DATE),)

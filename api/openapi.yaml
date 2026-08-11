@@ -657,25 +657,61 @@ paths:
       tags: [Watchlists]
       summary: Bulk enriched daily watchlist overview
       responses: { "200": { description: Overview, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistItemListEnvelope" } } } } }
-  /alerts:
+  /alerts/rules:
     get:
+      operationId: listAlertRules
       tags: [Alerts]
       summary: List alert rules
       responses:
         "200":
           description: Alert rules
     post:
+      operationId: createAlertRule
       tags: [Alerts]
       summary: Create an alert rule
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/AlertRuleInput"
+            schema: { $ref: "#/components/schemas/AlertRuleInput" }
       responses:
         "201":
           description: Created
+  /alerts/rules/{ruleId}:
+    parameters: [{ in: path, name: ruleId, required: true, schema: { type: string, format: uuid } }]
+    get: { operationId: getAlertRule, tags: [Alerts], responses: { "200": { description: Alert rule } } }
+    patch:
+      operationId: updateAlertRule
+      tags: [Alerts]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AlertRuleInput" } } } }
+      responses: { "200": { description: Updated } }
+    delete: { operationId: deleteAlertRule, tags: [Alerts], responses: { "204": { description: Deleted } } }
+  /alerts/rules/{ruleId}/enable:
+    post: { operationId: enableAlertRule, tags: [Alerts], parameters: [{ in: path, name: ruleId, required: true, schema: { type: string, format: uuid } }], responses: { "200": { description: Enabled } } }
+  /alerts/rules/{ruleId}/disable:
+    post: { operationId: disableAlertRule, tags: [Alerts], parameters: [{ in: path, name: ruleId, required: true, schema: { type: string, format: uuid } }], responses: { "200": { description: Disabled } } }
+  /alerts/evaluate:
+    post:
+      operationId: evaluateAlerts
+      tags: [Alerts]
+      parameters: [{ in: query, name: target_trade_date, schema: { type: string, format: date } }]
+      responses: { "200": { description: Evaluation audit result } }
+  /alerts/events:
+    get: { operationId: listAlertEvents, tags: [Alerts], responses: { "200": { description: Event history } } }
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [Notifications]
+      parameters:
+        - { in: query, name: unread_only, schema: { type: boolean, default: false } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { in: query, name: event_type, schema: { type: string } }
+        - { in: query, name: security, schema: { type: string } }
+      responses: { "200": { description: Notification events } }
+  /notifications/{eventId}/read:
+    post: { operationId: readNotification, tags: [Notifications], parameters: [{ in: path, name: eventId, required: true, schema: { type: string, format: uuid } }], responses: { "200": { description: Marked read } } }
+  /notifications/read-all:
+    post: { operationId: readAllNotifications, tags: [Notifications], responses: { "200": { description: All marked read } } }
   /screeners/run:
     post:
       tags: [Screeners]
@@ -1208,15 +1244,21 @@ components:
       properties: { data: { type: array, items: { $ref: "#/components/schemas/WatchlistItem" } } }
     AlertRuleInput:
       type: object
-      required: [target_type, target_id, rule_type, parameters]
+      required: [name, rule_type, scope_type]
       properties:
-        target_type: { type: string }
-        target_id: { type: string }
-        rule_type: { type: string }
-        parameters: { type: object, additionalProperties: true }
-        cooldown_minutes: { type: integer, minimum: 0, default: 120 }
-        daily_limit: { type: integer, minimum: 1, default: 2 }
-        is_enabled: { type: boolean, default: true }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        rule_type: { type: string, enum: [PRICE_TARGET, PRICE_STOP, PRICE_ADD, MA_NEAR, MA_TOUCH, MA_CROSS_ABOVE, MA_CROSS_BELOW, MA_CLOSE_ABOVE, MA_CLOSE_BELOW, MA_CONSECUTIVE_ABOVE, MA_CONSECUTIVE_BELOW] }
+        scope_type: { type: string, enum: [SECURITY, PORTFOLIO, WATCHLIST] }
+        security_id: { type: [string, "null"], format: uuid }
+        portfolio_id: { type: [string, "null"], format: uuid }
+        watchlist_id: { type: [string, "null"], format: uuid }
+        ma_period: { type: [integer, "null"], enum: [5, 10, 20, 60, 120, 240, null] }
+        threshold_price: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        threshold_percent: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        consecutive_days: { type: [integer, "null"], minimum: 2, maximum: 60 }
+        cooldown_minutes: { type: integer, minimum: 0, default: 1440 }
+        daily_limit: { type: integer, minimum: 1, default: 5 }
+        enabled: { type: boolean, default: true }
     ScreenerRequest:
       type: object
       required: [expression]

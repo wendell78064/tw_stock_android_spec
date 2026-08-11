@@ -87,6 +87,63 @@ class WatchlistItemModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class AlertRuleModel(Base):
+    __tablename__ = "alert_rules"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(120))
+    rule_type: Mapped[str] = mapped_column(String(40))
+    scope_type: Mapped[str] = mapped_column(String(16))
+    security_id: Mapped[UUID | None] = mapped_column(ForeignKey("securities.id"))
+    portfolio_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("portfolios.id", ondelete="CASCADE")
+    )
+    watchlist_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("watchlists.id", ondelete="CASCADE")
+    )
+    ma_period: Mapped[int | None] = mapped_column(Integer)
+    threshold_price: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    threshold_percent: Mapped[object | None] = mapped_column(Numeric(10, 4))
+    consecutive_days: Mapped[int | None] = mapped_column(Integer)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    cooldown_minutes: Mapped[int] = mapped_column(Integer)
+    daily_limit: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AlertEventModel(Base):
+    __tablename__ = "alert_events"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    alert_rule_id: Mapped[UUID] = mapped_column(ForeignKey("alert_rules.id", ondelete="CASCADE"))
+    security_id: Mapped[UUID] = mapped_column(ForeignKey("securities.id"))
+    triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    trade_date: Mapped[date] = mapped_column(Date)
+    event_type: Mapped[str] = mapped_column(String(40))
+    trigger_price: Mapped[object] = mapped_column(Numeric(24, 8))
+    reference_value: Mapped[object] = mapped_column(Numeric(24, 8))
+    reference_type: Mapped[str] = mapped_column(String(32))
+    message: Mapped[str] = mapped_column(String(500))
+    data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True)
+    notification_eligible: Mapped[bool] = mapped_column(Boolean)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AlertEvaluationRunModel(Base):
+    __tablename__ = "alert_evaluation_runs"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    target_trade_date: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(16))
+    rules_evaluated: Mapped[int] = mapped_column(Integer)
+    securities_evaluated: Mapped[int] = mapped_column(Integer)
+    events_created: Mapped[int] = mapped_column(Integer)
+    errors: Mapped[int] = mapped_column(Integer)
+    run_metadata: Mapped[str | None] = mapped_column(Text)
+
+
 class IngestionRunModel(Base):
     __tablename__ = "ingestion_runs"
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)

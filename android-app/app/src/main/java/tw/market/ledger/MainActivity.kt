@@ -28,6 +28,10 @@ import tw.market.ledger.feature.portfolio.presentation.AddTransactionRoute
 import tw.market.ledger.feature.portfolio.presentation.HoldingDetailRoute
 import tw.market.ledger.feature.portfolio.presentation.PortfolioRoute
 import tw.market.ledger.feature.watchlist.presentation.WatchlistRoute
+import tw.market.ledger.feature.alert.presentation.AlertRulesRoute
+import tw.market.ledger.feature.alert.presentation.CreateAlertScreen
+import tw.market.ledger.feature.alert.presentation.CreateAlertRoute
+import tw.market.ledger.feature.alert.presentation.NotificationCenterRoute
 import tw.market.ledger.model.MarketCode
 import tw.market.ledger.ui.TWMarketLedgerTheme
 
@@ -51,12 +55,12 @@ private fun AppNavigation() {
         topBar = {
             TopAppBar(
                 title = { Text("TW Market Ledger") },
-                actions = { TextButton(onClick = { navController.navigate("security-search") }) { Text("搜尋") } },
+                actions = { TextButton(onClick = { navController.navigate("alerts") }) { Text("提醒") }; TextButton(onClick = { navController.navigate("notifications") }) { Text("通知") }; TextButton(onClick = { navController.navigate("security-search") }) { Text("搜尋") } },
             )
         }, bottomBar = {
             NavigationBar {
                 listOf("市場" to "home", "產業" to "placeholder/產業", "持股" to "portfolio",
-                    "自選" to "watchlist", "更多" to "placeholder/更多").forEach { (label, route) ->
+                    "自選" to "watchlist", "更多" to "notifications").forEach { (label, route) ->
                     NavigationBarItem(selected = false, onClick = { navController.navigate(route) },
                         icon = { Text(label.take(1)) }, label = { Text(label) })
                 }
@@ -72,13 +76,26 @@ private fun AppNavigation() {
             composable("portfolio") { PortfolioRoute(
                 onAdd = { navController.navigate("portfolio/add") },
                 onHolding = { navController.navigate("portfolio/holding/${it.securityCode}") }) }
-            composable("watchlist") { WatchlistRoute() }
+            composable("watchlist") { WatchlistRoute(onAlert = { item ->
+                val type = when { item.targetPrice != null -> "PRICE_TARGET"; item.stopPrice != null -> "PRICE_STOP"; else -> "PRICE_ADD" }
+                val price = item.targetPrice ?: item.stopPrice ?: item.addPrice.orEmpty()
+                navController.navigate("alerts/create?price=$price&type=$type")
+            }) }
+            composable("alerts") { AlertRulesRoute(onCreate={navController.navigate("alerts/create")}) }
+            composable("alerts/create?security={security}&price={price}&type={type}", arguments = listOf(
+                navArgument("security") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("price") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("type") { type = NavType.StringType; defaultValue = "PRICE_TARGET" })) { entry ->
+                CreateAlertRoute(entry.arguments?.getString("security"), entry.arguments?.getString("price"),
+                    tw.market.ledger.model.AlertType.valueOf(requireNotNull(entry.arguments?.getString("type"))),
+                    onDone={ navController.popBackStack() }) }
+            composable("notifications") { NotificationCenterRoute() }
             composable("portfolio/add") { AddTransactionRoute(onDone = { navController.popBackStack() }) }
             composable("portfolio/holding/{code}", arguments = listOf(
                 navArgument("code") { type = NavType.StringType })) { entry ->
                 HoldingDetailRoute(requireNotNull(entry.arguments?.getString("code")), onSecurity = { holding ->
                     navController.navigate("security/${holding.market}/${holding.securityCode}")
-                })
+                }, onAlert = { navController.navigate("alerts/create") })
             }
             composable("futures/{product}", arguments = listOf(navArgument("product") { type = NavType.StringType })) {
                 FuturesDetailRoute(requireNotNull(it.arguments?.getString("product")))
@@ -100,6 +117,7 @@ private fun AppNavigation() {
                 SecurityDetailRoute(
                     code = requireNotNull(entry.arguments?.getString("code")),
                     market = MarketCode.valueOf(requireNotNull(entry.arguments?.getString("market"))),
+                    onAlert = { id -> navController.navigate("alerts/create${id?.let { value -> "?security=$value" } ?: ""}") },
                 )
             }
         }

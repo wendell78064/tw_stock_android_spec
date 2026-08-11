@@ -112,6 +112,7 @@ fun AddTransactionRoute(onDone: () -> Unit, viewModel: PortfolioViewModel = hilt
 
 @Composable
 fun HoldingDetailRoute(code: String, onSecurity: (PortfolioHolding) -> Unit,
+    onAlert: (PortfolioHolding) -> Unit = {},
     viewModel: PortfolioViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val dashboard = when (val value = state) {
@@ -123,7 +124,7 @@ fun HoldingDetailRoute(code: String, onSecurity: (PortfolioHolding) -> Unit,
     }
     val holding = dashboard?.holdings?.firstOrNull { it.securityCode == code }
     if (holding == null) Text("持股載入中") else HoldingDetailScreen(holding,
-        dashboard.transactions, { onSecurity(holding) }, viewModel::delete)
+        dashboard.transactions, { onSecurity(holding) }, viewModel::delete, { onAlert(holding) })
 }
 
 @Composable
@@ -235,7 +236,7 @@ fun AddTransactionScreen(availableShares: (String) -> Long? = { null }, onSave: 
 
 @Composable
 fun HoldingDetailScreen(holding: PortfolioHolding, transactions: List<PortfolioTransaction>,
-    onSecurity: () -> Unit, onDelete: (String) -> Unit) {
+    onSecurity: () -> Unit, onDelete: (String) -> Unit, onAlert: () -> Unit = {}) {
     var pending by remember { mutableStateOf<String?>(null) }
     LazyColumn(Modifier.padding(12.dp).testTag("holding-detail")) {
         item { Text("${holding.securityCode} ${holding.securityName}")
@@ -243,7 +244,8 @@ fun HoldingDetailScreen(holding: PortfolioHolding, transactions: List<PortfolioT
             Text("成本 ${holding.costBasis} · 收盤 ${holding.latestPrice ?: "--"}")
             Text("市值 ${holding.marketValue ?: "--"} · 未實現 ${holding.unrealizedPnl ?: "--"}")
             Text("已實現 ${holding.realizedPnl} · 報酬 ${holding.unrealizedReturnPercent ?: "--"}%")
-            TextButton(onClick=onSecurity) { Text("查看個股") } }
+            Row { TextButton(onClick=onSecurity) { Text("查看個股") }
+                TextButton(onClick=onAlert) { Text("建立提醒") } } }
         items(transactions.filter { it.securityCode == holding.securityCode }) { item ->
             ListItem(headlineContent={Text("${item.side} ${item.quantityShares} 股 @ ${item.price}")},
                 supportingContent={Text("${item.executedAt} · fee ${item.fee} · ${item.lotType}")},

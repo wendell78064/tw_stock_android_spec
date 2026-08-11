@@ -21,7 +21,7 @@ Phase 3 / Slice 2 — Watchlist Core
 Database head:
 
 ```text
-0007_watchlist_core
+0008_alert_engine
 ```
 
 Latest tag:
@@ -52,6 +52,15 @@ phase-3-slice-2-complete
 - Latest completed tag：`phase-3-slice-2-complete`
 - Database head：`0007_watchlist_core`
 - Next：Phase 3 / Slice 3 — Alert Engine
+
+## Current Working Slice
+
+- Phase 3 / Slice 3：Alert Engine + Notification Center
+- Status：LOCAL VALIDATION PASS / WAITING FOR CI
+- Database head：`0008_alert_engine`
+- Feature commit：pending commit
+- Completion tag：not created
+- FCM remote delivery：UNCONFIGURED
 
 ## Completed Watchlist Capabilities
 
@@ -109,6 +118,7 @@ phase-3-slice-2-complete
 - `feature-security`
 - `feature-portfolio`
 - `feature-watchlist`
+- `feature-alert`
 
 ## Phase 2 / Slice 2 Scope
 
@@ -194,6 +204,7 @@ phase-3-slice-2-complete
 
 ## Primary References
 
+- `docs/14_PHASE_3_ALERT_ENGINE.md`
 - `docs/13_PHASE_3_WATCHLIST.md`
 - `docs/12_PHASE_3_PORTFOLIO_CORE.md`
 - `docs/11_PHASE_2_DERIVATIVES.md`
@@ -207,7 +218,8 @@ phase-3-slice-2-complete
 - Phase 2 is closed
 - Phase 3 / Slice 1 is closed
 - Phase 3 / Slice 2 is closed after GitHub CI success
-- Next planned work is Phase 3 / Slice 3 — Alert Engine; implementation has not started
+- Phase 3 / Slice 3 implementation and local validation are complete; GitHub CI is pending
+- Do not start a later Slice before this Slice receives an explicit closeout request
 - Do not reopen Phase 2 solely for external licensing availability
 - Future providers may replace unavailable sources through existing boundaries
 - Any further Phase 3 work requires a separate explicit request and Slice definition

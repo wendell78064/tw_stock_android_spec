@@ -130,6 +130,7 @@ private fun SecurityResults(items: List<Security>, onClick: (Security) -> Unit) 
 fun SecurityDetailRoute(
     code: String,
     market: MarketCode,
+    onAlert: (String?) -> Unit = {},
     viewModel: SecurityDetailViewModel = hiltViewModel(),
     spotViewModel: SecuritySpotViewModel = hiltViewModel(),
 ) {
@@ -146,6 +147,7 @@ fun SecurityDetailRoute(
             TextButton(onClick = { tab = 1 }) { Text("籌碼") }
             TextButton(onClick = { tab = 2 }) { Text("信用") }
             TextButton(onClick = { tab = 3 }) { Text("基本資料") }
+            TextButton(onClick = { onAlert((state as? SecurityDetailUiState.Success)?.security?.id) }) { Text("提醒") }
         }
         when (tab) { 0 -> SecurityChartRoute(code, market)
             1 -> SecurityInstitutionalScreen(institutional, window, spotViewModel::loadInstitutional)

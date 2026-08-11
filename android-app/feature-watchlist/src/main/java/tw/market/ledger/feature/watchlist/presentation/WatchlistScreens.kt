@@ -97,12 +97,13 @@ class WatchlistViewModel @Inject constructor(private val repository: WatchlistRe
     private fun mutate(block: suspend () -> Unit) = viewModelScope.launch { runCatching { block() }.onSuccess { refresh() }.onFailure { mutableState.value = WatchlistUiState.Error(it.message ?: "操作失敗") } }
 }
 
-@Composable fun WatchlistRoute(viewModel: WatchlistViewModel = hiltViewModel()) {
-    val state by viewModel.state.collectAsState(); WatchlistScreen(state, viewModel)
+@Composable fun WatchlistRoute(onAlert: (WatchlistItem) -> Unit = {}, viewModel: WatchlistViewModel = hiltViewModel()) {
+    val state by viewModel.state.collectAsState(); WatchlistScreen(state, viewModel, onAlert)
 }
 
 @Composable
-fun WatchlistScreen(state: WatchlistUiState, viewModel: WatchlistViewModel? = null) {
+fun WatchlistScreen(state: WatchlistUiState, viewModel: WatchlistViewModel? = null,
+    onAlert: (WatchlistItem) -> Unit = {}) {
     when (state) {
         WatchlistUiState.Loading -> Text("Loading")
         is WatchlistUiState.Error -> Text(state.message)
@@ -112,12 +113,13 @@ fun WatchlistScreen(state: WatchlistUiState, viewModel: WatchlistViewModel? = nu
                 is WatchlistUiState.Offline -> state.dashboard; is WatchlistUiState.Stale -> state.dashboard
                 is WatchlistUiState.Partial -> state.dashboard; else -> error("unreachable")
             }
-            Dashboard(dashboard, state, viewModel)
+            Dashboard(dashboard, state, viewModel, onAlert)
         }
     }
 }
 
-@Composable private fun Dashboard(data: WatchlistDashboard, state: WatchlistUiState, vm: WatchlistViewModel?) {
+@Composable private fun Dashboard(data: WatchlistDashboard, state: WatchlistUiState,
+    vm: WatchlistViewModel?, onAlert: (WatchlistItem) -> Unit) {
     var groupsOpen by remember { mutableStateOf(false) }; var dialog by remember { mutableStateOf<String?>(null) }; var editing by remember { mutableStateOf<WatchlistItem?>(null) }
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         if (state is WatchlistUiState.Offline) Text("OFFLINE · STALE")
@@ -131,7 +133,7 @@ fun WatchlistScreen(state: WatchlistUiState, viewModel: WatchlistViewModel? = nu
         LazyColumn { items(data.items, key = { it.id }) { row -> Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Column(Modifier.padding(10.dp)) {
             Text("${row.securityCode} ${row.securityName}"); Text("收盤 ${row.close ?: "--"}  ${row.change ?: "--"} (${row.changePercent ?: "--"}%)")
             Text("行情日期 ${row.priceAsOf ?: "--"}"); Text(if (row.priceAboveMa20 == true) "收盤高於 MA20" else "MA20 關係無資料")
-            Row { TextButton({ editing = row }) { Text("編輯") }; TextButton({ vm?.move(row, -1, data.items) }) { Text("上移") }; TextButton({ vm?.move(row, 1, data.items) }) { Text("下移") }; TextButton({ vm?.remove(row.id) }) { Text("移出") } }
+            Row { TextButton({ editing = row }) { Text("編輯") }; TextButton({ onAlert(row) }) { Text("建立提醒") }; TextButton({ vm?.move(row, -1, data.items) }) { Text("上移") }; TextButton({ vm?.move(row, 1, data.items) }) { Text("下移") }; TextButton({ vm?.remove(row.id) }) { Text("移出") } }
         } } } }
     }
     dialog?.let { GroupDialog(it, { dialog = null }) { value -> when (it) { "create" -> vm?.create(value); "rename" -> vm?.rename(value); "delete" -> vm?.delete(); "add" -> vm?.add(value, null) }; dialog = null } }
