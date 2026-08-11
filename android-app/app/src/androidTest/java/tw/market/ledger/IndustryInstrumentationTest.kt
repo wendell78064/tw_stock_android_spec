@@ -31,38 +31,36 @@ class IndustryInstrumentationTest {
     @get:Rule
     val compose = createComposeRule()
 
+    private val semiIndustry = Industry("ind_24", "24", "半導體", "TWSE", 1)
+    private val aiTheme = Theme("t_ai", "AI_SERVER", "AI 伺服器", "AI supply chain", "CUSTOM", 1)
+
+    private val tsmcMember = TaxonomyMember(
+        securityId = "sec_2330",
+        code = "2330",
+        name = "台積電",
+        market = MarketCode.TWSE,
+        close = "1000.0",
+        change = "20.0",
+        changePercent = "2.04",
+        asOf = "2026-08-11T00:00:00Z",
+        dataStatus = DataStatus.FINAL,
+    )
+
+    private val quantaMember = TaxonomyMember(
+        securityId = "sec_2382",
+        code = "2382",
+        name = "廣達",
+        market = MarketCode.TWSE,
+        close = "280.0",
+        change = "5.0",
+        changePercent = "1.82",
+        asOf = "2026-08-11T00:00:00Z",
+        dataStatus = DataStatus.FINAL,
+    )
+
     @Test
-    fun deterministicIndustryAndThemeFlow() {
-        val semiIndustry = Industry("ind_24", "24", "半導體", "TWSE", 1)
-        val aiTheme = Theme("t_ai", "AI_SERVER", "AI 伺服器", "AI supply chain", "CUSTOM", 1)
-
-        val tsmcMember = TaxonomyMember(
-            securityId = "sec_2330",
-            code = "2330",
-            name = "台積電",
-            market = MarketCode.TWSE,
-            close = "1000.0",
-            change = "20.0",
-            changePercent = "2.04",
-            asOf = "2026-08-11T00:00:00Z",
-            dataStatus = DataStatus.FINAL,
-        )
-
-        val quantaMember = TaxonomyMember(
-            securityId = "sec_2382",
-            code = "2382",
-            name = "廣達",
-            market = MarketCode.TWSE,
-            close = "280.0",
-            change = "5.0",
-            changePercent = "1.82",
-            asOf = "2026-08-11T00:00:00Z",
-            dataStatus = DataStatus.FINAL,
-        )
-
+    fun industryLandingRendersAndNavigates() {
         var navSelection: String? = null
-
-        // 1. Landing Screen Navigation
         compose.setContent {
             IndustryLandingScreen(
                 uiState = IndustryLandingUiState.Success(
@@ -83,8 +81,11 @@ class IndustryInstrumentationTest {
         compose.onNodeWithText("AI 伺服器").assertIsDisplayed()
         compose.onNodeWithTag("theme_item_AI_SERVER").performClick()
         assertEquals("theme:t_ai", navSelection)
+    }
 
-        // 2. Industry Detail Screen: Verify Member
+    @Test
+    fun industryDetailRendersMembersAndNavigates() {
+        var navSelection: String? = null
         compose.setContent {
             IndustryDetailScreen(
                 uiState = IndustryDetailUiState.Success(
@@ -103,8 +104,10 @@ class IndustryInstrumentationTest {
         compose.onNodeWithText("台積電 (2330)").assertIsDisplayed()
         compose.onNodeWithTag("member_item_2330").performClick()
         assertEquals("sec:TWSE:2330", navSelection)
+    }
 
-        // 3. Theme Detail Screen: Verify Member
+    @Test
+    fun themeDetailRendersMembers() {
         compose.setContent {
             ThemeDetailScreen(
                 uiState = ThemeDetailUiState.Success(
@@ -115,14 +118,16 @@ class IndustryInstrumentationTest {
                         dataStatus = DataStatus.FINAL,
                     )
                 ),
-                onSecurityClick = { market, code -> navSelection = "sec:$market:$code" },
+                onSecurityClick = { _, _ -> },
                 onRetry = {},
             )
         }
 
         compose.onNodeWithText("廣達 (2382)").assertIsDisplayed()
+    }
 
-        // 4. Security Detail Screen: Verify Official Industry & Attached Themes
+    @Test
+    fun securityDetailRendersIndustryAndAttachedThemes() {
         val fullSecurity = Security(
             id = "sec_2330",
             code = "2330",
