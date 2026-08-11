@@ -130,8 +130,8 @@
 ### Slice Status
 
 - Phase 3 / Slice 1 — Portfolio Core：COMPLETE
-- Phase 3 / Slice 2 — Watchlist：IMPLEMENTED / WAITING FOR CI
-- Next after closeout：Phase 3 / Slice 3 — Alert Engine
+- Phase 3 / Slice 2 — Watchlist：COMPLETE
+- Next：Phase 3 / Slice 3 — Alert Engine
 
 ### 任務
 

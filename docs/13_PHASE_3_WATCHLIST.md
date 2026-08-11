@@ -50,6 +50,17 @@ Final local validation：
 - Critical item query `EXPLAIN ANALYZE`：index scan，0.125 ms
 - Official Provider smoke：NOT RUN
 
+GitHub Actions final validation：
+
+- Workflow：SUCCESS
+- backend：PASS
+- android：PASS
+- android-instrumentation：PASS
+- `connectedDebugAndroidTest`：PASS
+- Android Emulator：API 35／Google APIs／x86_64
+
+Run ID／URL：not recorded; no directly verified successful-run value was available during closeout.
+
 ## Limitations
 
 - 不含 Alert Engine、MA／Price alerts、push／Notification Center
