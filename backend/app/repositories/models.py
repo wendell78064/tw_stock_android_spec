@@ -59,6 +59,34 @@ class PortfolioTransactionModel(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class WatchlistModel(Base):
+    __tablename__ = "watchlists"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(80))
+    sort_order: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class WatchlistItemModel(Base):
+    __tablename__ = "watchlist_items"
+    __table_args__ = (
+        UniqueConstraint("watchlist_id", "security_id"),
+        Index("watchlist_items_order_idx", "watchlist_id", "sort_order"),
+        Index("watchlist_items_security_idx", "security_id"),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    watchlist_id: Mapped[UUID] = mapped_column(ForeignKey("watchlists.id", ondelete="CASCADE"))
+    security_id: Mapped[UUID] = mapped_column(ForeignKey("securities.id"))
+    sort_order: Mapped[int] = mapped_column(Integer)
+    note: Mapped[str | None] = mapped_column(String(500))
+    target_price: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    stop_price: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    add_price: Mapped[object | None] = mapped_column(Numeric(24, 8))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class IngestionRunModel(Base):
     __tablename__ = "ingestion_runs"
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)

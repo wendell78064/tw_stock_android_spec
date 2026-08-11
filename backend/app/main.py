@@ -11,6 +11,7 @@ from app.api.health import router as health_router
 from app.api.market import router as market_router
 from app.api.portfolios import router as portfolios_router
 from app.api.securities import router as securities_router
+from app.api.watchlists import router as watchlists_router
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
@@ -40,6 +41,7 @@ app.include_router(securities_router, prefix="/v1")
 app.include_router(market_router, prefix="/v1")
 app.include_router(derivatives_router, prefix="/v1")
 app.include_router(portfolios_router, prefix="/v1")
+app.include_router(watchlists_router, prefix="/v1")
 
 
 @app.middleware("http")

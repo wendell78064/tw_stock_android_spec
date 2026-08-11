@@ -27,6 +27,7 @@ import tw.market.ledger.feature.security.presentation.SecuritySearchRoute
 import tw.market.ledger.feature.portfolio.presentation.AddTransactionRoute
 import tw.market.ledger.feature.portfolio.presentation.HoldingDetailRoute
 import tw.market.ledger.feature.portfolio.presentation.PortfolioRoute
+import tw.market.ledger.feature.watchlist.presentation.WatchlistRoute
 import tw.market.ledger.model.MarketCode
 import tw.market.ledger.ui.TWMarketLedgerTheme
 
@@ -55,7 +56,7 @@ private fun AppNavigation() {
         }, bottomBar = {
             NavigationBar {
                 listOf("市場" to "home", "產業" to "placeholder/產業", "持股" to "portfolio",
-                    "自選" to "placeholder/自選", "更多" to "placeholder/更多").forEach { (label, route) ->
+                    "自選" to "watchlist", "更多" to "placeholder/更多").forEach { (label, route) ->
                     NavigationBarItem(selected = false, onClick = { navController.navigate(route) },
                         icon = { Text(label.take(1)) }, label = { Text(label) })
                 }
@@ -71,6 +72,7 @@ private fun AppNavigation() {
             composable("portfolio") { PortfolioRoute(
                 onAdd = { navController.navigate("portfolio/add") },
                 onHolding = { navController.navigate("portfolio/holding/${it.securityCode}") }) }
+            composable("watchlist") { WatchlistRoute() }
             composable("portfolio/add") { AddTransactionRoute(onDone = { navController.popBackStack() }) }
             composable("portfolio/holding/{code}", arguments = listOf(
                 navArgument("code") { type = NavType.StringType })) { entry ->

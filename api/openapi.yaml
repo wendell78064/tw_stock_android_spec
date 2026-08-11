@@ -573,12 +573,15 @@ paths:
               schema: { $ref: "#/components/schemas/PortfolioPositionListEnvelope" }
   /watchlists:
     get:
+      operationId: listWatchlists
       tags: [Watchlists]
       summary: List watchlists
       responses:
         "200":
           description: Watchlists
+          content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistListEnvelope" } } }
     post:
+      operationId: createWatchlist
       tags: [Watchlists]
       summary: Create a watchlist
       requestBody:
@@ -593,6 +596,67 @@ paths:
       responses:
         "201":
           description: Created
+          content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistEnvelope" } } }
+  /watchlists/reorder:
+    put:
+      operationId: reorderWatchlists
+      tags: [Watchlists]
+      summary: Batch reorder watchlist groups
+      requestBody: { required: true, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrderInput" } } } } }
+      responses: { "200": { description: Reordered, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistListEnvelope" } } } } }
+  /watchlists/{watchlistId}:
+    parameters: [{ $ref: "#/components/parameters/WatchlistId" }]
+    get:
+      operationId: getWatchlist
+      tags: [Watchlists]
+      responses: { "200": { description: Watchlist, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistEnvelope" } } } } }
+    patch:
+      operationId: renameWatchlist
+      tags: [Watchlists]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistNameInput" } } } }
+      responses: { "200": { description: Renamed, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistEnvelope" } } } } }
+    delete:
+      operationId: deleteWatchlist
+      tags: [Watchlists]
+      responses: { "204": { description: Deleted } }
+  /watchlists/{watchlistId}/items:
+    parameters: [{ $ref: "#/components/parameters/WatchlistId" }]
+    get:
+      operationId: listWatchlistItems
+      tags: [Watchlists]
+      responses: { "200": { description: Items, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistItemListEnvelope" } } } } }
+    post:
+      operationId: addWatchlistItem
+      tags: [Watchlists]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistAddInput" } } } }
+      responses: { "201": { description: Added, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistItemEnvelope" } } } } }
+  /watchlists/{watchlistId}/items/reorder:
+    parameters: [{ $ref: "#/components/parameters/WatchlistId" }]
+    put:
+      operationId: reorderWatchlistItems
+      tags: [Watchlists]
+      requestBody: { required: true, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/OrderInput" } } } } }
+      responses: { "200": { description: Reordered, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistItemListEnvelope" } } } } }
+  /watchlists/{watchlistId}/items/{itemId}:
+    parameters:
+      - { $ref: "#/components/parameters/WatchlistId" }
+      - { in: path, name: itemId, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateWatchlistItem
+      tags: [Watchlists]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistItemInput" } } } }
+      responses: { "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistItemEnvelope" } } } } }
+    delete:
+      operationId: deleteWatchlistItem
+      tags: [Watchlists]
+      responses: { "204": { description: Removed } }
+  /watchlists/{watchlistId}/overview:
+    parameters: [{ $ref: "#/components/parameters/WatchlistId" }]
+    get:
+      operationId: getWatchlistOverview
+      tags: [Watchlists]
+      summary: Bulk enriched daily watchlist overview
+      responses: { "200": { description: Overview, content: { application/json: { schema: { $ref: "#/components/schemas/WatchlistItemListEnvelope" } } } } }
   /alerts:
     get:
       tags: [Alerts]
@@ -659,6 +723,11 @@ components:
       schema:
         type: string
         format: uuid
+    WatchlistId:
+      in: path
+      name: watchlistId
+      required: true
+      schema: { type: string, format: uuid }
   schemas:
     HealthResponse:
       type: object
@@ -1062,6 +1131,81 @@ components:
         data:
           type: array
           items: { $ref: "#/components/schemas/PortfolioPosition" }
+    WatchlistNameInput:
+      type: object
+      required: [name]
+      properties: { name: { type: string, minLength: 1, maxLength: 80 } }
+    WatchlistAddInput:
+      type: object
+      required: [security_code]
+      properties:
+        security_code: { type: string, minLength: 1, maxLength: 16 }
+        market: { oneOf: [{ $ref: "#/components/schemas/MarketCode" }, { type: "null" }] }
+    OrderInput:
+      type: object
+      required: [id, sort_order]
+      properties:
+        id: { type: string, format: uuid }
+        sort_order: { type: integer, minimum: 0 }
+    WatchlistItemInput:
+      type: object
+      properties:
+        note: { type: [string, "null"], maxLength: 500 }
+        target_price: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        stop_price: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        add_price: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+    Watchlist:
+      allOf:
+        - $ref: "#/components/schemas/WatchlistNameInput"
+        - type: object
+          required: [id, sort_order, created_at, updated_at]
+          properties:
+            id: { type: string, format: uuid }
+            sort_order: { type: integer }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+    WatchlistItem:
+      allOf:
+        - $ref: "#/components/schemas/WatchlistItemInput"
+        - type: object
+          required: [id, watchlist_id, security_code, security_name, market, sort_order, data_status]
+          properties:
+            id: { type: string, format: uuid }
+            watchlist_id: { type: string, format: uuid }
+            security_code: { type: string }
+            security_name: { type: string }
+            market: { $ref: "#/components/schemas/MarketCode" }
+            sort_order: { type: integer }
+            close: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+            change: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+            change_percent: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+            price_as_of: { type: [string, "null"], format: date }
+            data_status: { $ref: "#/components/schemas/DataStatus" }
+            ma5: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+            ma20: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+            ma60: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+            rsi14: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+            price_above_ma20: { type: [boolean, "null"] }
+            price_above_ma60: { type: [boolean, "null"] }
+            foreign_net: { type: [integer, "null"], format: int64 }
+            investment_trust_net: { type: [integer, "null"], format: int64 }
+            dealer_net: { type: [integer, "null"], format: int64 }
+            margin_balance: { type: [integer, "null"], format: int64 }
+            margin_balance_change: { type: [integer, "null"], format: int64 }
+            short_balance: { type: [integer, "null"], format: int64 }
+            short_balance_change: { type: [integer, "null"], format: int64 }
+    WatchlistEnvelope:
+      type: object
+      properties: { data: { $ref: "#/components/schemas/Watchlist" } }
+    WatchlistListEnvelope:
+      type: object
+      properties: { data: { type: array, items: { $ref: "#/components/schemas/Watchlist" } } }
+    WatchlistItemEnvelope:
+      type: object
+      properties: { data: { $ref: "#/components/schemas/WatchlistItem" } }
+    WatchlistItemListEnvelope:
+      type: object
+      properties: { data: { type: array, items: { $ref: "#/components/schemas/WatchlistItem" } } }
     AlertRuleInput:
       type: object
       required: [target_type, target_id, rule_type, parameters]

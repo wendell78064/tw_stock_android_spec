@@ -20,7 +20,7 @@ Phase 3 / Slice 1 — Portfolio Core
 Database head:
 
 ```text
-0006_portfolio_core
+0007_watchlist_core
 ```
 
 Latest tag:
@@ -49,6 +49,24 @@ phase-3-slice-1-complete
 - Feature commit：`188d12a0716220a96f18c87eac2691da2e282370`
 - Latest completed tag：`phase-3-slice-1-complete`
 - Next：Phase 3 / Slice 2 — Watchlist
+
+## Current Working Slice
+
+- Phase 3 / Slice 2：Watchlist Core
+- Status：IMPLEMENTED / WAITING FOR CI
+- Database head：`0007_watchlist_core`
+- Feature commit：this feature commit
+- Completion tag：not created
+
+## Implemented Watchlist Capabilities
+
+- Multiple watchlist groups and group CRUD
+- Security add/remove with duplicate protection
+- Group and item batch reorder
+- Note and target／stop／add price settings
+- Bulk daily price／technical／institutional／credit overview
+- Android `feature-watchlist` and bottom navigation
+- Room offline read cache with explicit migration
 
 ## Completed Portfolio Capabilities
 
@@ -87,6 +105,7 @@ phase-3-slice-1-complete
 - `feature-market`
 - `feature-security`
 - `feature-portfolio`
+- `feature-watchlist`
 
 ## Phase 2 / Slice 2 Scope
 
@@ -172,6 +191,7 @@ phase-3-slice-1-complete
 
 ## Primary References
 
+- `docs/13_PHASE_3_WATCHLIST.md`
 - `docs/12_PHASE_3_PORTFOLIO_CORE.md`
 - `docs/11_PHASE_2_DERIVATIVES.md`
 - `docs/05_DATA_SOURCES_AND_COMPLIANCE.md`
@@ -183,7 +203,7 @@ phase-3-slice-1-complete
 
 - Phase 2 is closed
 - Phase 3 / Slice 1 is closed
-- Next planned work is Phase 3 / Slice 2 — Watchlist; implementation has not started
+- Phase 3 / Slice 2 implementation is complete locally and awaits GitHub CI
 - Do not reopen Phase 2 solely for external licensing availability
 - Future providers may replace unavailable sources through existing boundaries
 - Any further Phase 3 work requires a separate explicit request and Slice definition

@@ -10,6 +10,7 @@ from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.repositories.sql_portfolio import SqlPortfolioRepository
 from app.repositories.sql_price import SqlPriceRepository
 from app.repositories.sql_security import SqlSecurityRepository
+from app.repositories.sql_watchlist import SqlWatchlistRepository
 from app.services.readiness import ReadinessChecker
 
 
@@ -54,3 +55,9 @@ async def portfolio_repository(
     session: Annotated[AsyncSession, Depends(database_session)],
 ) -> SqlPortfolioRepository:
     return SqlPortfolioRepository(session)
+
+
+async def watchlist_repository(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> SqlWatchlistRepository:
+    return SqlWatchlistRepository(session)

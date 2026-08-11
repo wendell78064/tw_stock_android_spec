@@ -2,6 +2,8 @@ package tw.market.ledger
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import dagger.Module
@@ -23,6 +25,15 @@ import tw.market.ledger.database.DerivativesDao
 import tw.market.ledger.network.DerivativesApi
 import tw.market.ledger.database.PortfolioDao
 import tw.market.ledger.network.PortfolioApi
+import tw.market.ledger.database.WatchlistDao
+import tw.market.ledger.network.WatchlistApi
+
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `watchlist_cache` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, PRIMARY KEY(`id`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `watchlist_item_cache` (`watchlistId` TEXT NOT NULL, `id` TEXT NOT NULL, `securityCode` TEXT NOT NULL, `securityName` TEXT NOT NULL, `market` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, `note` TEXT, `targetPrice` TEXT, `stopPrice` TEXT, `addPrice` TEXT, `close` TEXT, `change` TEXT, `changePercent` TEXT, `priceAsOf` TEXT, `dataStatus` TEXT NOT NULL, `foreignNet` INTEGER, `marginBalanceChange` INTEGER, `priceAboveMa20` INTEGER, PRIMARY KEY(`watchlistId`, `id`))")
+    }
+}
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -30,7 +41,7 @@ object AppModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): TWMarketDatabase =
         Room.databaseBuilder(context, TWMarketDatabase::class.java, "tw-market-ledger.db")
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_5_6)
             .build()
 
     @Provides fun securityDao(database: TWMarketDatabase): SecurityDao = database.securityDao()
@@ -38,6 +49,7 @@ object AppModule {
     @Provides fun marketDao(database: TWMarketDatabase): MarketDao = database.marketDao()
     @Provides fun derivativesDao(database: TWMarketDatabase): DerivativesDao = database.derivativesDao()
     @Provides fun portfolioDao(database: TWMarketDatabase): PortfolioDao = database.portfolioDao()
+    @Provides fun watchlistDao(database: TWMarketDatabase): WatchlistDao = database.watchlistDao()
 
     @Provides @Singleton
     fun retrofit(): Retrofit {
@@ -60,4 +72,5 @@ object AppModule {
 
     @Provides @Singleton
     fun portfolioApi(retrofit: Retrofit): PortfolioApi = retrofit.create(PortfolioApi::class.java)
+    @Provides @Singleton fun watchlistApi(retrofit: Retrofit): WatchlistApi = retrofit.create(WatchlistApi::class.java)
 }
