@@ -19,7 +19,7 @@ Phase 2 / Slice 2
 Database head:
 
 ```text
-0005_derivatives_market
+0006_portfolio_core
 ```
 
 Latest tag:
@@ -41,6 +41,52 @@ phase-2-slice-2-complete
 - Emulator API：35
 - Emulator target：Google APIs
 - Emulator architecture：x86_64
+
+## Current Working Slice
+
+- Phase：3
+- Slice：1
+- Name：Portfolio Core
+- Status：IMPLEMENTED / WAITING FOR CI
+- Feature commit：this feature commit
+- Completion tag：not created
+
+## Phase 3 / Slice 1 Implemented Features
+
+- Portfolio and Default Portfolio
+- BUY／SELL transaction ledger
+- Shares-based quantity
+- Moving Average Cost accounting
+- Realized and unrealized P&L
+- Latest daily close valuation
+- Portfolio summary
+- Security allocation
+- Android `feature-portfolio`
+- Add transaction and delete transaction UI
+- Holding detail and transaction history
+- Room offline read cache
+
+## Current Portfolio APIs
+
+- `GET /v1/portfolios`
+- `POST /v1/portfolios`
+- `GET /v1/portfolios/{portfolioId}`
+- `GET /v1/portfolios/{portfolioId}/transactions`
+- `POST /v1/portfolios/{portfolioId}/transactions`
+- `DELETE /v1/portfolios/{portfolioId}/transactions/{transactionId}`
+- `GET /v1/portfolios/{portfolioId}/positions`
+- `GET /v1/portfolios/{portfolioId}/summary`
+
+## Android Modules
+
+- `app`
+- `core-model`
+- `core-network`
+- `core-database`
+- `core-ui`
+- `feature-market`
+- `feature-security`
+- `feature-portfolio`
 
 ## Phase 2 / Slice 2 Scope
 
@@ -137,5 +183,5 @@ phase-2-slice-2-complete
 - Phase 2 is closed
 - Do not reopen Phase 2 solely for external licensing availability
 - Future providers may replace unavailable sources through existing boundaries
-- Any Phase 3 work requires a separate explicit request and Slice definition
+- Any further Phase 3 work requires a separate explicit request and Slice definition
 - Preserve `phase-2-slice-2-complete` as the Phase 2 release boundary

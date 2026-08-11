@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.api.derivatives import router as derivatives_router
 from app.api.health import router as health_router
 from app.api.market import router as market_router
+from app.api.portfolios import router as portfolios_router
 from app.api.securities import router as securities_router
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging
@@ -38,6 +39,7 @@ app.include_router(health_router, prefix="/v1")
 app.include_router(securities_router, prefix="/v1")
 app.include_router(market_router, prefix="/v1")
 app.include_router(derivatives_router, prefix="/v1")
+app.include_router(portfolios_router, prefix="/v1")
 
 
 @app.middleware("http")

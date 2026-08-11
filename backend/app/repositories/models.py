@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -22,6 +23,40 @@ from app.domain.market_data import DataStatus
 
 class Base(DeclarativeBase):
     pass
+
+
+class PortfolioModel(Base):
+    __tablename__ = "portfolios"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(80))
+    base_currency: Mapped[str] = mapped_column(String(8), default="TWD")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PortfolioTransactionModel(Base):
+    __tablename__ = "portfolio_transactions"
+    __table_args__ = (
+        Index("portfolio_transactions_portfolio_executed_idx", "portfolio_id", "executed_at"),
+        Index(
+            "portfolio_transactions_security_executed_idx",
+            "portfolio_id",
+            "security_id",
+            "executed_at",
+        ),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    portfolio_id: Mapped[UUID] = mapped_column(ForeignKey("portfolios.id", ondelete="CASCADE"))
+    security_id: Mapped[UUID] = mapped_column(ForeignKey("securities.id"))
+    side: Mapped[str] = mapped_column(String(8))
+    executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    quantity_shares: Mapped[int] = mapped_column(BigInteger)
+    price: Mapped[object] = mapped_column(Numeric(24, 8))
+    fee: Mapped[object] = mapped_column(Numeric(24, 8))
+    lot_type: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class IngestionRunModel(Base):

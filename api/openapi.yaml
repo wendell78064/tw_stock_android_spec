@@ -450,6 +450,7 @@ paths:
                 $ref: "#/components/schemas/IndustryListEnvelope"
   /portfolios:
     get:
+      operationId: listPortfolios
       tags: [Portfolios]
       summary: List portfolios
       responses:
@@ -460,6 +461,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PortfolioListEnvelope"
     post:
+      operationId: createPortfolio
       tags: [Portfolios]
       summary: Create a portfolio
       requestBody:
@@ -475,8 +477,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PortfolioEnvelope"
+  /portfolios/{portfolioId}:
+    get:
+      operationId: getPortfolio
+      tags: [Portfolios]
+      summary: Get a portfolio
+      parameters:
+        - $ref: "#/components/parameters/PortfolioId"
+      responses:
+        "200":
+          description: Portfolio
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PortfolioEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /portfolios/{portfolioId}/summary:
     get:
+      operationId: getPortfolioSummary
       tags: [Portfolios]
       summary: Get portfolio summary
       parameters:
@@ -490,6 +507,7 @@ paths:
                 $ref: "#/components/schemas/PortfolioSummaryEnvelope"
   /portfolios/{portfolioId}/transactions:
     get:
+      operationId: listPortfolioTransactions
       tags: [Portfolios]
       summary: List transactions
       parameters:
@@ -502,6 +520,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/TransactionListEnvelope"
     post:
+      operationId: createPortfolioTransaction
       tags: [Portfolios]
       summary: Create a transaction
       parameters:
@@ -524,6 +543,34 @@ paths:
                 $ref: "#/components/schemas/TransactionEnvelope"
         "422":
           $ref: "#/components/responses/ValidationError"
+  /portfolios/{portfolioId}/transactions/{transactionId}:
+    delete:
+      operationId: deletePortfolioTransaction
+      tags: [Portfolios]
+      summary: Delete a transaction and replay subsequent accounting
+      parameters:
+        - $ref: "#/components/parameters/PortfolioId"
+        - in: path
+          name: transactionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /portfolios/{portfolioId}/positions:
+    get:
+      operationId: getPortfolioPositions
+      tags: [Portfolios]
+      summary: Get request-time moving-average positions and valuation
+      parameters:
+        - $ref: "#/components/parameters/PortfolioId"
+      responses:
+        "200":
+          description: Current positions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PortfolioPositionListEnvelope" }
   /watchlists:
     get:
       tags: [Watchlists]
@@ -887,15 +934,20 @@ components:
         meta: { $ref: "#/components/schemas/Meta" }
     Portfolio:
       type: object
+      required: [id, name, base_currency, is_default, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
+        base_currency: { type: string, enum: [TWD] }
         is_default: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     CreatePortfolioRequest:
       type: object
       required: [name]
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
+        base_currency: { type: string, enum: [TWD], default: TWD }
     PortfolioEnvelope:
       type: object
       properties:
@@ -908,13 +960,20 @@ components:
           items: { $ref: "#/components/schemas/Portfolio" }
     PortfolioSummary:
       type: object
+      required: [total_cost_basis, total_realized_pnl, holding_count, data_status, tax_handling]
       properties:
-        market_value: { $ref: "#/components/schemas/DecimalString" }
-        cost_basis: { $ref: "#/components/schemas/DecimalString" }
-        realized_pnl: { $ref: "#/components/schemas/DecimalString" }
-        unrealized_pnl: { $ref: "#/components/schemas/DecimalString" }
-        return_percent: { $ref: "#/components/schemas/DecimalString" }
-        valuation_as_of: { type: string, format: date-time }
+        total_market_value:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        total_cost_basis: { $ref: "#/components/schemas/DecimalString" }
+        total_realized_pnl: { $ref: "#/components/schemas/DecimalString" }
+        total_unrealized_pnl:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        total_return_percent:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        holding_count: { type: integer, minimum: 0 }
+        price_as_of: { type: [string, "null"], format: date-time }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+        tax_handling: { type: string, const: NOT_INCLUDED }
     PortfolioSummaryEnvelope:
       type: object
       properties:
@@ -924,20 +983,22 @@ components:
       type: object
       additionalProperties: false
       required:
-        - stock_code
-        - transaction_type
-        - transaction_time
+        - security_code
+        - side
+        - executed_at
         - quantity_shares
         - price
         - fee
         - lot_type
       properties:
-        stock_code:
+        security_code:
           type: string
-        transaction_type:
+        market:
+          oneOf: [{ $ref: "#/components/schemas/MarketCode" }, { type: "null" }]
+        side:
           type: string
           enum: [BUY, SELL]
-        transaction_time:
+        executed_at:
           type: string
           format: date-time
         quantity_shares:
@@ -949,7 +1010,7 @@ components:
           $ref: "#/components/schemas/DecimalString"
         lot_type:
           type: string
-          enum: [BOARD_LOT, ODD_LOT]
+          enum: [ROUND_LOT, ODD_LOT]
     Transaction:
       allOf:
         - $ref: "#/components/schemas/TransactionInput"
@@ -957,7 +1018,10 @@ components:
           properties:
             id: { type: string, format: uuid }
             portfolio_id: { type: string, format: uuid }
+            security_name: { type: string }
             created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
+            tax_handling: { type: string, const: NOT_INCLUDED }
     TransactionEnvelope:
       type: object
       properties:
@@ -968,6 +1032,36 @@ components:
         data:
           type: array
           items: { $ref: "#/components/schemas/Transaction" }
+    PortfolioPosition:
+      type: object
+      required: [security_code, security_name, market, quantity_shares, cost_basis, realized_pnl, price_data_status]
+      properties:
+        security_code: { type: string }
+        security_name: { type: string }
+        market: { $ref: "#/components/schemas/MarketCode" }
+        quantity_shares: { type: integer, format: int64 }
+        average_cost:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        cost_basis: { $ref: "#/components/schemas/DecimalString" }
+        realized_pnl: { $ref: "#/components/schemas/DecimalString" }
+        latest_price:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        price_as_of: { type: [string, "null"], format: date-time }
+        price_data_status: { $ref: "#/components/schemas/DataStatus" }
+        market_value:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        unrealized_pnl:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        unrealized_return_percent:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+        allocation_percent:
+          oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }]
+    PortfolioPositionListEnvelope:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/PortfolioPosition" }
     AlertRuleInput:
       type: object
       required: [target_type, target_id, rule_type, parameters]
