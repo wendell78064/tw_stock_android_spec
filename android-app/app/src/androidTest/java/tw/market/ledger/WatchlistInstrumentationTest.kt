@@ -1,7 +1,9 @@
 package tw.market.ledger
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import org.junit.Rule
 import org.junit.Test
@@ -23,7 +25,7 @@ class WatchlistInstrumentationTest {
         compose.onNodeWithText("測試自選").assertIsDisplayed()
         compose.onNodeWithText("5678 第二檔").assertIsDisplayed()
         compose.onNodeWithText("1234 測試股票").assertIsDisplayed()
-        compose.onNodeWithText("編輯").assertIsDisplayed()
-        compose.onNodeWithText("移出").assertIsDisplayed()
+        compose.onAllNodesWithText("編輯").assertCountEquals(2)
+        compose.onAllNodesWithText("移出").assertCountEquals(2)
     }
 }
