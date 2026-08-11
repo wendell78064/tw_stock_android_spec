@@ -40,6 +40,16 @@ Fingerprint 是 `SHA256(rule_id:security_id:trade_date:event_type)`，DB unique 
 
 Final local validation：Ruff PASS；Pytest 80 passed；OpenAPI validation／Kotlin client generation PASS；Android lint／unit／Debug APK／Instrumentation APK PASS；Alembic `0007 → 0008 → 0007 → 0008` PASS。測試涵蓋 price/MA semantics、missing/stale/partial、validation、dynamic membership、dedup、daily limit、audit、API CRUD、Notification Center、Android rules/create/notification/offline states 與 deterministic instrumentation fixture。50 securities × 20 rules deterministic smoke 為 8.068 ms，membership／market／event-state 各一次 bulk call。
 
+## GitHub CI Final Validation
+
+- Workflow：SUCCESS
+- Backend：PASS
+- Android：PASS
+- Android instrumentation：PASS
+- Emulator：Android API 35／Google APIs／x86_64
+- `connectedDebugAndroidTest`：PASS（14 instrumentation tests；其中 1 個為 Alert Engine deterministic scenario）
+- Run ID／URL：未記錄（目前無可直接驗證資訊）
+
 ## Limitations
 
 - Daily/latest available data only；不含 realtime、minute K、WebSocket

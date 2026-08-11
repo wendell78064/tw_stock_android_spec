@@ -125,13 +125,19 @@
 - 法人資料可查 1／5／10／20／60 日。
 - 每個 API 顯示來源與狀態。
 
-## Phase 3：產業、題材、篩選器與比較
+## Phase 3：Personal Investment Core
+
+狀態：**COMPLETE**
 
 ### Slice Status
 
 - Phase 3 / Slice 1 — Portfolio Core：COMPLETE
 - Phase 3 / Slice 2 — Watchlist：COMPLETE
-- Phase 3 / Slice 3 — Alert Engine：IMPLEMENTED / WAITING FOR CI
+- Phase 3 / Slice 3 — Alert Engine：COMPLETE
+
+## Phase 4：Industry / Theme / Strength / Screener
+
+下一工作：**Phase 4 / Slice 1 — Industry / Theme Foundation**
 
 ### 任務
 
@@ -152,7 +158,7 @@
 - 篩選器 AND／OR 結果可重現。
 - 比較圖起點正規化一致。
 
-## Phase 4：合法盤中行情
+## Phase 5：合法盤中行情
 
 ### 前置條件
 
@@ -181,7 +187,7 @@
 - 盤中同規則不重複轟炸。
 - App 背景恢復後資料正確。
 
-## Phase 5：完整產品功能
+## Phase 6：完整產品功能
 
 - 多裝置同步。
 - 生物辨識。
