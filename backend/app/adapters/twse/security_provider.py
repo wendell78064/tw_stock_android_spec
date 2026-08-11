@@ -7,6 +7,25 @@ from app.adapters.market_spot_mapping import map_index, map_lending, map_margin
 from app.adapters.security_mapping import RawRow, make_record
 from app.domain.pricing import DailyPriceRecord, SecurityKey
 from app.domain.security import MarketCode, SecurityRecord
+from app.domain.market_data import DataStatus
+from app.domain.market_spot import LicenseStatus, ProviderPolicy, SourceCapability, SourceType
+
+
+TWSE_LENDING_CAPABILITIES = {
+    "borrowed_shares": SourceCapability.UNAVAILABLE,
+    "returned_shares": SourceCapability.UNAVAILABLE,
+    "borrowing_balance": SourceCapability.UNAVAILABLE,
+    "lending_short_sell": SourceCapability.OFFICIAL_OPENAPI,
+    "lending_short_balance": SourceCapability.UNAVAILABLE,
+}
+TWSE_LENDING_POLICY = ProviderPolicy(
+    SourceType.OFFICIAL_OPENAPI,
+    SourceCapability.OFFICIAL_OPENAPI,
+    LicenseStatus.VERIFIED_OPEN_DATA,
+    True,
+    None,
+    None,
+)
 
 
 class TwseSecurityProvider:
@@ -119,12 +138,14 @@ class TwseSecurityProvider:
             received_at=received_at,
             source="TWSE_LENDING",
             keys={
-                "lending_sell": "借券賣出",
+                "lending_short_sell": "借券賣出股數",
                 "lending_return": "借券還券",
                 "lending_balance": "借券餘額",
                 "lending_balance_change": "借券餘額異動",
             },
             security_code=code,
+            data_status=DataStatus.PARTIAL,
+            provider_policy=TWSE_LENDING_POLICY,
         )
 
     async def get_daily_prices(

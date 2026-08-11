@@ -118,7 +118,7 @@ class TpexSecurityProvider:
             received_at=received_at,
             source="TPEX_LENDING",
             keys={
-                "lending_sell": "LendingSale",
+                "lending_short_sell": "LendingSale",
                 "lending_return": "LendingReturn",
                 "lending_balance": "LendingBalance",
                 "lending_balance_change": "LendingChange",

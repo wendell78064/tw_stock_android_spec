@@ -100,6 +100,7 @@ class MarketDashboardViewModel @Inject constructor(private val overview: GetMark
                     Text(futures?.near?.let { "${it.contractCode} ${it.close ?: "--"} · OI ${it.openInterest ?: "--"} · 基差 ${it.closeBasis ?: "--"}" }
                         ?: "資料 unavailable / 尚未同步")
                     Text("近月／次月 · 法人期貨 · Put/Call · 集中度 · VIX")
+                    Text("VIX：正式資料來源目前不可用")
                 }
             }
         }
@@ -114,7 +115,10 @@ class MarketDashboardViewModel @Inject constructor(private val overview: GetMark
             Text("融資餘額 ${it.marginBalance ?: "--"}（${it.marginBalanceChange ?: "--"}）")
             Text("融券餘額 ${it.shortBalance ?: "--"}（${it.shortBalanceChange ?: "--"}） 券資比 ${it.shortMarginRatio ?: "--"}") } }
         item { Text("借券", style = MaterialTheme.typography.titleMedium); data.lending.lastOrNull()?.let {
-            Text("賣出 ${it.lendingSell ?: "--"} 餘額 ${it.lendingBalance ?: "--"}（${it.lendingBalanceChange ?: "--"}）") } }
+            Text("借券賣出 ${it.lendingSell ?: "--"}")
+            if (it.lendingBalance == null) Text("借券餘額：官方自動化資料來源目前未提供")
+            else Text("借券餘額 ${it.lendingBalance}（${it.lendingBalanceChange ?: "--"}）")
+        } ?: Text("官方自動化資料來源目前未提供") }
         item { Text("資料更新時間：${data.asOf ?: "未提供"}") }
     }
 }

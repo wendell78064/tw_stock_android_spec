@@ -5,7 +5,12 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.dependencies import derivatives_repository, market_spot_repository
 from app.core.errors import AppError
-from app.domain.derivatives import DerivativesRepository, RollMethod
+from app.domain.derivatives import (
+    DerivativesRepository,
+    RollMethod,
+    TAIWAN_VIX_POLICY,
+    VixSourceCapability,
+)
 from app.domain.market_spot import MarketSpotRepository
 from app.services.derivatives import (
     ContinuousFuturesService,
@@ -251,7 +256,18 @@ async def volatility(
     limits = {"1D": 1, "5D": 5, "10D": 10, "30D": 30, "1Y": 250, "5Y": 1250}
     if range not in limits:
         raise AppError("INVALID_RANGE", "Unsupported volatility range", 422)
+    data = await DerivativesRiskService(repository).volatility(limits[range])
+    policy = TAIWAN_VIX_POLICY
     return {
-        "data": await DerivativesRiskService(repository).volatility(limits[range]),
+        "data": data,
         "range": range,
+        "meta": {
+            "data_status": "FINAL" if data else "UNAVAILABLE",
+            "source_type": policy.source_type.value,
+            "source_capability": VixSourceCapability.OFFICIAL_DOWNLOAD.value,
+            "license_status": policy.license_status.value,
+            "automation_allowed": policy.automation_allowed,
+            "storage_allowed": policy.storage_allowed,
+            "redistribution_allowed": policy.redistribution_allowed,
+        },
     }

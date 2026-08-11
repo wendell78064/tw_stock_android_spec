@@ -8,7 +8,13 @@ import pytest
 from app.adapters.fake_derivatives import FakeDerivativesDataProvider
 from app.adapters.official_http import OfficialJsonClient, UpstreamSchemaError
 from app.adapters.taifex.provider import OfficialTaifexProvider
-from app.domain.derivatives import OptionStrikeOpenInterest, OptionType, RollMethod
+from app.domain.derivatives import (
+    TAIWAN_VIX_POLICY,
+    OptionStrikeOpenInterest,
+    OptionType,
+    RollMethod,
+    VixSourceCapability,
+)
 from app.services.derivatives import ContinuousFuturesService, FuturesService, OptionMaxPainService
 from app.services.derivatives_ingestion import (
     DERIVATIVE_DATASETS,
@@ -97,6 +103,16 @@ class MemoryDerivativesRepository:
 
     async def volatility(self, code, limit):
         return [x for x in self.data["VOLATILITY_INDEX"] if x.code == code][-limit:]
+
+
+@pytest.mark.asyncio
+async def test_official_vix_capability_requires_verified_reuse_rights() -> None:
+    provider = OfficialTaifexProvider()
+    assert await provider.get_volatility_index(date(2026, 8, 7)) == []
+    assert provider.vix_source_capability is VixSourceCapability.OFFICIAL_DOWNLOAD
+    assert TAIWAN_VIX_POLICY.source_capability.value == "LICENSE_REQUIRED"
+    assert TAIWAN_VIX_POLICY.license_status.value == "PUBLIC_DOWNLOAD_UNVERIFIED_REUSE"
+    assert TAIWAN_VIX_POLICY.automation_allowed is None
 
 
 @pytest.mark.asyncio

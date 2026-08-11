@@ -7,17 +7,18 @@ from fastapi.testclient import TestClient
 from app.adapters.fake_market_data import FakeMarketDataProvider
 from app.adapters.market_spot_mapping import map_institution
 from app.adapters.tpex.security_provider import TpexSecurityProvider
-from app.adapters.twse.security_provider import TwseSecurityProvider
+from app.adapters.twse.security_provider import TWSE_LENDING_CAPABILITIES, TwseSecurityProvider
 from app.core.dependencies import (
     derivatives_repository,
     market_spot_repository,
     security_repository,
 )
 from app.domain.market_spot import InstitutionType
+from app.domain.market_spot import SourceCapability
 from app.domain.pricing import SecurityKey
 from app.domain.security import MarketCode
 from app.main import app
-from app.services.market_spot import CreditTradingService, InstitutionalService
+from app.services.market_spot import CreditTradingService, InstitutionalService, MarketOverviewService
 from app.services.market_spot_ingestion import DATASETS, MarketSpotIngestionService, validate_record
 from tests.fakes import FakeSession, InMemorySecurityRepository
 
@@ -195,6 +196,26 @@ def test_twse_tpex_official_field_mapping() -> None:
     assert institutional.net == 750 and institutional.metadata.source_code == "TWSE_T86"
 
 
+def test_twse_lending_short_mapping_preserves_unsupported_nulls() -> None:
+    row = TwseSecurityProvider().map_lending_row(
+        {"股票代號": "2330", "借券賣出股數": "1,234"},
+        trade_date=date(2026, 8, 7),
+        received_at=datetime(2026, 8, 7, tzinfo=UTC),
+    )
+    assert row.lending_short_sell == 1234
+    assert row.lending_return is None
+    assert row.lending_balance is None
+    assert row.lending_balance_change is None
+    assert row.metadata.data_status.value == "PARTIAL"
+    assert TWSE_LENDING_CAPABILITIES == {
+        "borrowed_shares": SourceCapability.UNAVAILABLE,
+        "returned_shares": SourceCapability.UNAVAILABLE,
+        "borrowing_balance": SourceCapability.UNAVAILABLE,
+        "lending_short_sell": SourceCapability.OFFICIAL_OPENAPI,
+        "lending_short_balance": SourceCapability.UNAVAILABLE,
+    }
+
+
 @pytest.mark.asyncio
 async def test_fake_provider_mapping_validation_and_ingestion_idempotency() -> None:
     provider = FakeMarketDataProvider()
@@ -246,6 +267,22 @@ async def test_institutional_windows_dealer_subtypes_and_credit() -> None:
     assert len(credit["margin"]) == 60 and credit["margin"][-1]["short_margin_ratio"] == "10.0"
 
 
+@pytest.mark.asyncio
+async def test_market_overview_section_unavailable_remains_partial() -> None:
+    class LendingUnavailableRepository(MemoryMarketSpotRepository):
+        async def lending(self, market, security, start, end):
+            raise RuntimeError("official lending unavailable")
+
+    provider = FakeMarketDataProvider()
+    repository = LendingUnavailableRepository()
+    target = date(2026, 8, 7)
+    for dataset, method in DATASETS.items():
+        await repository.synchronize(dataset, await getattr(provider, method)(target), UUID(int=1))
+    result = await MarketOverviewService(repository, EmptyDerivativesRepository()).overview()
+    assert result["meta"]["data_status"] == "PARTIAL"
+    assert result["data"]["indexes"]
+
+
 @pytest.fixture
 def market_client():
     provider = FakeMarketDataProvider()
@@ -295,6 +332,17 @@ def test_market_and_security_apis_decimal_and_errors(market_client) -> None:
         == 200
     )
     assert market_client.get("/v1/market/credit", params={"market": "TWSE"}).status_code == 200
+    vix = market_client.get("/v1/market/volatility")
+    assert vix.status_code == 200 and vix.json()["data"] == []
+    assert vix.json()["meta"] == {
+        "data_status": "UNAVAILABLE",
+        "source_type": "OFFICIAL_DOWNLOAD",
+        "source_capability": "OFFICIAL_DOWNLOAD",
+        "license_status": "PUBLIC_DOWNLOAD_UNVERIFIED_REUSE",
+        "automation_allowed": None,
+        "storage_allowed": None,
+        "redistribution_allowed": None,
+    }
     institutional = market_client.get(
         "/v1/securities/1234/institutional", params={"market": "TWSE", "window": 20}
     )

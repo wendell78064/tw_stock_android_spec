@@ -21,13 +21,29 @@ def encode(value):
 
 def metadata(record) -> dict:
     meta = record.metadata
-    return {
+    result = {
         "as_of": meta.as_of.isoformat(),
         "received_at": meta.received_at.isoformat(),
         "data_status": meta.data_status.value,
         "source_code": meta.source_code,
         "source_revision": meta.source_revision,
     }
+    policy = meta.provider_policy
+    if policy is None and meta.source_code == "TWSE_LENDING":
+        # Repository rows do not persist legal policy; resolve it from provider configuration.
+        from app.adapters.twse.security_provider import TWSE_LENDING_POLICY
+
+        policy = TWSE_LENDING_POLICY
+    if policy:
+        result.update(
+            source_type=policy.source_type.value,
+            source_capability=policy.source_capability.value,
+            license_status=policy.license_status.value,
+            automation_allowed=policy.automation_allowed,
+            storage_allowed=policy.storage_allowed,
+            redistribution_allowed=policy.redistribution_allowed,
+        )
+    return result
 
 
 class InstitutionalService:
@@ -116,7 +132,7 @@ class CreditTradingService:
             } | metadata(row)
 
         def loan(row):
-            return {
+            values = {
                 name: encode(getattr(row, name))
                 for name in (
                     "trade_date",
@@ -125,7 +141,9 @@ class CreditTradingService:
                     "lending_balance",
                     "lending_balance_change",
                 )
-            } | metadata(row)
+            }
+            values["lending_short_sell"] = encode(row.lending_short_sell)
+            return values | metadata(row)
 
         return {
             "market": market.value,
@@ -146,18 +164,28 @@ class MarketOverviewService:
         institutional = []
         credit = []
         lending = []
+        section_failed = False
         for market in MarketCode:
-            breadth.extend((await self.repository.breadth(market, None, None))[-1:])
-            institutional.extend(
-                await InstitutionalService(self.repository).series(market, None, 1)
-            )
-            section = await CreditTradingService(self.repository).series(market, None, 1)
-            credit.extend(section["margin"])
-            lending.extend(section["lending"])
+            try:
+                breadth.extend((await self.repository.breadth(market, None, None))[-1:])
+            except Exception:
+                section_failed = True
+            try:
+                institutional.extend(
+                    await InstitutionalService(self.repository).series(market, None, 1)
+                )
+            except Exception:
+                section_failed = True
+            try:
+                section = await CreditTradingService(self.repository).series(market, None, 1)
+                credit.extend(section["margin"])
+                lending.extend(section["lending"])
+            except Exception:
+                section_failed = True
         statuses = [item.metadata.data_status for item in indexes + breadth]
         status = (
             DataStatus.FINAL
-            if statuses and all(item is DataStatus.FINAL for item in statuses)
+            if statuses and all(item is DataStatus.FINAL for item in statuses) and not section_failed
             else DataStatus.PARTIAL
         )
         futures = None
@@ -166,15 +194,19 @@ class MarketOverviewService:
         if self.derivatives_repository:
             from app.services.derivatives import DerivativesRiskService, FuturesService
 
-            futures = await FuturesService(
-                self.derivatives_repository, self.repository
-            ).product_overview("TX")
-            institutional_futures = await FuturesService(self.derivatives_repository).positions(
-                "TX", 1
-            )
-            put_call = await self.derivatives_repository.put_call("TXO", 1)
-            concentration = await self.derivatives_repository.concentrations("TX", 1)
-            vix = await DerivativesRiskService(self.derivatives_repository).volatility(1)
+            try:
+                futures = await FuturesService(
+                    self.derivatives_repository, self.repository
+                ).product_overview("TX")
+                institutional_futures = await FuturesService(
+                    self.derivatives_repository
+                ).positions("TX", 1)
+                put_call = await self.derivatives_repository.put_call("TXO", 1)
+                concentration = await self.derivatives_repository.concentrations("TX", 1)
+                vix = await DerivativesRiskService(self.derivatives_repository).volatility(1)
+            except Exception:
+                put_call, concentration, vix = [], [], []
+                status = DataStatus.PARTIAL
             derivatives_risk = {
                 "put_call": (
                     {

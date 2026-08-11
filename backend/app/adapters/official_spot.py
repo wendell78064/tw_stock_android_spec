@@ -514,7 +514,7 @@ class OfficialTpexProvider:
                 received_at=now,
                 source="TPEX_LENDING",
                 keys={
-                    "lending_sell": "SecuritiesBorrowingSale",
+                    "lending_short_sell": "SecuritiesBorrowingSale",
                     "lending_return": "SecuritiesBorrowingReturn",
                     "lending_balance": "SecuritiesBorrowingBalanceOfTheMarketDay",
                     "lending_balance_change": "SecuritiesBorrowingAdjustment",

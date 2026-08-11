@@ -18,6 +18,8 @@ from app.domain.derivatives import (
     SessionType,
     TraderConcentration,
     VolatilityIndex,
+    TAIWAN_VIX_POLICY,
+    VixSourceCapability,
 )
 from app.domain.market_data import DataStatus
 from app.domain.market_spot import InstitutionType, SourceMetadata
@@ -83,6 +85,8 @@ def meta(target: date, received_at: datetime, dataset: str) -> SourceMetadata:
 
 class OfficialTaifexProvider:
     source_code = "TAIFEX"
+    vix_source_capability = VixSourceCapability.OFFICIAL_DOWNLOAD
+    vix_policy = TAIWAN_VIX_POLICY
 
     def __init__(
         self, client: httpx.AsyncClient | None = None, transport: OfficialJsonClient | None = None

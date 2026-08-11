@@ -23,6 +23,38 @@ class DealerSubtype(StrEnum):
     TOTAL = "TOTAL"
 
 
+class SourceType(StrEnum):
+    OFFICIAL_OPENAPI = "OFFICIAL_OPENAPI"
+    OFFICIAL_DOWNLOAD = "OFFICIAL_DOWNLOAD"
+    LICENSED_VENDOR = "LICENSED_VENDOR"
+
+
+class SourceCapability(StrEnum):
+    SUPPORTED = "SUPPORTED"
+    OFFICIAL_OPENAPI = "OFFICIAL_OPENAPI"
+    OFFICIAL_DOWNLOAD_ONLY = "OFFICIAL_DOWNLOAD_ONLY"
+    LICENSE_REQUIRED = "LICENSE_REQUIRED"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+class LicenseStatus(StrEnum):
+    VERIFIED_OPEN_DATA = "VERIFIED_OPEN_DATA"
+    VERIFIED_LICENSED = "VERIFIED_LICENSED"
+    PUBLIC_DOWNLOAD_UNVERIFIED_REUSE = "PUBLIC_DOWNLOAD_UNVERIFIED_REUSE"
+    REQUIRES_LICENSE = "REQUIRES_LICENSE"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+@dataclass(frozen=True)
+class ProviderPolicy:
+    source_type: SourceType
+    source_capability: SourceCapability
+    license_status: LicenseStatus
+    automation_allowed: bool | None
+    storage_allowed: bool | None
+    redistribution_allowed: bool | None
+
+
 @dataclass(frozen=True)
 class SourceMetadata:
     source_code: str
@@ -31,6 +63,7 @@ class SourceMetadata:
     data_status: DataStatus
     source_revision: str | None = None
     ingestion_run_id: UUID | None = None
+    provider_policy: ProviderPolicy | None = None
 
 
 @dataclass(frozen=True)
@@ -103,12 +136,17 @@ class MarginRecord:
 class LendingRecord:
     market: MarketCode
     trade_date: date
-    lending_sell: int | None
+    lending_short_sell: int | None
     lending_return: int | None
     lending_balance: int | None
     lending_balance_change: int | None
     metadata: SourceMetadata
     security: SecurityKey | None = None
+
+    @property
+    def lending_sell(self) -> int | None:
+        """Backward-compatible alias; the official TWSE value is short-sale volume."""
+        return self.lending_short_sell
 
 
 class MarketSpotProvider(Protocol):

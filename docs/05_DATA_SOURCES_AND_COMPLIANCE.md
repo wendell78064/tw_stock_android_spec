@@ -21,6 +21,8 @@
 - `https://openapi.twse.com.tw/`
 - `https://www.twse.com.tw/`
 
+借券自動化僅使用官方明確提供的 OpenAPI dataset。目前「借券賣出股數」精確映射為 `lending_short_sell`；借入、還券與餘額能力未由正式 provider 提供時保持 `null`／`UNAVAILABLE`，不透過網站爬取或其他欄位推算。
+
 ### TPEx 證券櫃檯買賣中心
 
 用途：
@@ -54,6 +56,8 @@
 
 - `https://openapi.taifex.com.tw/`
 - `https://www.taifex.com.tw/`
+
+TAIFEX OpenAPI 未提供目前系統所需的 TAIWAN VIX 歷史 API。官方網站另有歷史下載資料，但自動下載、保存及 App 再呈現／redistribution 權限未確認前，分類為 `PUBLIC_DOWNLOAD_UNVERIFIED_REUSE`，正式產品不自動擷取或重散布。
 
 ## 2. 盤中即時行情
 

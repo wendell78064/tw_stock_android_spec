@@ -6,6 +6,24 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.market_spot import InstitutionType, SourceMetadata
+from app.domain.market_spot import LicenseStatus, ProviderPolicy, SourceCapability, SourceType
+
+
+class VixSourceCapability(StrEnum):
+    OPENAPI = "OPENAPI"
+    OFFICIAL_DOWNLOAD = "OFFICIAL_DOWNLOAD"
+    LICENSED_VENDOR = "LICENSED_VENDOR"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+TAIWAN_VIX_POLICY = ProviderPolicy(
+    SourceType.OFFICIAL_DOWNLOAD,
+    SourceCapability.LICENSE_REQUIRED,
+    LicenseStatus.PUBLIC_DOWNLOAD_UNVERIFIED_REUSE,
+    None,
+    None,
+    None,
+)
 
 
 class SessionType(StrEnum):

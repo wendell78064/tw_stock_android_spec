@@ -148,6 +148,8 @@ def map_lending(
     keys: dict[str, str],
     security_code: str | None = None,
     count_multiplier: int = 1,
+    data_status: DataStatus = DataStatus.FINAL,
+    provider_policy=None,
 ) -> LendingRecord:
     def number(field: str) -> int | None:
         return integer_value(row.get(keys.get(field, "")), count_multiplier)
@@ -155,10 +157,16 @@ def map_lending(
     return LendingRecord(
         market,
         trade_date,
-        number("lending_sell"),
+        number("lending_short_sell"),
         number("lending_return"),
         number("lending_balance"),
         number("lending_balance_change"),
-        metadata(source, trade_date, received_at),
+        SourceMetadata(
+            source,
+            datetime.combine(trade_date, datetime.min.time(), received_at.tzinfo),
+            received_at,
+            data_status,
+            provider_policy=provider_policy,
+        ),
         SecurityKey(market, security_code) if security_code else None,
     )

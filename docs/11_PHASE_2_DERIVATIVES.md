@@ -8,7 +8,41 @@
 
 Carry-over 的 `OfficialTwseProvider`／`OfficialTpexProvider` 已正式接線市場指數、廣度、三大法人與信用資料；正式來源失敗不會 fallback Fake。TWSE 交易單位在 Adapter 明確換算為股。Fake provider 僅供固定測試。
 
-TAIFEX OpenAPI 未提供可合法保存的 TAIWAN VIX 歷史端點，因此正式 VIX ingestion 回傳 unavailable，不爬取網頁、不以假值替代；若取得授權資料，沿既有 provider boundary 接入。
+TAIFEX OpenAPI 未提供目前系統所需的 TAIWAN VIX 歷史 API。官方網站另有歷史下載資料，但自動下載、保存及 App 再呈現／再利用須依授權狀態決定；目前分類為 `OFFICIAL_DOWNLOAD`／`PUBLIC_DOWNLOAD_UNVERIFIED_REUSE`，正式 ingestion 回傳 unavailable，不爬取網頁、不以假值替代。若取得授權資料，沿既有 provider boundary 接入。
+
+## TWSE Lending Capability Matrix
+
+| Domain capability | 正式來源分類 | 系統行為 |
+|---|---|---|
+| `borrowed_shares` | `UNAVAILABLE` | `null`，不由其他欄位推算 |
+| `returned_shares` | `UNAVAILABLE` | `null`，不補零 |
+| `borrowing_balance` | `UNAVAILABLE` | `null`，不以借券賣出量代替 |
+| `lending_short_sell` | `OFFICIAL_OPENAPI` | 精確對應 TWSE「借券賣出股數」 |
+| `lending_short_balance` | `UNAVAILABLE` | `null`，不使用 website-only scraper |
+
+系統只自動接入允許的官方 API dataset；website-only dataset 不使用 scraping。TWSE lending provider policy 為 `OFFICIAL_OPENAPI`／`VERIFIED_OPEN_DATA`，其餘能力缺口是外部資料不可得，而非軟體尚未實作。
+
+## TAIWAN VIX Source Capability
+
+| 來源 | Capability | License status | 自動下載／保存／再呈現 |
+|---|---|---|---|
+| TAIFEX OpenAPI | `UNAVAILABLE` | `UNAVAILABLE` | 未提供所需歷史 API |
+| TAIFEX 官方下載 | `OFFICIAL_DOWNLOAD` | `PUBLIC_DOWNLOAD_UNVERIFIED_REUSE` | `null`／`null`／`null`，待授權確認 |
+| 授權 vendor | `LICENSED_VENDOR` | `VERIFIED_LICENSED` | 由 provider configuration 決定 |
+
+API 在尚無已驗證正式資料時以 `data_status=UNAVAILABLE` 搭配 `license_status=PUBLIC_DOWNLOAD_UNVERIFIED_REUSE`，明確區分外部授權限制與 implementation incomplete。
+
+## Licensing / Availability Classification
+
+`source_type`、`source_capability`、`license_status`、`automation_allowed`、`storage_allowed`、`redistribution_allowed` 由 Provider policy 提供；布林值 `null` 表示尚未確認，不自動解讀為允許或禁止。法律／授權狀態不是不可變 Domain 事實，可在取得正式授權後替換設定與 Provider。
+
+## External Data Limitations
+
+正式流程不使用 HTML scraping、browser automation、private API、反向工程下載端點、Fake fallback 或 zero-fill。借券餘額與 VIX 不可用時，API 保留 `null`／`UNAVAILABLE`，Android 顯示來源不可用；Market Overview 的其他 section 可用時維持 `PARTIAL`，單一 section 不使整頁失敗。
+
+## Phase 2 Slice 2 Completion Criteria
+
+Software Gate 與 External Data Gate 分開驗收。外部資料的最終狀態允許為 `SUPPORTED`、`UNAVAILABLE` 或 `LICENSE_REQUIRED`；只要分類真實、API 與 Android 不誤導、無未授權擷取或替代資料，且 provider 可替換，即視為 Software Slice 完成。封版仍須以本次 local validation 與 GitHub emulator CI 實際通過為前提。
 
 ## 商品、契約與行情
 
@@ -59,4 +93,4 @@ Backend fixture 測試涵蓋 mapping、schema guard、ingestion 冪等、契約�
 
 GitHub Actions API 35 x86_64 emulator 的 `connectedDebugAndroidTest` 已通過；run #6：<https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31354579169>。
 
-封版 Gate 尚未全部通過：TAIFEX 官方 OpenAPI 沒有可合法保存的 TAIWAN VIX 歷史端點；TWSE 公開 OpenAPI 目前僅揭示「當日可借券賣出股數」，不足以當成借券成交／餘額歷史。兩者維持 unavailable，未使用爬蟲或 Fake 冒充正式資料，因此尚未建立 `phase-2-slice-2-complete` tag。
+封版 Gate 尚待本次 local validation 與 GitHub emulator CI 確認。外部資料 Gate 已分類：TAIFEX OpenAPI 未提供所需 VIX 歷史 API，官方下載的再利用權限尚未確認；TWSE OpenAPI 的「借券賣出股數」只映射為 `lending_short_sell`，不冒充借券成交或餘額。兩者均未使用爬蟲、Fake fallback 或 zero-fill，因此不再標記為軟體未完成；CI 通過前尚未建立 `phase-2-slice-2-complete` tag。

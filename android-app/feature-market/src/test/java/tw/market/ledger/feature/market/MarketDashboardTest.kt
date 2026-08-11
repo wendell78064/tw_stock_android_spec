@@ -4,6 +4,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,5 +35,15 @@ class MarketDashboardTest {
     @Test fun offlineAndEmptyNeverRenderBlank() {
         compose.setContent { MarketDashboardScreen(MarketDashboardUiState.Offline(overview.copy(fromCache=true)), 1) }
         compose.onNodeWithText("Offline / Stale：顯示 ${overview.asOf} 快取").assertIsDisplayed()
+    }
+    @Test fun unavailableLendingAndVixNeverRenderAsZero() {
+        val lending = LendingPoint("2026-08-07", 1234, null, null, index.asOf, DataStatus.PARTIAL)
+        compose.setContent { MarketDashboardScreen(
+            MarketDashboardUiState.Partial(overview.copy(indexes=emptyList(), breadth=emptyList(),
+                lending=listOf(lending), dataStatus=DataStatus.PARTIAL)), 1) }
+        compose.onNodeWithText("VIX：正式資料來源目前不可用").assertIsDisplayed()
+        compose.onNodeWithTag("market-dashboard").performScrollToNode(
+            hasText("借券餘額：官方自動化資料來源目前未提供"))
+        compose.onNodeWithText("借券餘額：官方自動化資料來源目前未提供").assertIsDisplayed()
     }
 }
