@@ -17,7 +17,7 @@ from app.api.schemas import (
     UpdateSavedScreenerInput,
 )
 from app.core.dependencies import screener_query_service, screener_repository
-from app.core.exceptions import AppError
+from app.core.errors import AppError
 from app.domain.screener import SCREENER_FIELDS_REGISTRY
 from app.repositories.sql_screener import SqlScreenerRepository
 from app.services.screener_ast import dict_to_expression, expression_to_dict, validate_expression

@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.core.exceptions import AppError
+from app.core.errors import AppError
 from app.domain.screener import (
     SCREENER_FIELDS_REGISTRY,
     ScreenerExpression,
