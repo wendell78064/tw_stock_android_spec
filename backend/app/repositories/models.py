@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -237,7 +238,9 @@ class TaxonomyStrengthSnapshotModel(Base):
     __tablename__ = "taxonomy_strength_snapshots"
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    industry_id: Mapped[UUID | None] = mapped_column(ForeignKey("industries.id", ondelete="CASCADE"))
+    industry_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("industries.id", ondelete="CASCADE")
+    )
     theme_id: Mapped[UUID | None] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"))
     trade_date: Mapped[date] = mapped_column(Date)
     window: Mapped[int] = mapped_column(Integer)

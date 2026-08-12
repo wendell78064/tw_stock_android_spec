@@ -27,11 +27,17 @@ def run_sync(date_str: str | None, from_date_str: str | None, to_date_str: str |
                 tot_ins += res["inserted"]
                 tot_upd += res["updated"]
                 curr += timedelta(days=1)
-            print(f"Calculated strength range {from_date_str} to {to_date_str}: inserted={tot_ins}, updated={tot_upd}")
+            print(
+                f"Calculated strength range {from_date_str} to {to_date_str}: "
+                f"inserted={tot_ins}, updated={tot_upd}"
+            )
         else:
             target_d = date.fromisoformat(date_str) if date_str else date.today()
             res = calc_service.calculate_for_date(target_d)
-            print(f"Calculated strength for {target_d}: inserted={res['inserted']}, updated={res['updated']}")
+            print(
+                f"Calculated strength for {target_d}: "
+                f"inserted={res['inserted']}, updated={res['updated']}"
+            )
 
 
 def main() -> None:

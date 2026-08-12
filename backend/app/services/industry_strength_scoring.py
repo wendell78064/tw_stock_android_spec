@@ -21,7 +21,9 @@ class IndustryStrengthScoringService:
     def __init__(self, weights: dict[str, Decimal] | None = None) -> None:
         self.weights = weights or DEFAULT_WEIGHTS
 
-    def calculate_percentile_scores(self, raw_values: list[tuple[any, Decimal]]) -> dict[any, Decimal]:
+    def calculate_percentile_scores(
+        self, raw_values: list[tuple[any, Decimal]]
+    ) -> dict[any, Decimal]:
         """Convert list of (key, raw_value) to deterministic percentile ranks 0..100.
         
         Key tie-breaking ensures stability.
@@ -111,7 +113,9 @@ class IndustryStrengthScoringService:
                     available_weight += weight
                     weighted_sum += val * weight
 
-            component_coverage = available_weight.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            component_coverage = available_weight.quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP
+            )
 
             if component_coverage >= MIN_COMPONENT_COVERAGE_THRESHOLD and available_weight > 0:
                 final_score = (weighted_sum / available_weight).quantize(
@@ -142,7 +146,11 @@ class IndustryStrengthScoringService:
             key=lambda x: (
                 x["strength_score"] is None,
                 -(x["strength_score"] if x["strength_score"] is not None else Decimal("-9999")),
-                -(x["equal_weight_return"] if x.get("equal_weight_return") is not None else Decimal("-9999")),
+                -(
+                    x["equal_weight_return"]
+                    if x.get("equal_weight_return") is not None
+                    else Decimal("-9999")
+                ),
                 x.get("taxonomy_code", ""),
                 str(x["taxonomy_id"]),
             ),

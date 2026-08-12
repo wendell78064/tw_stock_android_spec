@@ -1,8 +1,8 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.market_data import DataStatus
@@ -37,7 +37,9 @@ class IndustryStrengthCalculationService:
         )
         return list(self.session.scalars(stmt).all())
 
-    def calculate_for_date(self, target_date: date, windows: list[int] | None = None) -> dict[str, int]:
+    def calculate_for_date(
+        self, target_date: date, windows: list[int] | None = None
+    ) -> dict[str, int]:
         """Calculate and persist taxonomy strength snapshots for a given date across all windows."""
         if windows is None:
             windows = [1, 5, 10, 20, 60]
@@ -63,7 +65,10 @@ class IndustryStrengthCalculationService:
             for ind in industries:
                 members_stmt = (
                     select(SecurityModel.id, SecurityModel.code)
-                    .join(SecurityIndustryModel, SecurityModel.id == SecurityIndustryModel.security_id)
+                    .join(
+                        SecurityIndustryModel,
+                        SecurityModel.id == SecurityIndustryModel.security_id,
+                    )
                     .where(SecurityIndustryModel.industry_id == ind.id)
                 )
                 member_rows = self.session.execute(members_stmt).all()
@@ -185,7 +190,8 @@ class IndustryStrengthCalculationService:
             bp = base_prices.get(sec_id)
 
             if lp and lp.volume is not None:
-                # Accumulate volume as turnover estimation if explicit turnover_amount not in daily_prices
+                # Accumulate volume as turnover estimation
+                # if explicit turnover_amount not in daily_prices
                 total_turnover += Decimal(str(lp.close * lp.volume))
                 has_turnover = True
 
@@ -250,12 +256,16 @@ class IndustryStrengthCalculationService:
                     ma60_above += 1
 
         above_ma20_pct = (
-            (Decimal(str(ma20_above)) / Decimal(str(ma20_valid))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            (Decimal(str(ma20_above)) / Decimal(str(ma20_valid))).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP
+            )
             if ma20_valid > 0
             else Decimal("0")
         )
         above_ma60_pct = (
-            (Decimal(str(ma60_above)) / Decimal(str(ma60_valid))).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+            (Decimal(str(ma60_above)) / Decimal(str(ma60_valid))).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP
+            )
             if ma60_valid > 0
             else Decimal("0")
         )
@@ -285,6 +295,7 @@ class IndustryStrengthCalculationService:
         margin_change = Decimal(str(sum((r.margin_balance_change or 0) for r in credit_rows)))
         short_change = Decimal(str(sum((r.short_balance_change or 0) for r in credit_rows)))
 
+        status = DataStatus.FINAL.value if valid_members > 0 else DataStatus.PARTIAL.value
         return {
             "taxonomy_id": taxonomy_id,
             "taxonomy_code": taxonomy_code,
@@ -312,8 +323,8 @@ class IndustryStrengthCalculationService:
             "turnover_amount": total_turnover if has_turnover else None,
             "turnover_share": None,
             "turnover_momentum": Decimal("1.0") if has_turnover else None,
-            "data_status": DataStatus.FINAL.value if valid_members > 0 else DataStatus.PARTIAL.value,
-            "as_of": datetime.now(timezone.utc),
+            "data_status": status,
+            "as_of": datetime.now(UTC),
         }
 
     def _upsert_snapshot(self, item: dict, is_industry: bool) -> tuple[int, int]:

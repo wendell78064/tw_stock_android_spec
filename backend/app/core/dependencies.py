@@ -10,6 +10,7 @@ from app.core.settings import Settings, get_settings
 from app.repositories.sql_alert import SqlAlertRepository
 from app.repositories.sql_derivatives import SqlDerivativesRepository
 from app.repositories.sql_industry import SqlIndustryRepository
+from app.repositories.sql_industry_strength import SqlIndustryStrengthRepository
 from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.repositories.sql_portfolio import SqlPortfolioRepository
 from app.repositories.sql_price import SqlPriceRepository
@@ -71,9 +72,6 @@ async def alert_repository(
     session: Annotated[AsyncSession, Depends(database_session)],
 ) -> SqlAlertRepository:
     return SqlAlertRepository(session)
-
-
-from app.repositories.sql_industry_strength import SqlIndustryStrengthRepository
 
 
 async def industry_repository(

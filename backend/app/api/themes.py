@@ -20,7 +20,11 @@ from app.api.schemas import (
     ThemeSecuritiesEnvelope,
     UpdateThemeInput,
 )
-from app.core.dependencies import industry_repository, industry_strength_repository, require_admin_key
+from app.core.dependencies import (
+    industry_repository,
+    industry_strength_repository,
+    require_admin_key,
+)
 from app.core.errors import AppError
 from app.domain.industry import IndustryRepository
 from app.domain.market_data import DataStatus
@@ -242,7 +246,9 @@ async def list_theme_strengths(
     trade_date: date | None = None,
     sort: str = "strength",
 ) -> TaxonomyStrengthListEnvelope:
-    strengths = await strength_repo.get_theme_strengths(window=window, trade_date=trade_date, sort_by=sort)
+    strengths = await strength_repo.get_theme_strengths(
+        window=window, trade_date=trade_date, sort_by=sort
+    )
     now = datetime.now(UTC)
     as_of = strengths[0].as_of if strengths else now
     status_val = strengths[0].data_status if strengths else DataStatus.UNAVAILABLE
@@ -269,7 +275,9 @@ async def get_theme_strength_detail(
     window: int = 20,
     trade_date: date | None = None,
 ) -> TaxonomyStrengthDetailEnvelope:
-    detail = await strength_repo.get_taxonomy_strength_detail(taxonomy_id=id, is_industry=False, window=window, trade_date=trade_date)
+    detail = await strength_repo.get_taxonomy_strength_detail(
+        taxonomy_id=id, is_industry=False, window=window, trade_date=trade_date
+    )
     if detail is None:
         raise AppError("STRENGTH_NOT_FOUND", "找不到指定題材之強度快照", 404, {"id": str(id)})
     now = datetime.now(UTC)
@@ -282,8 +290,8 @@ async def get_theme_strength_detail(
     return TaxonomyStrengthDetailEnvelope(
         data=TaxonomyStrengthDetailResponse(
             snapshot=TaxonomyStrengthResponse.from_domain(detail.snapshot),
-            leaders=[TaxonomyLeaderResponse.from_domain(l) for l in detail.leaders],
-            laggards=[TaxonomyLeaderResponse.from_domain(l) for l in detail.laggards],
+            leaders=[TaxonomyLeaderResponse.from_domain(ldr) for ldr in detail.leaders],
+            laggards=[TaxonomyLeaderResponse.from_domain(ldr) for ldr in detail.laggards],
         ),
         meta=meta,
     )
@@ -300,7 +308,9 @@ async def get_theme_strength_history(
     window: int = 20,
     limit: int = 60,
 ) -> TaxonomyStrengthListEnvelope:
-    history = await strength_repo.get_taxonomy_strength_history(taxonomy_id=id, is_industry=False, window=window, limit=limit)
+    history = await strength_repo.get_taxonomy_strength_history(
+        taxonomy_id=id, is_industry=False, window=window, limit=limit
+    )
     now = datetime.now(UTC)
     as_of = history[-1].as_of if history else now
     status_val = history[-1].data_status if history else DataStatus.UNAVAILABLE

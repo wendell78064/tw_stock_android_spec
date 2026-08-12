@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 from app.domain.industry import IndustryInfo, MemberSecurity, ThemeInfo
+from app.domain.industry_strength import TaxonomyLeader, TaxonomyStrengthSnapshot
 from app.domain.market_data import DataStatus
 from app.domain.pricing import Candle, PriceBasis, TechnicalSnapshot
 from app.domain.security import MarketCode, Security, SecurityStatus, SecurityType, ThemeRef
@@ -364,7 +365,11 @@ class TaxonomyStrengthResponse(BaseModel):
             trade_date=snap.trade_date,
             window=snap.window,
             equal_weight_return=str(snap.equal_weight_return),
-            market_cap_weighted_return=str(snap.market_cap_weighted_return) if snap.market_cap_weighted_return is not None else None,
+            market_cap_weighted_return=(
+                str(snap.market_cap_weighted_return)
+                if snap.market_cap_weighted_return is not None
+                else None
+            ),
             total_members=snap.total_members,
             valid_members=snap.valid_members,
             coverage_ratio=str(snap.coverage_ratio),
@@ -379,15 +384,33 @@ class TaxonomyStrengthResponse(BaseModel):
             dealer_net_amount=str(snap.dealer_net_amount),
             margin_balance_change=str(snap.margin_balance_change),
             short_balance_change=str(snap.short_balance_change),
-            lending_balance_change=str(snap.lending_balance_change) if snap.lending_balance_change is not None else None,
-            turnover_amount=str(snap.turnover_amount) if snap.turnover_amount is not None else None,
-            turnover_share=str(snap.turnover_share) if snap.turnover_share is not None else None,
-            turnover_momentum=str(snap.turnover_momentum) if snap.turnover_momentum is not None else None,
+            lending_balance_change=(
+                str(snap.lending_balance_change)
+                if snap.lending_balance_change is not None
+                else None
+            ),
+            turnover_amount=(
+                str(snap.turnover_amount)
+                if snap.turnover_amount is not None
+                else None
+            ),
+            turnover_share=(
+                str(snap.turnover_share)
+                if snap.turnover_share is not None
+                else None
+            ),
+            turnover_momentum=(
+                str(snap.turnover_momentum)
+                if snap.turnover_momentum is not None
+                else None
+            ),
             components=StrengthComponentsResponse(
                 momentum_score=str(c.momentum_score) if c.momentum_score is not None else None,
                 breadth_score=str(c.breadth_score) if c.breadth_score is not None else None,
                 technical_score=str(c.technical_score) if c.technical_score is not None else None,
-                institutional_score=str(c.institutional_score) if c.institutional_score is not None else None,
+                institutional_score=(
+                    str(c.institutional_score) if c.institutional_score is not None else None
+                ),
                 turnover_score=str(c.turnover_score) if c.turnover_score is not None else None,
             ),
             strength_score=str(snap.strength_score) if snap.strength_score is not None else None,
@@ -410,16 +433,16 @@ class TaxonomyLeaderResponse(BaseModel):
     data_status: DataStatus
 
     @classmethod
-    def from_domain(cls, l: TaxonomyLeader) -> "TaxonomyLeaderResponse":
+    def from_domain(cls, leader: TaxonomyLeader) -> "TaxonomyLeaderResponse":
         return cls(
-            security_id=l.security_id,
-            code=l.code,
-            name=l.name,
-            market=l.market,
-            return_pct=str(l.return_pct),
-            latest_close=str(l.latest_close) if l.latest_close is not None else None,
-            foreign_net=str(l.foreign_net) if l.foreign_net is not None else None,
-            data_status=l.data_status,
+            security_id=leader.security_id,
+            code=leader.code,
+            name=leader.name,
+            market=leader.market,
+            return_pct=str(leader.return_pct),
+            latest_close=str(leader.latest_close) if leader.latest_close is not None else None,
+            foreign_net=str(leader.foreign_net) if leader.foreign_net is not None else None,
+            data_status=leader.data_status,
         )
 
 

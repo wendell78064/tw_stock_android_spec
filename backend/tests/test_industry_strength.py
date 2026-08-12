@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -99,14 +99,23 @@ class InMemoryStrengthRepository:
     def __init__(self):
         self.snapshots = []
 
-    async def get_industry_strengths(self, window: int = 20, trade_date: date | None = None, sort_by: str = "strength"):
+    async def get_industry_strengths(
+        self, window: int = 20, trade_date: date | None = None, sort_by: str = "strength"
+    ):
         return [s for s in self.snapshots if s.taxonomy_type == "OFFICIAL" and s.window == window]
 
-    async def get_theme_strengths(self, window: int = 20, trade_date: date | None = None, sort_by: str = "strength"):
+    async def get_theme_strengths(
+        self, window: int = 20, trade_date: date | None = None, sort_by: str = "strength"
+    ):
         return [s for s in self.snapshots if s.taxonomy_type == "CUSTOM" and s.window == window]
 
-    async def get_taxonomy_strength_detail(self, taxonomy_id, is_industry: bool, window: int = 20, trade_date: date | None = None):
-        match = next((s for s in self.snapshots if s.taxonomy_id == taxonomy_id and s.window == window), None)
+    async def get_taxonomy_strength_detail(
+        self, taxonomy_id, is_industry: bool, window: int = 20, trade_date: date | None = None
+    ):
+        match = next(
+            (s for s in self.snapshots if s.taxonomy_id == taxonomy_id and s.window == window),
+            None,
+        )
         if not match:
             return None
 
@@ -133,8 +142,12 @@ class InMemoryStrengthRepository:
 
         return TaxonomyStrengthDetail(snapshot=match, leaders=[leader], laggards=[laggard])
 
-    async def get_taxonomy_strength_history(self, taxonomy_id, is_industry: bool, window: int = 20, limit: int = 60):
-        return [s for s in self.snapshots if s.taxonomy_id == taxonomy_id and s.window == window][:limit]
+    async def get_taxonomy_strength_history(
+        self, taxonomy_id, is_industry: bool, window: int = 20, limit: int = 60
+    ):
+        return [
+            s for s in self.snapshots if s.taxonomy_id == taxonomy_id and s.window == window
+        ][:limit]
 
 
 @pytest.fixture
@@ -181,7 +194,7 @@ def mock_strength_repo(app_client):
         rank=1,
         algorithm_version=ALGORITHM_VERSION,
         data_status=DataStatus.FINAL,
-        as_of=datetime(2026, 8, 11, 0, 0, tzinfo=timezone.utc),
+        as_of=datetime(2026, 8, 11, 0, 0, tzinfo=UTC),
     )
     repo.snapshots.append(snap)
 

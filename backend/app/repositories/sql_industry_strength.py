@@ -36,7 +36,9 @@ class SqlIndustryStrengthRepository:
         trade_date: date | None = None,
         sort_by: str = "strength",
     ) -> list[TaxonomyStrengthSnapshot]:
-        return await self._get_taxonomy_strengths(is_industry=True, window=window, trade_date=trade_date, sort_by=sort_by)
+        return await self._get_taxonomy_strengths(
+            is_industry=True, window=window, trade_date=trade_date, sort_by=sort_by
+        )
 
     async def get_theme_strengths(
         self,
@@ -44,7 +46,9 @@ class SqlIndustryStrengthRepository:
         trade_date: date | None = None,
         sort_by: str = "strength",
     ) -> list[TaxonomyStrengthSnapshot]:
-        return await self._get_taxonomy_strengths(is_industry=False, window=window, trade_date=trade_date, sort_by=sort_by)
+        return await self._get_taxonomy_strengths(
+            is_industry=False, window=window, trade_date=trade_date, sort_by=sort_by
+        )
 
     async def _get_taxonomy_strengths(
         self,
@@ -85,7 +89,11 @@ class SqlIndustryStrengthRepository:
             elif sort_by == "foreign_flow":
                 val = s.foreign_net_amount
             elif sort_by == "turnover":
-                val = s.turnover_amount if s.turnover_amount is not None else Decimal("-999999999999")
+                val = (
+                    s.turnover_amount
+                    if s.turnover_amount is not None
+                    else Decimal("-999999999999")
+                )
             else:  # strength
                 val = s.strength_score if s.strength_score is not None else Decimal("-9999")
 
@@ -121,7 +129,9 @@ class SqlIndustryStrengthRepository:
             return None
 
         snapshot = await self._map_to_domain(row, is_industry)
-        leaders, laggards = await self._compute_leaders_and_laggards(taxonomy_id, is_industry, row.trade_date, window)
+        leaders, laggards = await self._compute_leaders_and_laggards(
+            taxonomy_id, is_industry, row.trade_date, window
+        )
 
         return TaxonomyStrengthDetail(snapshot=snapshot, leaders=leaders, laggards=laggards)
 
@@ -146,7 +156,9 @@ class SqlIndustryStrengthRepository:
         rows.reverse()
         return [await self._map_to_domain(r, is_industry) for r in rows]
 
-    async def _map_to_domain(self, r: TaxonomyStrengthSnapshotModel, is_industry: bool) -> TaxonomyStrengthSnapshot:
+    async def _map_to_domain(
+        self, r: TaxonomyStrengthSnapshotModel, is_industry: bool
+    ) -> TaxonomyStrengthSnapshot:
         if is_industry:
             ind = await self.session.get(IndustryModel, r.industry_id)
             tax_id = ind.id if ind else r.industry_id
@@ -294,8 +306,11 @@ class SqlIndustryStrengthRepository:
                     name=sec.name,
                     market=MarketCode(sec.market),
                     return_pct=ret.quantize(Decimal("0.01")),
-                    latest_close=lp.close,
-                    foreign_net=Decimal(str(inst_flows.get(sec.id, 0))) if sec.id in inst_flows else None,
+                    foreign_net=(
+                        Decimal(str(inst_flows.get(sec.id, 0)))
+                        if sec.id in inst_flows
+                        else None
+                    ),
                     data_status=DataStatus.FINAL,
                 )
                 computed_members.append(leader)

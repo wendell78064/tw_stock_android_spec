@@ -2,10 +2,11 @@ package tw.market.ledger
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -147,7 +148,8 @@ class IndustryStrengthInstrumentationTest {
         compose.onNodeWithText("5大成分分數拆解").assertIsDisplayed()
         compose.onNodeWithText("動能 (30%)").assertIsDisplayed()
         compose.onNodeWithText("85.00").assertIsDisplayed()
-        compose.onNodeWithTag("leader_item_2330").performScrollTo().performClick()
+        compose.onNodeWithTag("strength_detail_lazy_column").performScrollToNode(hasTestTag("leader_item_2330"))
+        compose.onNodeWithTag("leader_item_2330").performClick()
         assertEquals("TWSE:2330", clickedSec)
     }
 
