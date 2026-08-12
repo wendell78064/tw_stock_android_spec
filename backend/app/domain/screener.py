@@ -5,7 +5,8 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from app.domain.market import DataStatus, MarketCode
+from app.domain.market_data import DataStatus
+from app.domain.security import MarketCode
 
 
 class ScreenerOperator(str, Enum):
