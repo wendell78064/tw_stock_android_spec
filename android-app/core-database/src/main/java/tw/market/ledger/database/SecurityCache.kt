@@ -5,9 +5,13 @@ import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import tw.market.ledger.model.Candle
+
 
 @Entity(tableName = "security_cache", primaryKeys = ["market", "code"])
 data class SecurityEntity(
@@ -142,6 +146,90 @@ interface MarketDao {
     @Query("SELECT * FROM credit_cache WHERE dataset=:dataset AND market=:market AND security=:security AND window=:window ORDER BY tradeDate") suspend fun credit(dataset: String, market: String, security: String, window: Int): List<CreditEntity>
 }
 
+@Entity(tableName = "saved_screener_cache")
+data class SavedScreenerEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val description: String?,
+    val expressionJson: String,
+    val sortField: String,
+    val sortDirection: String,
+    val updatedAt: String
+)
+
+@Entity(tableName = "screener_result_cache")
+data class ScreenerResultEntity(
+    @PrimaryKey val securityId: String,
+    val code: String,
+    val name: String,
+    val market: String,
+    val industryName: String?,
+    val themesJson: String,
+    val close: String?,
+    val returnPct: String?,
+    val matchedConditionsJson: String,
+    val extraMetricsJson: String,
+    val dataStatus: String,
+    val cachedAt: String
+)
+
+@Dao
+interface ScreenerDao {
+    @Query("SELECT * FROM saved_screener_cache ORDER BY updatedAt DESC")
+    suspend fun getSavedScreeners(): List<SavedScreenerEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSavedScreeners(screeners: List<SavedScreenerEntity>)
+
+    @Query("DELETE FROM saved_screener_cache WHERE id = :id")
+    suspend fun deleteSavedScreener(id: String)
+
+    @Query("SELECT * FROM screener_result_cache ORDER BY code ASC")
+    suspend fun getCachedScreenerResults(): List<ScreenerResultEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun replaceCachedScreenerResults(results: List<ScreenerResultEntity>)
+
+    @Query("DELETE FROM screener_result_cache")
+    suspend fun clearScreenerResults()
+}
+
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS saved_screener_cache (
+                id TEXT NOT NULL PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                expressionJson TEXT NOT NULL,
+                sortField TEXT NOT NULL,
+                sortDirection TEXT NOT NULL,
+                updatedAt TEXT NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS screener_result_cache (
+                securityId TEXT NOT NULL PRIMARY KEY,
+                code TEXT NOT NULL,
+                name TEXT NOT NULL,
+                market TEXT NOT NULL,
+                industryName TEXT,
+                themesJson TEXT NOT NULL,
+                close TEXT,
+                returnPct TEXT,
+                matchedConditionsJson TEXT NOT NULL,
+                extraMetricsJson TEXT NOT NULL,
+                dataStatus TEXT NOT NULL,
+                cachedAt TEXT NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 @Database(
     entities = [SecurityEntity::class, CandleEntity::class, TechnicalEntity::class,
         MarketIndexEntity::class, MarketBreadthEntity::class, InstitutionalEntity::class,
@@ -149,8 +237,9 @@ interface MarketDao {
         PortfolioHoldingEntity::class, PortfolioTransactionEntity::class,
         WatchlistEntity::class, WatchlistItemEntity::class, AlertRuleEntity::class,
         AlertEventEntity::class, IndustryEntity::class, ThemeEntity::class, TaxonomyMemberEntity::class,
-        TaxonomyStrengthEntity::class, TaxonomyLeaderEntity::class],
-    version = 9,
+        TaxonomyStrengthEntity::class, TaxonomyLeaderEntity::class,
+        SavedScreenerEntity::class, ScreenerResultEntity::class],
+    version = 10,
     exportSchema = false,
 )
 abstract class TWMarketDatabase : RoomDatabase() {
@@ -162,4 +251,6 @@ abstract class TWMarketDatabase : RoomDatabase() {
     abstract fun watchlistDao(): WatchlistDao
     abstract fun alertDao(): AlertDao
     abstract fun taxonomyDao(): TaxonomyDao
+    abstract fun screenerDao(): ScreenerDao
 }
+

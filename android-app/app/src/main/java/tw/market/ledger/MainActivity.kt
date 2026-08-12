@@ -37,6 +37,12 @@ import tw.market.ledger.feature.industry.presentation.IndustryLandingRoute
 import tw.market.ledger.feature.industry.presentation.ThemeDetailRoute
 import tw.market.ledger.model.MarketCode
 import tw.market.ledger.ui.TWMarketLedgerTheme
+import androidx.hilt.navigation.compose.hiltViewModel
+import tw.market.ledger.feature.screener.ScreenerBuilderScreen
+import tw.market.ledger.feature.screener.ScreenerMainScreen
+import tw.market.ledger.feature.screener.ScreenerResultScreen
+import tw.market.ledger.feature.screener.ScreenerResultViewModel
+
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -127,9 +133,45 @@ private fun AppNavigation() {
                 SecurityDetailRoute(
                     code = requireNotNull(entry.arguments?.getString("code")),
                     market = MarketCode.valueOf(requireNotNull(entry.arguments?.getString("market"))),
-                    onAlert = { id -> navController.navigate("alerts/create${id?.let { value -> "?security=$value" } ?: ""}") },
+                    onAlert = { id -> navController.navigate("alerts/create${id?.let { value -> "?security=$value" } ?: ""}") }
+                )
+            }
+
+            composable("screener") {
+
+                val vm = hiltViewModel<tw.market.ledger.feature.screener.ScreenerMainViewModel>()
+                ScreenerMainScreen(
+                    viewModel = vm,
+                    onNavigateToBuilder = { navController.navigate("screener/builder") },
+                    onRunExpression = { expr ->
+                        navController.navigate("screener/result")
+                    },
+                    onOpenSecurityDetail = { code, market ->
+                        navController.navigate("security/$market/$code")
+                    }
+                )
+            }
+            composable("screener/builder") {
+                val vm = hiltViewModel<tw.market.ledger.feature.screener.ScreenerBuilderViewModel>()
+                ScreenerBuilderScreen(
+                    viewModel = vm,
+                    onRunExpression = { expr ->
+                        navController.navigate("screener/result")
+                    },
+                    onSavedSuccess = { navController.popBackStack() }
+                )
+            }
+            composable("screener/result") {
+                val vm = hiltViewModel<ScreenerResultViewModel>()
+                ScreenerResultScreen(
+                    viewModel = vm,
+                    expression = null,
+                    onOpenSecurityDetail = { code, market ->
+                        navController.navigate("security/$market/$code")
+                    }
                 )
             }
         }
     }
 }
+

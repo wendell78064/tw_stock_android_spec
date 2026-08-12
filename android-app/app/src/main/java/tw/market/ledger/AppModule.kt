@@ -32,6 +32,10 @@ import tw.market.ledger.network.AlertApi
 
 import tw.market.ledger.database.TaxonomyDao
 import tw.market.ledger.network.IndustryApi
+import tw.market.ledger.database.MIGRATION_9_10
+import tw.market.ledger.database.ScreenerDao
+import tw.market.ledger.network.ScreenerApi
+
 
 private val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -59,13 +63,14 @@ private val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): TWMarketDatabase =
         Room.databaseBuilder(context, TWMarketDatabase::class.java, "tw-market-ledger.db")
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
             .build()
 
     @Provides fun securityDao(database: TWMarketDatabase): SecurityDao = database.securityDao()
@@ -76,6 +81,7 @@ object AppModule {
     @Provides fun watchlistDao(database: TWMarketDatabase): WatchlistDao = database.watchlistDao()
     @Provides fun alertDao(database: TWMarketDatabase): AlertDao = database.alertDao()
     @Provides fun taxonomyDao(database: TWMarketDatabase): TaxonomyDao = database.taxonomyDao()
+    @Provides fun screenerDao(database: TWMarketDatabase): ScreenerDao = database.screenerDao()
 
     @Provides @Singleton
     fun retrofit(): Retrofit {
@@ -101,4 +107,6 @@ object AppModule {
     @Provides @Singleton fun watchlistApi(retrofit: Retrofit): WatchlistApi = retrofit.create(WatchlistApi::class.java)
     @Provides @Singleton fun alertApi(retrofit: Retrofit): AlertApi = retrofit.create(AlertApi::class.java)
     @Provides @Singleton fun industryApi(retrofit: Retrofit): IndustryApi = retrofit.create(IndustryApi::class.java)
+    @Provides @Singleton fun screenerApi(retrofit: Retrofit): ScreenerApi = retrofit.create(ScreenerApi::class.java)
 }
+

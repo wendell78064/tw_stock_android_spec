@@ -86,10 +86,27 @@ async def industry_strength_repository(
     return SqlIndustryStrengthRepository(session)
 
 
+from app.repositories.sql_screener import SqlScreenerRepository
+from app.services.screener_query import ScreenerQueryService
+
+
+async def screener_repository(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> SqlScreenerRepository:
+    return SqlScreenerRepository(session)
+
+
+async def screener_query_service(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> ScreenerQueryService:
+    return ScreenerQueryService(session)
+
+
 def require_admin_key(
     x_admin_key: Annotated[str | None, Header(alias="X-Admin-Key")] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,
 ) -> None:
     if not x_admin_key or x_admin_key != settings.admin_api_key:
         raise AppError("UNAUTHORIZED", "Missing or invalid admin API key", 401)
+
 

@@ -37,6 +37,8 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
+from app.api.screener import router as screener_router
+
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_exception_handler(AppError, app_error_handler)
 app.include_router(health_router, prefix="/v1")
@@ -48,6 +50,8 @@ app.include_router(watchlists_router, prefix="/v1")
 app.include_router(alerts_router, prefix="/v1")
 app.include_router(industries_router, prefix="/v1")
 app.include_router(themes_router, prefix="/v1")
+app.include_router(screener_router)
+
 
 
 @app.middleware("http")

@@ -939,19 +939,116 @@ paths:
     post: { operationId: readNotification, tags: [Notifications], parameters: [{ in: path, name: eventId, required: true, schema: { type: string, format: uuid } }], responses: { "200": { description: Marked read } } }
   /notifications/read-all:
     post: { operationId: readAllNotifications, tags: [Notifications], responses: { "200": { description: All marked read } } }
-  /screeners/run:
-    post:
+  /screener/fields:
+    get:
+      operationId: getScreenerFields
       tags: [Screeners]
-      summary: Run a stock screener
+      summary: Get available fields and allowed operators for stock screener
+      responses:
+        "200":
+          description: Screener field metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScreenerFieldsEnvelope" }
+  /screener/run:
+    post:
+      operationId: runScreener
+      tags: [Screeners]
+      summary: Run an ad-hoc stock screener calculation
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: "#/components/schemas/ScreenerRequest"
+            schema: { $ref: "#/components/schemas/RunScreenerInput" }
       responses:
         "200":
-          description: Screener result
+          description: Screener execution result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScreenerResultEnvelope" }
+  /screeners:
+    get:
+      operationId: listSavedScreeners
+      tags: [Screeners]
+      summary: List all saved screeners
+      responses:
+        "200":
+          description: Saved screeners list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedScreenerListEnvelope" }
+    post:
+      operationId: createSavedScreener
+      tags: [Screeners]
+      summary: Create a saved screener strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSavedScreenerInput" }
+      responses:
+        "201":
+          description: Saved screener created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedScreenerEnvelope" }
+  /screeners/{id}:
+    get:
+      operationId: getSavedScreener
+      tags: [Screeners]
+      summary: Get a saved screener detail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Saved screener detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedScreenerEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: updateSavedScreener
+      tags: [Screeners]
+      summary: Update a saved screener strategy
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSavedScreenerInput" }
+      responses:
+        "200":
+          description: Saved screener updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SavedScreenerEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteSavedScreener
+      tags: [Screeners]
+      summary: Delete a saved screener strategy
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Saved screener deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /screeners/{id}/run:
+    post:
+      operationId: runSavedScreener
+      tags: [Screeners]
+      summary: Execute a saved stock screener strategy
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 50 } }
+        - { in: query, name: offset, required: false, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: Screener execution result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScreenerResultEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1702,6 +1799,98 @@ components:
       properties:
         data: { $ref: "#/components/schemas/TaxonomyStrengthDetail" }
         meta: { $ref: "#/components/schemas/Meta" }
+    ScreenerFieldMeta:
+      type: object
+      required: [field_id, label, category, value_type, allowed_operators]
+      properties:
+        field_id: { type: string }
+        label: { type: string }
+        category: { type: string }
+        value_type: { type: string }
+        allowed_operators: { type: array, items: { type: string } }
+        unit: { type: [string, "null"] }
+        supported_windows: { type: [array, "null"], items: { type: integer } }
+    ScreenerFieldsEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/ScreenerFieldMeta" } }
+        meta: { $ref: "#/components/schemas/Meta" }
+    RunScreenerInput:
+      type: object
+      required: [expression]
+      properties:
+        expression: { type: object, additionalProperties: true }
+        trade_date: { type: [string, "null"], format: date }
+        sort_field: { type: string, default: "code" }
+        sort_direction: { type: string, default: "ASC" }
+        limit: { type: integer, default: 50 }
+        offset: { type: integer, default: 0 }
+    CreateSavedScreenerInput:
+      type: object
+      required: [name, expression]
+      properties:
+        name: { type: string }
+        description: { type: [string, "null"] }
+        expression: { type: object, additionalProperties: true }
+        sort_field: { type: string, default: "code" }
+        sort_direction: { type: string, default: "ASC" }
+    UpdateSavedScreenerInput:
+      type: object
+      properties:
+        name: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        expression: { type: [object, "null"], additionalProperties: true }
+        sort_field: { type: [string, "null"] }
+        sort_direction: { type: [string, "null"] }
+    ScreenerResultSecurity:
+      type: object
+      required: [security_id, code, name, market, matched_conditions, extra_metrics, data_status]
+      properties:
+        security_id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        market: { $ref: "#/components/schemas/MarketCode" }
+        industry_name: { type: [string, "null"] }
+        themes: { type: array, items: { type: string } }
+        close: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        return_pct: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        matched_conditions: { type: array, items: { type: string } }
+        extra_metrics: { type: object, additionalProperties: true }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+    ScreenerResultEnvelope:
+      type: object
+      required: [data, total_count, trade_date, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/ScreenerResultSecurity" } }
+        total_count: { type: integer }
+        trade_date: { type: string, format: date }
+        meta: { $ref: "#/components/schemas/Meta" }
+    SavedScreener:
+      type: object
+      required: [id, name, expression, sort_field, sort_direction, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        expression: { type: object, additionalProperties: true }
+        sort_field: { type: string }
+        sort_direction: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SavedScreenerEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/SavedScreener" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    SavedScreenerListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/SavedScreener" } }
+        meta: { $ref: "#/components/schemas/Meta" }
+
   responses:
     NotFound:
       description: Resource not found

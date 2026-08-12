@@ -681,3 +681,17 @@ class VolatilityIndexModel(Base):
     data_status: Mapped[DataStatus] = mapped_column(Enum(DataStatus, name="data_status"))
     source_revision: Mapped[str | None] = mapped_column(String(64))
     ingestion_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("ingestion_runs.id"))
+
+
+class SavedScreenerModel(Base):
+    __tablename__ = "saved_screeners"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expression: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    sort_field: Mapped[str] = mapped_column(String(50), nullable=False, default="code")
+    sort_direction: Mapped[str] = mapped_column(String(10), nullable=False, default="ASC")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+

@@ -461,3 +461,75 @@ class TaxonomyStrengthDetailEnvelope(BaseModel):
     data: TaxonomyStrengthDetailResponse
     meta: MetaResponse
 
+
+class ScreenerFieldMetaSchema(BaseModel):
+    field_id: str
+    label: str
+    category: str
+    value_type: str
+    allowed_operators: list[str]
+    unit: str | None = None
+    supported_windows: list[int] | None = None
+
+
+class ScreenerFieldsEnvelope(BaseModel):
+    data: list[ScreenerFieldMetaSchema]
+    meta: MetaResponse
+
+
+class RunScreenerInput(BaseModel):
+    expression: dict[str, Any]
+    trade_date: date | None = None
+    sort_field: str = "code"
+    sort_direction: str = "ASC"
+    limit: int = 50
+    offset: int = 0
+
+
+class CreateSavedScreenerInput(BaseModel):
+    name: str
+    description: str | None = None
+    expression: dict[str, Any]
+    sort_field: str = "code"
+    sort_direction: str = "ASC"
+
+
+class UpdateSavedScreenerInput(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    expression: dict[str, Any] | None = None
+    sort_field: str | None = None
+    sort_direction: str | None = None
+
+
+class ScreenerResultSecuritySchema(BaseModel):
+    security_id: UUID
+    code: str
+    name: str
+    market: MarketCode
+    industry_name: str | None = None
+    themes: list[str] = []
+    close: str | None = None
+    return_pct: str | None = None
+    matched_conditions: list[str] = []
+    extra_metrics: dict[str, Any] = {}
+    data_status: DataStatus
+
+
+class ScreenerResultEnvelope(BaseModel):
+    data: list[ScreenerResultSecuritySchema]
+    total_count: int
+    trade_date: date
+    meta: MetaResponse
+
+
+class SavedScreenerEnvelope(BaseModel):
+    data: dict[str, Any]
+    meta: MetaResponse
+
+
+class SavedScreenerListEnvelope(BaseModel):
+    data: list[dict[str, Any]]
+    meta: MetaResponse
+
+
