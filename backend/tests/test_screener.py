@@ -6,13 +6,13 @@ from starlette.testclient import TestClient
 
 from app.core.errors import AppError
 from app.domain.market_data import DataStatus
-from app.domain.security import MarketCode
 from app.domain.screener import (
     SavedScreener,
     ScreenerExpression,
     ScreenerOperator,
     ScreenerResultSecurity,
 )
+from app.domain.security import MarketCode
 from app.services.screener_ast import (
     dict_to_expression,
     expression_to_dict,
