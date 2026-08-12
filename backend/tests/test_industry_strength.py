@@ -74,7 +74,8 @@ def test_strength_scoring_missing_component_reweighting():
 def test_strength_scoring_coverage_below_threshold():
     service = IndustryStrengthScoringService()
 
-    # Only Momentum (30%) is available -> coverage = 0.30 < 0.60 threshold
+    # Momentum (30%) + Institutional (15% — always included, summing all nets defaulting to 0)
+    # = 0.45 coverage, which is below 0.60 threshold -> strength_score must be None
     group_data = [
         {
             "taxonomy_id": "ind1",
@@ -90,7 +91,9 @@ def test_strength_scoring_coverage_below_threshold():
 
     scored = service.score_group(group_data)
     assert len(scored) == 1
-    assert scored[0]["component_coverage"] == Decimal("0.3000")
+    # Institutional is always appended (tot_inst=0 when all nets are None), so
+    # available_weight = momentum(0.30) + institutional(0.15) = 0.45
+    assert scored[0]["component_coverage"] == Decimal("0.4500")
     assert scored[0]["strength_score"] is None
     assert scored[0]["rank"] is None
 
@@ -151,7 +154,7 @@ class InMemoryStrengthRepository:
 
 
 @pytest.fixture
-def mock_strength_repo(app_client):
+def mock_strength_repo(client):
     repo = InMemoryStrengthRepository()
     ind_id = uuid4()
     snap = TaxonomyStrengthSnapshot(
