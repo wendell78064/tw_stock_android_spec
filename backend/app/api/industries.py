@@ -44,6 +44,41 @@ async def list_industries(
     )
 
 
+# ── Strength endpoints (literal paths must come before /{id}) ─────────────────
+
+
+@router.get(
+    "/strength",
+    response_model=TaxonomyStrengthListEnvelope,
+    operation_id="listIndustryStrengths",
+)
+async def list_industry_strengths(
+    strength_repo: Annotated[SqlIndustryStrengthRepository, Depends(industry_strength_repository)],
+    window: int = 20,
+    trade_date: date | None = None,
+    sort: str = "strength",
+) -> TaxonomyStrengthListEnvelope:
+    strengths = await strength_repo.get_industry_strengths(
+        window=window, trade_date=trade_date, sort_by=sort
+    )
+    now = datetime.now(UTC)
+    as_of = strengths[0].as_of if strengths else now
+    status = strengths[0].data_status if strengths else DataStatus.UNAVAILABLE
+    meta = MetaResponse(
+        as_of=as_of,
+        received_at=now,
+        data_status=status,
+        source="STRENGTH_ENGINE",
+    )
+    return TaxonomyStrengthListEnvelope(
+        data=[TaxonomyStrengthResponse.from_domain(s) for s in strengths],
+        meta=meta,
+    )
+
+
+# ── Parameterised /{id} endpoints ─────────────────────────────────────────────
+
+
 @router.get("/{id}", response_model=IndustryEnvelope, operation_id="getIndustry")
 async def get_industry(
     id: UUID,
@@ -87,35 +122,6 @@ async def get_industry_securities(
     )
     return IndustrySecuritiesEnvelope(
         data=[MemberSecurityResponse.from_domain(mem) for mem in members],
-        meta=meta,
-    )
-
-
-@router.get(
-    "/strength",
-    response_model=TaxonomyStrengthListEnvelope,
-    operation_id="listIndustryStrengths",
-)
-async def list_industry_strengths(
-    strength_repo: Annotated[SqlIndustryStrengthRepository, Depends(industry_strength_repository)],
-    window: int = 20,
-    trade_date: date | None = None,
-    sort: str = "strength",
-) -> TaxonomyStrengthListEnvelope:
-    strengths = await strength_repo.get_industry_strengths(
-        window=window, trade_date=trade_date, sort_by=sort
-    )
-    now = datetime.now(UTC)
-    as_of = strengths[0].as_of if strengths else now
-    status = strengths[0].data_status if strengths else DataStatus.UNAVAILABLE
-    meta = MetaResponse(
-        as_of=as_of,
-        received_at=now,
-        data_status=status,
-        source="STRENGTH_ENGINE",
-    )
-    return TaxonomyStrengthListEnvelope(
-        data=[TaxonomyStrengthResponse.from_domain(s) for s in strengths],
         meta=meta,
     )
 

@@ -84,6 +84,41 @@ async def create_theme(
     )
 
 
+# ── Strength endpoints (literal paths must come before /{id}) ─────────────────
+
+
+@router.get(
+    "/strength",
+    response_model=TaxonomyStrengthListEnvelope,
+    operation_id="listThemeStrengths",
+)
+async def list_theme_strengths(
+    strength_repo: Annotated[SqlIndustryStrengthRepository, Depends(industry_strength_repository)],
+    window: int = 20,
+    trade_date: date | None = None,
+    sort: str = "strength",
+) -> TaxonomyStrengthListEnvelope:
+    strengths = await strength_repo.get_theme_strengths(
+        window=window, trade_date=trade_date, sort_by=sort
+    )
+    now = datetime.now(UTC)
+    as_of = strengths[0].as_of if strengths else now
+    status_val = strengths[0].data_status if strengths else DataStatus.UNAVAILABLE
+    meta = MetaResponse(
+        as_of=as_of,
+        received_at=now,
+        data_status=status_val,
+        source="STRENGTH_ENGINE",
+    )
+    return TaxonomyStrengthListEnvelope(
+        data=[TaxonomyStrengthResponse.from_domain(s) for s in strengths],
+        meta=meta,
+    )
+
+
+# ── Parameterised /{id} endpoints ─────────────────────────────────────────────
+
+
 @router.get("/{id}", response_model=ThemeEnvelope, operation_id="getTheme")
 async def get_theme(
     id: UUID,
@@ -233,35 +268,6 @@ async def remove_theme_security(
             {"theme_id": str(id), "security_id": str(security_id)},
         )
     return None
-
-
-@router.get(
-    "/strength",
-    response_model=TaxonomyStrengthListEnvelope,
-    operation_id="listThemeStrengths",
-)
-async def list_theme_strengths(
-    strength_repo: Annotated[SqlIndustryStrengthRepository, Depends(industry_strength_repository)],
-    window: int = 20,
-    trade_date: date | None = None,
-    sort: str = "strength",
-) -> TaxonomyStrengthListEnvelope:
-    strengths = await strength_repo.get_theme_strengths(
-        window=window, trade_date=trade_date, sort_by=sort
-    )
-    now = datetime.now(UTC)
-    as_of = strengths[0].as_of if strengths else now
-    status_val = strengths[0].data_status if strengths else DataStatus.UNAVAILABLE
-    meta = MetaResponse(
-        as_of=as_of,
-        received_at=now,
-        data_status=status_val,
-        source="STRENGTH_ENGINE",
-    )
-    return TaxonomyStrengthListEnvelope(
-        data=[TaxonomyStrengthResponse.from_domain(s) for s in strengths],
-        meta=meta,
-    )
 
 
 @router.get(
