@@ -14,57 +14,32 @@ Phase 3 / Slice 1 COMPLETE
 Phase 3 / Slice 2 COMPLETE
 Phase 3 / Slice 3 COMPLETE
 Phase 4 / Slice 1 COMPLETE
+Phase 4 / Slice 2 COMPLETE
 ```
 
-- Current phase: Phase 4 / Slice 1 COMPLETE
-- Latest completed feature: Industry & Theme Foundation
-- Feature commit: `41a7cc4`
-- DB head: `0009_industry_theme_foundation`
-- Room: version 8
-- Latest tag: `phase-4-slice-1-complete`
-- GitHub Actions: backend / android / android-instrumentation PASS (connectedDebugAndroidTest 15 tests PASS on API 35 / Google APIs / x86_64)
+- Current phase: Phase 4 / Slice 2 COMPLETE
+- Latest completed feature: Industry / Theme Strength Ranking
+- Feature commit: `9048f23`
+- DB head: `0010_industry_strength`
+- Room: version 9
+- Latest tag: `phase-4-slice-2-complete`
+- GitHub Actions: backend PASS / android PASS / android-instrumentation PASS
 
-## Completed Features
+## Phase 4 / Slice 2 Completed Features
 
-### Portfolio
-
-- BUY / SELL transactions
-- Moving average cost
-- Positions
-- Realized / unrealized P&L
-- Market value
-- Portfolio summary
-
-### Watchlist
-
-- Multiple groups and item CRUD
-- Target / Stop / Add price
-- Market / technical / institutional / credit enrichment
-- Room offline cache
-
-### Alert
-
-- SECURITY / PORTFOLIO / WATCHLIST scopes
-- Price alerts
-- MA5 / 10 / 20 / 60 / 120 / 240
-- Near / Touch / Cross / Close / Consecutive
-- Dedup / cooldown / daily limit
-- Notification Center
-- Read / unread
-- Room offline cache
-
-### Industry & Theme Foundation (Phase 4 / Slice 1)
-
-- Official Industry (TWSE taxonomy)
-- Custom Theme (dynamic non-enum classifications)
-- Security multi-theme mapping
-- Industry / Theme APIs
-- Admin protected Theme CRUD (`X-Admin-Key`)
-- Bulk member market enrichment (SQL window function)
-- Industry Android navigation ("產業" bottom tab)
-- Industry / Theme detail screens
-- Security Detail Industry & Theme tags
-- Room offline / STALE cache (`MIGRATION_7_8`)
+- Industry / Theme strength ranking
+- 1/5/10/20/60 trading-day windows
+- Equal-weight performance
+- Breadth
+- MA participation
+- Institutional aggregation
+- Credit aggregation
+- Turnover metrics
+- twml-industry-strength-v1
+- Component scores / coverage
+- Leaders / Laggards
+- Android ranking/detail
+- Offline / Partial / Stale
 
 ## External and Future
 
@@ -72,12 +47,13 @@ Phase 4 / Slice 1 COMPLETE
 
 ## Next
 
-Phase 4 / Slice 2 — Industry Strength Ranking
+Phase 4 / Slice 3 — Stock Screener
 
-Do not start Phase 4 / Slice 2 without a separate explicit request and Slice definition.
+Do not start Phase 4 / Slice 3 without a separate explicit request and Slice definition.
 
 ## Primary References
 
+- `docs/15_PHASE_4_INDUSTRY_THEME_STRENGTH.md`
 - `docs/14_PHASE_3_ALERT_ENGINE.md`
 - `docs/13_PHASE_3_WATCHLIST.md`
 - `docs/12_PHASE_3_PORTFOLIO_CORE.md`
