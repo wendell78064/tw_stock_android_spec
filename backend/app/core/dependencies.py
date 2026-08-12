@@ -73,10 +73,19 @@ async def alert_repository(
     return SqlAlertRepository(session)
 
 
+from app.repositories.sql_industry_strength import SqlIndustryStrengthRepository
+
+
 async def industry_repository(
     session: Annotated[AsyncSession, Depends(database_session)],
 ) -> SqlIndustryRepository:
     return SqlIndustryRepository(session)
+
+
+async def industry_strength_repository(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> SqlIndustryStrengthRepository:
+    return SqlIndustryStrengthRepository(session)
 
 
 def require_admin_key(

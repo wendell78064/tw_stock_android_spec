@@ -57,6 +57,12 @@ sync-securities:
 sync-daily-prices:
 	docker compose exec backend python -m app.cli.sync_daily_prices --provider fake --date $(DATE)
 
+calculate-industry-strength:
+	docker compose exec backend python -m app.cli.calculate_industry_strength --date $(DATE)
+
+backfill-industry-strength:
+	docker compose exec backend python -m app.cli.calculate_industry_strength --from-date $(FROM) --to-date $(TO)
+
 backfill-security:
 	docker compose exec backend python -m app.cli.sync_daily_prices --provider fake --code $(CODE) --market $(MARKET) --start $(FROM) --end $(TO)
 

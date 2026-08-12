@@ -465,6 +465,52 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/IndustrySecuritiesEnvelope" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /industries/strength:
+    get:
+      operationId: listIndustryStrengths
+      tags: [Industries]
+      summary: List industry strength ranking snapshots
+      parameters:
+        - { in: query, name: window, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: trade_date, required: false, schema: { type: string, format: date } }
+        - { in: query, name: sort, required: false, schema: { type: string, default: "strength" } }
+      responses:
+        "200":
+          description: Industry strength snapshots
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyStrengthListEnvelope" }
+  /industries/{id}/strength:
+    get:
+      operationId: getIndustryStrengthDetail
+      tags: [Industries]
+      summary: Get industry strength detail with leaders and laggards
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: window, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: trade_date, required: false, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: Industry strength detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyStrengthDetailEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /industries/{id}/strength/history:
+    get:
+      operationId: getIndustryStrengthHistory
+      tags: [Industries]
+      summary: Get industry strength historical snapshots
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: window, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 60 } }
+      responses:
+        "200":
+          description: Industry strength history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyStrengthListEnvelope" }
   /themes:
     get:
       operationId: listThemes
@@ -583,6 +629,52 @@ paths:
         "204":
           description: Security removed from theme
         "404": { $ref: "#/components/responses/NotFound" }
+  /themes/strength:
+    get:
+      operationId: listThemeStrengths
+      tags: [Themes]
+      summary: List theme strength ranking snapshots
+      parameters:
+        - { in: query, name: window, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: trade_date, required: false, schema: { type: string, format: date } }
+        - { in: query, name: sort, required: false, schema: { type: string, default: "strength" } }
+      responses:
+        "200":
+          description: Theme strength snapshots
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyStrengthListEnvelope" }
+  /themes/{id}/strength:
+    get:
+      operationId: getThemeStrengthDetail
+      tags: [Themes]
+      summary: Get theme strength detail with leaders and laggards
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: window, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: trade_date, required: false, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: Theme strength detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyStrengthDetailEnvelope" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /themes/{id}/strength/history:
+    get:
+      operationId: getThemeStrengthHistory
+      tags: [Themes]
+      summary: Get theme strength historical snapshots
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: window, required: false, schema: { type: integer, default: 20 } }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 60 } }
+      responses:
+        "200":
+          description: Theme strength history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaxonomyStrengthListEnvelope" }
   /portfolios:
     get:
       operationId: listPortfolios
@@ -1527,6 +1619,89 @@ components:
       required: [error]
       properties:
         error: { $ref: "#/components/schemas/ErrorDetail" }
+    StrengthComponents:
+      type: object
+      properties:
+        momentum_score: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        breadth_score: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        technical_score: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        institutional_score: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        turnover_score: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+    TaxonomyStrength:
+      type: object
+      required: [id, taxonomy_id, taxonomy_code, taxonomy_name, taxonomy_type, trade_date, window, equal_weight_return, total_members, valid_members, coverage_ratio, advancers, decliners, unchanged, advance_ratio, above_ma20_pct, above_ma60_pct, foreign_net_amount, investment_trust_net_amount, dealer_net_amount, margin_balance_change, short_balance_change, components, component_coverage, algorithm_version, data_status, as_of]
+      properties:
+        id: { type: string, format: uuid }
+        taxonomy_id: { type: string, format: uuid }
+        taxonomy_code: { type: string }
+        taxonomy_name: { type: string }
+        taxonomy_type: { type: string }
+        trade_date: { type: string, format: date }
+        window: { type: integer }
+        equal_weight_return: { $ref: "#/components/schemas/DecimalString" }
+        market_cap_weighted_return: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        total_members: { type: integer }
+        valid_members: { type: integer }
+        coverage_ratio: { $ref: "#/components/schemas/DecimalString" }
+        advancers: { type: integer }
+        decliners: { type: integer }
+        unchanged: { type: integer }
+        advance_ratio: { $ref: "#/components/schemas/DecimalString" }
+        above_ma20_pct: { $ref: "#/components/schemas/DecimalString" }
+        above_ma60_pct: { $ref: "#/components/schemas/DecimalString" }
+        foreign_net_amount: { $ref: "#/components/schemas/DecimalString" }
+        investment_trust_net_amount: { $ref: "#/components/schemas/DecimalString" }
+        dealer_net_amount: { $ref: "#/components/schemas/DecimalString" }
+        margin_balance_change: { $ref: "#/components/schemas/DecimalString" }
+        short_balance_change: { $ref: "#/components/schemas/DecimalString" }
+        lending_balance_change: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        turnover_amount: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        turnover_share: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        turnover_momentum: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        components: { $ref: "#/components/schemas/StrengthComponents" }
+        strength_score: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        component_coverage: { $ref: "#/components/schemas/DecimalString" }
+        rank: { type: [integer, "null"] }
+        algorithm_version: { type: string }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+        as_of: { type: string, format: date-time }
+    TaxonomyLeader:
+      type: object
+      required: [security_id, code, name, market, return_pct, data_status]
+      properties:
+        security_id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        market: { $ref: "#/components/schemas/MarketCode" }
+        return_pct: { $ref: "#/components/schemas/DecimalString" }
+        latest_close: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        foreign_net: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+    TaxonomyStrengthDetail:
+      type: object
+      required: [snapshot, leaders, laggards]
+      properties:
+        snapshot: { $ref: "#/components/schemas/TaxonomyStrength" }
+        leaders:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyLeader" }
+        laggards:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyLeader" }
+    TaxonomyStrengthListEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/TaxonomyStrength" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    TaxonomyStrengthDetailEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/TaxonomyStrengthDetail" }
+        meta: { $ref: "#/components/schemas/Meta" }
   responses:
     NotFound:
       description: Resource not found

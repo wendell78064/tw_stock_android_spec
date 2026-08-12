@@ -78,6 +78,10 @@ private class FakeIndustryRepository : IndustryRepository {
     override suspend fun getIndustryDetail(id: String) = indDetailResult
     override suspend fun getThemes() = themesResult
     override suspend fun getThemeDetail(id: String) = themeDetailResult
+    override suspend fun getIndustryStrengths(window: Int, sort: String) = Result.success(Pair(emptyList<tw.market.ledger.model.TaxonomyStrength>(), false))
+    override suspend fun getThemeStrengths(window: Int, sort: String) = Result.success(Pair(emptyList<tw.market.ledger.model.TaxonomyStrength>(), false))
+    override suspend fun getTaxonomyStrengthDetail(id: String, isIndustry: Boolean, window: Int) = Result.failure<tw.market.ledger.model.TaxonomyStrengthDetail>(Exception("unused"))
+    override suspend fun getTaxonomyStrengthHistory(id: String, isIndustry: Boolean, window: Int, limit: Int) = Result.success(Pair(emptyList<tw.market.ledger.model.TaxonomyStrength>(), false))
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)

@@ -52,6 +52,12 @@ private val MIGRATION_7_8 = object : Migration(7, 8) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `taxonomy_member_cache` (`taxonomyId` TEXT NOT NULL, `securityId` TEXT NOT NULL, `code` TEXT NOT NULL, `name` TEXT NOT NULL, `market` TEXT NOT NULL, `securityType` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `close` TEXT, `change` TEXT, `changePercent` TEXT, `asOf` TEXT, `dataStatus` TEXT NOT NULL, PRIMARY KEY(`taxonomyId`, `securityId`))")
     }
 }
+private val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS `taxonomy_strength_cache` (`id` TEXT NOT NULL, `taxonomyId` TEXT NOT NULL, `taxonomyCode` TEXT NOT NULL, `taxonomyName` TEXT NOT NULL, `taxonomyType` TEXT NOT NULL, `tradeDate` TEXT NOT NULL, `window` INTEGER NOT NULL, `equalWeightReturn` TEXT NOT NULL, `marketCapWeightedReturn` TEXT, `totalMembers` INTEGER NOT NULL, `validMembers` INTEGER NOT NULL, `coverageRatio` TEXT NOT NULL, `advancers` INTEGER NOT NULL, `decliners` INTEGER NOT NULL, `unchanged` INTEGER NOT NULL, `advanceRatio` TEXT NOT NULL, `aboveMa20Pct` TEXT NOT NULL, `aboveMa60Pct` TEXT NOT NULL, `foreignNetAmount` TEXT NOT NULL, `investmentTrustNetAmount` TEXT NOT NULL, `dealerNetAmount` TEXT NOT NULL, `marginBalanceChange` TEXT NOT NULL, `shortBalanceChange` TEXT NOT NULL, `lendingBalanceChange` TEXT, `turnoverAmount` TEXT, `turnoverShare` TEXT, `turnoverMomentum` TEXT, `momentumScore` TEXT, `breadthScore` TEXT, `technicalScore` TEXT, `institutionalScore` TEXT, `turnoverScore` TEXT, `strengthScore` TEXT, `componentCoverage` TEXT NOT NULL, `rank` INTEGER, `algorithmVersion` TEXT NOT NULL, `dataStatus` TEXT NOT NULL, `asOf` TEXT NOT NULL, PRIMARY KEY(`taxonomyId`, `window`, `tradeDate`))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS `taxonomy_leader_cache` (`taxonomyId` TEXT NOT NULL, `securityId` TEXT NOT NULL, `code` TEXT NOT NULL, `name` TEXT NOT NULL, `market` TEXT NOT NULL, `returnPct` TEXT NOT NULL, `latestClose` TEXT, `foreignNet` TEXT, `dataStatus` TEXT NOT NULL, `isLeader` INTEGER NOT NULL, PRIMARY KEY(`taxonomyId`, `securityId`, `isLeader`))")
+    }
+}
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -59,7 +65,7 @@ object AppModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): TWMarketDatabase =
         Room.databaseBuilder(context, TWMarketDatabase::class.java, "tw-market-ledger.db")
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
             .build()
 
     @Provides fun securityDao(database: TWMarketDatabase): SecurityDao = database.securityDao()

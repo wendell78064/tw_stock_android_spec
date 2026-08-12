@@ -306,3 +306,135 @@ class AddThemeSecurityInput(BaseModel):
 class TechnicalSeriesEnvelope(BaseModel):
     data: list[TechnicalPointResponse]
     meta: MetaResponse
+
+
+class StrengthComponentsResponse(BaseModel):
+    momentum_score: str | None = None
+    breadth_score: str | None = None
+    technical_score: str | None = None
+    institutional_score: str | None = None
+    turnover_score: str | None = None
+
+
+class TaxonomyStrengthResponse(BaseModel):
+    id: UUID
+    taxonomy_id: UUID
+    taxonomy_code: str
+    taxonomy_name: str
+    taxonomy_type: str
+    trade_date: date
+    window: int
+    equal_weight_return: str
+    market_cap_weighted_return: str | None = None
+    total_members: int
+    valid_members: int
+    coverage_ratio: str
+    advancers: int
+    decliners: int
+    unchanged: int
+    advance_ratio: str
+    above_ma20_pct: str
+    above_ma60_pct: str
+    foreign_net_amount: str
+    investment_trust_net_amount: str
+    dealer_net_amount: str
+    margin_balance_change: str
+    short_balance_change: str
+    lending_balance_change: str | None = None
+    turnover_amount: str | None = None
+    turnover_share: str | None = None
+    turnover_momentum: str | None = None
+    components: StrengthComponentsResponse
+    strength_score: str | None = None
+    component_coverage: str
+    rank: int | None = None
+    algorithm_version: str
+    data_status: DataStatus
+    as_of: datetime
+
+    @classmethod
+    def from_domain(cls, snap: TaxonomyStrengthSnapshot) -> "TaxonomyStrengthResponse":
+        c = snap.components
+        return cls(
+            id=snap.id,
+            taxonomy_id=snap.taxonomy_id,
+            taxonomy_code=snap.taxonomy_code,
+            taxonomy_name=snap.taxonomy_name,
+            taxonomy_type=snap.taxonomy_type,
+            trade_date=snap.trade_date,
+            window=snap.window,
+            equal_weight_return=str(snap.equal_weight_return),
+            market_cap_weighted_return=str(snap.market_cap_weighted_return) if snap.market_cap_weighted_return is not None else None,
+            total_members=snap.total_members,
+            valid_members=snap.valid_members,
+            coverage_ratio=str(snap.coverage_ratio),
+            advancers=snap.advancers,
+            decliners=snap.decliners,
+            unchanged=snap.unchanged,
+            advance_ratio=str(snap.advance_ratio),
+            above_ma20_pct=str(snap.above_ma20_pct),
+            above_ma60_pct=str(snap.above_ma60_pct),
+            foreign_net_amount=str(snap.foreign_net_amount),
+            investment_trust_net_amount=str(snap.investment_trust_net_amount),
+            dealer_net_amount=str(snap.dealer_net_amount),
+            margin_balance_change=str(snap.margin_balance_change),
+            short_balance_change=str(snap.short_balance_change),
+            lending_balance_change=str(snap.lending_balance_change) if snap.lending_balance_change is not None else None,
+            turnover_amount=str(snap.turnover_amount) if snap.turnover_amount is not None else None,
+            turnover_share=str(snap.turnover_share) if snap.turnover_share is not None else None,
+            turnover_momentum=str(snap.turnover_momentum) if snap.turnover_momentum is not None else None,
+            components=StrengthComponentsResponse(
+                momentum_score=str(c.momentum_score) if c.momentum_score is not None else None,
+                breadth_score=str(c.breadth_score) if c.breadth_score is not None else None,
+                technical_score=str(c.technical_score) if c.technical_score is not None else None,
+                institutional_score=str(c.institutional_score) if c.institutional_score is not None else None,
+                turnover_score=str(c.turnover_score) if c.turnover_score is not None else None,
+            ),
+            strength_score=str(snap.strength_score) if snap.strength_score is not None else None,
+            component_coverage=str(snap.component_coverage),
+            rank=snap.rank,
+            algorithm_version=snap.algorithm_version,
+            data_status=snap.data_status,
+            as_of=snap.as_of,
+        )
+
+
+class TaxonomyLeaderResponse(BaseModel):
+    security_id: UUID
+    code: str
+    name: str
+    market: MarketCode
+    return_pct: str
+    latest_close: str | None = None
+    foreign_net: str | None = None
+    data_status: DataStatus
+
+    @classmethod
+    def from_domain(cls, l: TaxonomyLeader) -> "TaxonomyLeaderResponse":
+        return cls(
+            security_id=l.security_id,
+            code=l.code,
+            name=l.name,
+            market=l.market,
+            return_pct=str(l.return_pct),
+            latest_close=str(l.latest_close) if l.latest_close is not None else None,
+            foreign_net=str(l.foreign_net) if l.foreign_net is not None else None,
+            data_status=l.data_status,
+        )
+
+
+class TaxonomyStrengthDetailResponse(BaseModel):
+    snapshot: TaxonomyStrengthResponse
+    leaders: list[TaxonomyLeaderResponse]
+    laggards: list[TaxonomyLeaderResponse]
+
+
+class TaxonomyStrengthListEnvelope(BaseModel):
+    data: list[TaxonomyStrengthResponse]
+    meta: MetaResponse
+
+
+class TaxonomyStrengthDetailEnvelope(BaseModel):
+    data: TaxonomyStrengthDetailResponse
+    meta: MetaResponse
+

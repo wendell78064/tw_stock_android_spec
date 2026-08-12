@@ -233,6 +233,48 @@ class SecurityThemeModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class TaxonomyStrengthSnapshotModel(Base):
+    __tablename__ = "taxonomy_strength_snapshots"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    industry_id: Mapped[UUID | None] = mapped_column(ForeignKey("industries.id", ondelete="CASCADE"))
+    theme_id: Mapped[UUID | None] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"))
+    trade_date: Mapped[date] = mapped_column(Date)
+    window: Mapped[int] = mapped_column(Integer)
+    equal_weight_return: Mapped[Decimal] = mapped_column(Numeric(10, 4))
+    market_cap_weighted_return: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    total_members: Mapped[int] = mapped_column(Integer)
+    valid_members: Mapped[int] = mapped_column(Integer)
+    coverage_ratio: Mapped[Decimal] = mapped_column(Numeric(6, 4))
+    advancers: Mapped[int] = mapped_column(Integer)
+    decliners: Mapped[int] = mapped_column(Integer)
+    unchanged: Mapped[int] = mapped_column(Integer)
+    advance_ratio: Mapped[Decimal] = mapped_column(Numeric(6, 4))
+    above_ma20_pct: Mapped[Decimal] = mapped_column(Numeric(6, 4))
+    above_ma60_pct: Mapped[Decimal] = mapped_column(Numeric(6, 4))
+    foreign_net_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    investment_trust_net_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    dealer_net_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    margin_balance_change: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    short_balance_change: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    lending_balance_change: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    turnover_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    turnover_share: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
+    turnover_momentum: Mapped[Decimal | None] = mapped_column(Numeric(10, 4))
+    momentum_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    breadth_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    technical_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    institutional_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    turnover_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    strength_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    component_coverage: Mapped[Decimal] = mapped_column(Numeric(6, 4))
+    rank: Mapped[int | None] = mapped_column(Integer)
+    algorithm_version: Mapped[str] = mapped_column(String(64), default="twml-industry-strength-v1")
+    data_status: Mapped[str] = mapped_column(String(32), default="FINAL")
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 
 class DailyPriceModel(Base):
     __tablename__ = "daily_prices"
