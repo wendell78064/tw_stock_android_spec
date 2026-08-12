@@ -17,7 +17,7 @@ from app.domain.security import MarketCode
 from app.repositories.models import (
     DailyPriceModel,
     IndustryModel,
-    InstitutionalSpotModel,
+    InstitutionSpotTradingModel,
     SecurityIndustryModel,
     SecurityModel,
     SecurityThemeModel,
@@ -281,16 +281,24 @@ class SqlIndustryStrengthRepository:
             ).all()
         }
 
-        inst_flows = {
-            f.security_id: f.foreign_investors_net
-            for f in (
+        inst_rows = list(
+            (
                 await self.session.scalars(
-                    select(InstitutionalSpotModel).where(
-                        InstitutionalSpotModel.security_id.in_(sec_ids),
-                        InstitutionalSpotModel.trade_date == latest_date,
+                    select(InstitutionSpotTradingModel).where(
+                        InstitutionSpotTradingModel.security_id.in_(sec_ids),
+                        InstitutionSpotTradingModel.trade_date == latest_date,
+                        InstitutionSpotTradingModel.institution_type == "FOREIGN",
                     )
                 )
             ).all()
+        )
+        inst_flows = {
+            f.security_id: (
+                f.net_amount
+                if f.net_amount is not None
+                else Decimal(str(f.net_shares or 0))
+            )
+            for f in inst_rows
         }
 
         computed_members = []

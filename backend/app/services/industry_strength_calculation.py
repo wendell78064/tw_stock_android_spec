@@ -9,7 +9,7 @@ from app.domain.market_data import DataStatus
 from app.repositories.models import (
     DailyPriceModel,
     IndustryModel,
-    InstitutionalSpotModel,
+    InstitutionSpotTradingModel,
     MarginTradingModel,
     SecurityIndustryModel,
     SecurityModel,
@@ -273,15 +273,28 @@ class IndustryStrengthCalculationService:
         # 3. Institutional Flow
         inst_rows = list(
             self.session.scalars(
-                select(InstitutionalSpotModel).where(
-                    InstitutionalSpotModel.security_id.in_(sec_ids),
-                    InstitutionalSpotModel.trade_date.in_(trading_days),
+                select(InstitutionSpotTradingModel).where(
+                    InstitutionSpotTradingModel.security_id.in_(sec_ids),
+                    InstitutionSpotTradingModel.trade_date.in_(trading_days),
                 )
             )
         )
-        foreign_net = Decimal(str(sum((r.foreign_investors_net or 0) for r in inst_rows)))
-        trust_net = Decimal(str(sum((r.investment_trust_net or 0) for r in inst_rows)))
-        dealer_net = Decimal(str(sum((r.dealer_net or 0) for r in inst_rows)))
+        foreign_net = Decimal("0")
+        trust_net = Decimal("0")
+        dealer_net = Decimal("0")
+
+        for r in inst_rows:
+            val = (
+                Decimal(str(r.net_amount))
+                if r.net_amount is not None
+                else (Decimal(str(r.net_shares)) if r.net_shares is not None else Decimal("0"))
+            )
+            if r.institution_type == "FOREIGN":
+                foreign_net += val
+            elif r.institution_type == "INVESTMENT_TRUST":
+                trust_net += val
+            elif r.institution_type == "DEALER":
+                dealer_net += val
 
         # 4. Credit Changes
         credit_rows = list(
