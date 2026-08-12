@@ -1,5 +1,6 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -16,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -692,6 +694,10 @@ class SavedScreenerModel(Base):
     expression: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     sort_field: Mapped[str] = mapped_column(String(50), nullable=False, default="code")
     sort_direction: Mapped[str] = mapped_column(String(10), nullable=False, default="ASC")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
 

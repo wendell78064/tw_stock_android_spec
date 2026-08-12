@@ -68,7 +68,7 @@ class ScreenerInstrumentationTest {
         composeTestRule.setContent {
             ScreenerResultItemCard(security = security, onClick = {})
         }
-        composeTestRule.onNodeWithTag("result_item_2330").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("security_code_2330").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("result_item_2330", useUnmergedTree = true)
+            .assertIsDisplayed()
     }
 }

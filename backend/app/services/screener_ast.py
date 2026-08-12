@@ -3,7 +3,6 @@ from typing import Any
 from app.core.exceptions import AppError
 from app.domain.screener import (
     SCREENER_FIELDS_REGISTRY,
-    FieldType,
     ScreenerExpression,
     ScreenerOperator,
 )
@@ -15,7 +14,10 @@ def validate_expression(expr: ScreenerExpression) -> None:
 
     if expr.type == "CONDITION":
         if not expr.field or expr.field not in SCREENER_FIELDS_REGISTRY:
-            raise AppError("INVALID_AST_FIELD", f"Field '{expr.field}' is not in whitelist registry")
+            raise AppError(
+                "INVALID_AST_FIELD",
+                f"Field '{expr.field}' is not in whitelist registry",
+            )
 
         meta = SCREENER_FIELDS_REGISTRY[expr.field]
 
@@ -31,17 +33,29 @@ def validate_expression(expr: ScreenerExpression) -> None:
 
         if op == ScreenerOperator.BETWEEN:
             if expr.value is None or expr.value2 is None:
-                raise AppError("INVALID_AST_VALUE", f"Operator BETWEEN requires value and value2 for field '{expr.field}'")
+                raise AppError(
+                    "INVALID_AST_VALUE",
+                    f"Operator BETWEEN requires value and value2 for field '{expr.field}'",
+                )
         elif op in (ScreenerOperator.IN, ScreenerOperator.NOT_IN):
             if not isinstance(expr.value, list | tuple):
-                raise AppError("INVALID_AST_VALUE", f"Operator {op} requires list value for field '{expr.field}'")
+                raise AppError(
+                    "INVALID_AST_VALUE",
+                    f"Operator {op} requires list value for field '{expr.field}'",
+                )
         else:
             if expr.value is None:
-                raise AppError("INVALID_AST_VALUE", f"Operator {op} requires non-null value for field '{expr.field}'")
+                raise AppError(
+                    "INVALID_AST_VALUE",
+                    f"Operator {op} requires non-null value for field '{expr.field}'",
+                )
 
     else:  # AND / OR
         if not expr.children:
-            raise AppError("INVALID_AST_GROUP", f"Logical group '{expr.type}' must have at least one child")
+            raise AppError(
+                "INVALID_AST_GROUP",
+                f"Logical group '{expr.type}' must have at least one child",
+            )
         for child in expr.children:
             validate_expression(child)
 

@@ -1,5 +1,4 @@
 from datetime import UTC, date, datetime
-from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -118,22 +117,34 @@ def test_ast_validation_valid():
     expr = ScreenerExpression(
         type="AND",
         children=[
-            ScreenerExpression(type="CONDITION", field="close", operator=ScreenerOperator.GT, value=500),
-            ScreenerExpression(type="CONDITION", field="rsi14", operator=ScreenerOperator.BETWEEN, value=30, value2=70),
+            ScreenerExpression(
+                type="CONDITION", field="close", operator=ScreenerOperator.GT, value=500
+            ),
+            ScreenerExpression(
+                type="CONDITION",
+                field="rsi14",
+                operator=ScreenerOperator.BETWEEN,
+                value=30,
+                value2=70,
+            ),
         ],
     )
     validate_expression(expr)  # should not raise
 
 
 def test_ast_validation_invalid_field():
-    expr = ScreenerExpression(type="CONDITION", field="non_existent_field", operator=ScreenerOperator.GT, value=100)
+    expr = ScreenerExpression(
+        type="CONDITION", field="non_existent_field", operator=ScreenerOperator.GT, value=100
+    )
     with pytest.raises(AppError) as exc:
         validate_expression(expr)
     assert exc.value.code == "INVALID_AST_FIELD"
 
 
 def test_ast_validation_invalid_operator():
-    expr = ScreenerExpression(type="CONDITION", field="close", operator=ScreenerOperator.IN, value="string")
+    expr = ScreenerExpression(
+        type="CONDITION", field="close", operator=ScreenerOperator.IN, value="string"
+    )
     with pytest.raises(AppError) as exc:
         validate_expression(expr)
     assert exc.value.code == "INVALID_AST_VALUE"

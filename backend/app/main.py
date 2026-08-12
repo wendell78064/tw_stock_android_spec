@@ -15,6 +15,7 @@ from app.api.portfolios import router as portfolios_router
 from app.api.securities import router as securities_router
 from app.api.themes import router as themes_router
 from app.api.watchlists import router as watchlists_router
+from app.api.screener import router as screener_router
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
@@ -37,7 +38,6 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-from app.api.screener import router as screener_router
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.add_exception_handler(AppError, app_error_handler)

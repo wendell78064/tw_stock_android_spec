@@ -32,7 +32,11 @@ class ScreenerQueryService:
         self.session = session
 
     async def get_latest_trade_date(self) -> date | None:
-        stmt = select(DailyPriceModel.trade_date).order_by(DailyPriceModel.trade_date.desc()).limit(1)
+        stmt = (
+            select(DailyPriceModel.trade_date)
+            .order_by(DailyPriceModel.trade_date.desc())
+            .limit(1)
+        )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
@@ -42,8 +46,8 @@ class ScreenerQueryService:
         target_trade_date: date | None = None,
         sort_field: str = "code",
         sort_direction: str = "ASC",
-        limit: Int = 50,
-        offset: Int = 0,
+        limit: int = 50,
+        offset: int = 0,
     ) -> tuple[list[ScreenerResultSecurity], int, date]:
         if target_trade_date is None:
             target_trade_date = await self.get_latest_trade_date()
@@ -124,7 +128,9 @@ class ScreenerQueryService:
         strength_map = {st.taxonomy_id: st for st in strength_res.scalars().all()}
 
         # Map security_id -> industry_id for strength lookup
-        ind_id_stmt = select(SecurityIndustryModel.security_id, SecurityIndustryModel.industry_id).where(
+        ind_id_stmt = select(
+            SecurityIndustryModel.security_id, SecurityIndustryModel.industry_id
+        ).where(
             SecurityIndustryModel.security_id.in_(sec_ids)
         )
         ind_id_res = await self.session.execute(ind_id_stmt)
@@ -144,17 +150,27 @@ class ScreenerQueryService:
             str_snap = strength_map.get(ind_id) if ind_id else None
 
             # Calculate institutional net totals
-            foreign_5d_net = sum((i.net_volume for i in inst_list if i.institution == "FOREIGN"), Decimal(0))
-            trust_5d_net = sum((i.net_volume for i in inst_list if i.institution == "TRUST"), Decimal(0))
+            foreign_5d_net = sum(
+                (i.net_volume for i in inst_list if i.institution == "FOREIGN"), Decimal(0)
+            )
+            trust_5d_net = sum(
+                (i.net_volume for i in inst_list if i.institution == "TRUST"), Decimal(0)
+            )
 
             dataset[sec.id] = {
                 "close": dp.close_price if dp else None,
                 "return_1d": dp.change_percent if dp else None,
                 "return_5d": dp.change_percent if dp else None,
                 "rsi14": ti.rsi_14 if ti else None,
-                "close_vs_ma20": (dp.close_price - ti.ma_20) / ti.ma_20 * 100 if dp and ti and ti.ma_20 else None,
-                "close_vs_ma60": (dp.close_price - ti.ma_60) / ti.ma_60 * 100 if dp and ti and ti.ma_60 else None,
-                "close_vs_ma240": (dp.close_price - ti.ma_240) / ti.ma_240 * 100 if dp and ti and ti.ma_240 else None,
+                "close_vs_ma20": (dp.close_price - ti.ma_20) / ti.ma_20 * 100
+                if dp and ti and ti.ma_20
+                else None,
+                "close_vs_ma60": (dp.close_price - ti.ma_60) / ti.ma_60 * 100
+                if dp and ti and ti.ma_60
+                else None,
+                "close_vs_ma240": (dp.close_price - ti.ma_240) / ti.ma_240 * 100
+                if dp and ti and ti.ma_240
+                else None,
                 "foreign_5d_net": foreign_5d_net,
                 "trust_5d_net": trust_5d_net,
                 "margin_balance_change": ct.margin_balance_change if ct else None,
@@ -179,10 +195,14 @@ class ScreenerQueryService:
                         industry_name=ind_map.get(sec.id),
                         themes=theme_map.get(sec.id, []),
                         close=str(dp.close_price) if dp and dp.close_price is not None else None,
-                        return_pct=str(dp.change_percent) if dp and dp.change_percent is not None else None,
+                        return_pct=str(dp.change_percent)
+                        if dp and dp.change_percent is not None
+                        else None,
                         matched_conditions=matched_conds,
                         extra_metrics={
-                            "rsi14": str(feature_map["rsi14"]) if feature_map["rsi14"] is not None else None,
+                            "rsi14": str(feature_map["rsi14"])
+                            if feature_map["rsi14"] is not None
+                            else None,
                             "foreign_5d_net": str(feature_map["foreign_5d_net"]),
                             "industry_strength": str(feature_map["industry_strength_score"])
                             if feature_map["industry_strength_score"] is not None
@@ -225,7 +245,9 @@ class ScreenerQueryService:
     ) -> tuple[bool, list[str]]:
         if expr.type == "CONDITION":
             val = feature_map.get(expr.field)
-            passed, desc = self._evaluate_condition(expr.field, expr.operator, expr.value, expr.value2, val)
+            passed, desc = self._evaluate_condition(
+                expr.field, expr.operator, expr.value, expr.value2, val
+            )
             return passed, [desc] if passed else []
 
         elif expr.type == "AND":
@@ -274,7 +296,11 @@ class ScreenerQueryService:
                 ScreenerOperator.NE,
                 ScreenerOperator.BETWEEN,
             ):
-                num_actual = Decimal(str(actual_val)) if not isinstance(actual_val, Decimal) else actual_val
+                num_actual = (
+                    Decimal(str(actual_val))
+                    if not isinstance(actual_val, Decimal)
+                    else actual_val
+                )
                 if operator == ScreenerOperator.BETWEEN:
                     low = Decimal(str(target_val))
                     high = Decimal(str(target_val2))
@@ -294,7 +320,12 @@ class ScreenerQueryService:
                 elif operator == ScreenerOperator.NE:
                     return num_actual != num_target, desc
 
-            elif operator in (ScreenerOperator.IN, ScreenerOperator.NOT_IN, ScreenerOperator.EQ, ScreenerOperator.NE):
+            elif operator in (
+                ScreenerOperator.IN,
+                ScreenerOperator.NOT_IN,
+                ScreenerOperator.EQ,
+                ScreenerOperator.NE,
+            ):
                 if isinstance(actual_val, list):
                     if operator == ScreenerOperator.IN:
                         return any(item in target_val for item in actual_val), desc
