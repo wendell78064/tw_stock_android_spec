@@ -15,8 +15,10 @@ from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.repositories.sql_portfolio import SqlPortfolioRepository
 from app.repositories.sql_price import SqlPriceRepository
 from app.repositories.sql_security import SqlSecurityRepository
+from app.repositories.sql_screener import SqlScreenerRepository
 from app.repositories.sql_watchlist import SqlWatchlistRepository
 from app.services.readiness import ReadinessChecker
+from app.services.screener_query import ScreenerQueryService
 
 
 def readiness_checker(request: Request) -> ReadinessChecker:
@@ -84,10 +86,6 @@ async def industry_strength_repository(
     session: Annotated[AsyncSession, Depends(database_session)],
 ) -> SqlIndustryStrengthRepository:
     return SqlIndustryStrengthRepository(session)
-
-
-from app.repositories.sql_screener import SqlScreenerRepository
-from app.services.screener_query import ScreenerQueryService
 
 
 async def screener_repository(

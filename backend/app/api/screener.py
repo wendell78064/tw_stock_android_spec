@@ -288,8 +288,8 @@ async def run_saved_screener(
     id: UUID,
     repository: Annotated[SqlScreenerRepository, Depends(screener_repository)],
     query_service: Annotated[ScreenerQueryService, Depends(screener_query_service)],
-    limit: Int = 50,
-    offset: Int = 0,
+    limit: int = 50,
+    offset: int = 0,
 ) -> ScreenerResultEnvelope:
     screener = await repository.get_screener(id)
     if screener is None:
