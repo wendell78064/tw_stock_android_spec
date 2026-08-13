@@ -6,7 +6,10 @@ from fastapi import WebSocket
 from redis.asyncio import Redis
 
 from app.domain.realtime import RealtimeQuote
-from app.services.realtime_cache import CHANNEL_REALTIME_QUOTES, RealtimeCacheService
+from app.services.realtime_cache import (
+    CHANNEL_REALTIME_QUOTES,
+    RealtimeCacheService,
+)
 
 logger = logging.getLogger(__name__)
 
