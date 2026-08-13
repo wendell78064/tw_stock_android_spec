@@ -42,6 +42,10 @@ def get_realtime_provider_manager(request: Request):
     return request.app.state.realtime_provider_manager
 
 
+def get_intraday_aggregator(request: Request):
+    return request.app.state.intraday_aggregator
+
+
 async def database_session(request: Request) -> AsyncIterator[AsyncSession]:
     async with request.app.state.session_factory() as session:
         yield session
@@ -125,5 +129,3 @@ def require_admin_key(
 ) -> None:
     if not x_admin_key or x_admin_key != settings.admin_api_key:
         raise AppError("UNAUTHORIZED", "Missing or invalid admin API key", 401)
-
-

@@ -6,7 +6,10 @@ from fastapi import FastAPI, Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.adapters.fake_realtime_provider import FakeRealtimeProvider
+from app.adapters.fake_realtime_provider import (
+    FakeRealtimeProvider,
+    UnconfiguredRealtimeProvider,
+)
 from app.api.alerts import router as alerts_router
 from app.api.comparison import router as comparison_router
 from app.api.derivatives import router as derivatives_router
@@ -22,6 +25,7 @@ from app.api.watchlists import router as watchlists_router
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
+from app.services.intraday_candle_aggregator import IntradayCandleAggregator
 from app.services.readiness import ReadinessChecker
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
@@ -43,12 +47,18 @@ async def lifespan(app: FastAPI):
     # Realtime Quote Pipeline Initialization
     cache_service = RealtimeCacheService(redis)
     hub = RealtimeQuoteHub(redis, cache_service)
-    provider = FakeRealtimeProvider()
-    manager = RealtimeProviderManager(provider, cache_service, hub)
+    aggregator = IntradayCandleAggregator(cache_service)
+    provider = (
+        FakeRealtimeProvider()
+        if settings.app_env.lower() in {"development", "test", "ci"}
+        else UnconfiguredRealtimeProvider()
+    )
+    manager = RealtimeProviderManager(provider, cache_service, hub, aggregator)
 
     app.state.realtime_cache_service = cache_service
     app.state.realtime_hub = hub
     app.state.realtime_provider_manager = manager
+    app.state.intraday_aggregator = aggregator
 
     await hub.start()
     await manager.start()
@@ -75,7 +85,6 @@ app.include_router(themes_router, prefix="/v1")
 app.include_router(screener_router)
 app.include_router(comparison_router)
 app.include_router(realtime_router)
-
 
 
 @app.middleware("http")

@@ -95,6 +95,7 @@ object AppModule {
 
     @Provides @Singleton
     fun chartApi(retrofit: Retrofit): ChartApi = retrofit.create(ChartApi::class.java)
+    @Provides @Singleton fun realtimeApi(retrofit: Retrofit): tw.market.ledger.network.RealtimeApi = retrofit.create(tw.market.ledger.network.RealtimeApi::class.java)
 
     @Provides @Singleton
     fun marketApi(retrofit: Retrofit): MarketApi = retrofit.create(MarketApi::class.java)
@@ -118,4 +119,3 @@ object AppModule {
     fun realtimeSubscriptionManager(client: tw.market.ledger.network.RealtimeQuoteClient): tw.market.ledger.network.RealtimeSubscriptionManager =
         tw.market.ledger.network.RealtimeSubscriptionManager(client)
 }
-

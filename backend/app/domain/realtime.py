@@ -25,6 +25,45 @@ class TradingSession(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class RealtimeEventKind(str, Enum):
+    SNAPSHOT = "SNAPSHOT"
+    UPDATE = "UPDATE"
+
+
+class IntradayInterval(str, Enum):
+    ONE_MINUTE = "1m"
+    FIVE_MINUTES = "5m"
+
+    @property
+    def minutes(self) -> int:
+        return 1 if self is IntradayInterval.ONE_MINUTE else 5
+
+
+class IntradayCandle(BaseModel):
+    security_id: str
+    market_id: str
+    code: str
+    interval: IntradayInterval
+    session: TradingSession
+    bucket_start: datetime
+    bucket_end: datetime
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: int = 0
+    turnover_amount: Decimal | None = None
+    trade_count: int | None = None
+    first_sequence: int | None = None
+    last_sequence: int | None = None
+    quote_count: int = 0
+    is_final: bool = False
+    data_status: DataStatus
+    provider: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class ProviderCapabilities(BaseModel):
     provider_name: str
     source_type: str  # e.g., "WEBSOCKET", "POLLING", "FAKE"
@@ -78,6 +117,7 @@ class RealtimeQuote(BaseModel):
     provider: str = "UNKNOWN"
     delay_seconds: int = 0
     source_timestamp: datetime | None = None
+    event_kind: RealtimeEventKind = RealtimeEventKind.UPDATE
 
     @property
     def composite_key(self) -> str:

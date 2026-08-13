@@ -7,6 +7,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 @JsonClass(generateAdapter = true)
 data class RealtimeQuoteDto(
@@ -47,7 +48,45 @@ data class BatchQuoteRequestDto(
     @Json(name = "targets") val targets: List<BatchQuoteTargetDto>
 )
 
+@JsonClass(generateAdapter = true)
+data class IntradayCandleDto(
+    @Json(name = "security_id") val securityId: String,
+    @Json(name = "market_id") val marketId: String,
+    val code: String,
+    val interval: String,
+    val session: String,
+    @Json(name = "bucket_start") val bucketStart: String,
+    @Json(name = "bucket_end") val bucketEnd: String,
+    val open: String,
+    val high: String,
+    val low: String,
+    val close: String,
+    val volume: Long,
+    @Json(name = "turnover_amount") val turnoverAmount: String?,
+    @Json(name = "quote_count") val quoteCount: Int,
+    @Json(name = "is_final") val isFinal: Boolean,
+    @Json(name = "data_status") val dataStatus: String,
+    val provider: String,
+    @Json(name = "updated_at") val updatedAt: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class IntradayCandleEnvelopeDto(
+    val interval: String,
+    val candles: List<IntradayCandleDto>,
+    @Json(name = "data_status") val dataStatus: String,
+    @Json(name = "as_of") val asOf: String,
+    val provider: String,
+)
+
 interface RealtimeApi {
+    @GET("v1/intraday/{market}/{code}/candles")
+    suspend fun getIntradayCandles(
+        @Path("market") market: String,
+        @Path("code") code: String,
+        @Query("interval") interval: String,
+        @Query("limit") limit: Int = 500,
+    ): Response<IntradayCandleEnvelopeDto>
     @GET("v1/quotes/{market}/{code}")
     suspend fun getLatestQuote(
         @Path("market") market: String,

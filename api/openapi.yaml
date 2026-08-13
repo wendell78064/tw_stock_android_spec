@@ -17,6 +17,26 @@ tags:
   - name: Alerts
   - name: Screeners
 paths:
+  /intraday/{market}/{code}/candles:
+    get:
+      operationId: getIntradayCandles
+      tags: [Market]
+      summary: Get short-retention intraday candles
+      parameters:
+        - { in: path, name: market, required: true, schema: { type: string } }
+        - { in: path, name: code, required: true, schema: { type: string } }
+        - { in: query, name: interval, schema: { $ref: "#/components/schemas/IntradayInterval" } }
+        - { in: query, name: date, schema: { type: string, format: date } }
+        - { in: query, name: from, schema: { type: string, format: date-time } }
+        - { in: query, name: to, schema: { type: string, format: date-time } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 1000, default: 500 } }
+      responses:
+        "200":
+          description: Chronological intraday candle history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntradayCandleEnvelope" }
+        "422": { description: Invalid interval or query }
   /health:
     get:
       security: []
@@ -1089,6 +1109,50 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    IntradayInterval:
+      type: string
+      enum: [1m, 5m]
+    IntradayCandle:
+      type: object
+      required: [security_id, market_id, code, interval, session, bucket_start, bucket_end, open, high, low, close, volume, quote_count, is_final, data_status, provider, created_at, updated_at]
+      properties:
+        security_id: { type: string }
+        market_id: { type: string }
+        code: { type: string }
+        interval: { $ref: "#/components/schemas/IntradayInterval" }
+        session: { type: string, enum: [REGULAR, AFTER_HOURS, UNKNOWN] }
+        bucket_start: { type: string, format: date-time }
+        bucket_end: { type: string, format: date-time }
+        open: { $ref: "#/components/schemas/DecimalString" }
+        high: { $ref: "#/components/schemas/DecimalString" }
+        low: { $ref: "#/components/schemas/DecimalString" }
+        close: { $ref: "#/components/schemas/DecimalString" }
+        volume: { type: integer, format: int64 }
+        turnover_amount: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        trade_count: { type: [integer, "null"] }
+        first_sequence: { type: [integer, "null"], format: int64 }
+        last_sequence: { type: [integer, "null"], format: int64 }
+        quote_count: { type: integer }
+        is_final: { type: boolean }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+        provider: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    IntradayCandleEnvelope:
+      type: object
+      required: [security, interval, session, candles, data_status, as_of, provider]
+      properties:
+        security:
+          type: object
+          additionalProperties: { type: string }
+        interval: { $ref: "#/components/schemas/IntradayInterval" }
+        session: { type: string }
+        candles:
+          type: array
+          items: { $ref: "#/components/schemas/IntradayCandle" }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+        as_of: { type: string, format: date-time }
+        provider: { type: string }
     HealthResponse:
       type: object
       required: [status]

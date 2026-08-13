@@ -223,6 +223,7 @@ fun SecurityChartRoute(
     code: String,
     market: MarketCode,
     viewModel: SecurityChartViewModel = hiltViewModel(),
+    intradayViewModel: IntradayChartViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val range by viewModel.range.collectAsStateWithLifecycle()
@@ -231,14 +232,78 @@ fun SecurityChartRoute(
     val selected by viewModel.selected.collectAsStateWithLifecycle()
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     val settingsState by viewModel.settingsUiState.collectAsStateWithLifecycle()
+    val intradayState by intradayViewModel.state.collectAsStateWithLifecycle()
     var settingsOpen by remember { mutableStateOf(false) }
     LaunchedEffect(code, market) { viewModel.load(code, market) }
+    LaunchedEffect(code, market, range) {
+        if (range == ChartRange.ONE_DAY) intradayViewModel.load(code, market)
+    }
+    if (range == ChartRange.ONE_DAY) {
+        Column {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                ChartRange.entries.forEach { item ->
+                    FilterChip(selected = range == item, onClick = { viewModel.selectRange(item) }, label = { Text(item.label()) })
+                }
+            }
+            IntradayChartScreen(intradayState, intradayViewModel::selectInterval, intradayViewModel::setFollowLatest)
+        }
+        return
+    }
     SecurityChartScreen(state, range, basis, indicators, selected,
         viewModel::selectRange, viewModel::selectBasis, viewModel::toggleIndicator,
         viewModel::selectCandle, onSettings = { settingsOpen = true })
     if (settingsOpen) IndicatorSettingsDialog(preferences, settingsState,
         onDismiss = { settingsOpen = false }, onSave = viewModel::savePreferences,
         onResetAll = viewModel::resetAllPreferences)
+}
+
+@Composable
+fun IntradayChartScreen(
+    state: IntradayUiState,
+    onInterval: (IntradayInterval) -> Unit,
+    onFollowLatest: (Boolean) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().padding(12.dp).testTag("intraday-1d-chart"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        when (state) {
+            IntradayUiState.Loading -> CircularProgressIndicator(Modifier.testTag("intraday-loading"))
+            is IntradayUiState.Error -> Text("盤中走勢載入失敗：${state.message}")
+            IntradayUiState.Unavailable -> Text("即時盤中行情尚未配置", modifier = Modifier.testTag("intraday-unavailable"))
+            is IntradayUiState.Content -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IntradayInterval.entries.forEach { interval ->
+                        FilterChip(
+                            selected = state.chart.interval == interval,
+                            onClick = { onInterval(interval) },
+                            label = { Text(interval.apiValue) },
+                            modifier = Modifier.testTag("intraday-${interval.apiValue}"),
+                        )
+                    }
+                }
+                val status = when (state.chart.connection) {
+                    RealtimeConnectionState.CONNECTED -> if (state.chart.partial) "Stale" else "LIVE"
+                    RealtimeConnectionState.RECONNECTING -> "Reconnecting"
+                    RealtimeConnectionState.UNAVAILABLE -> "Unavailable"
+                    else -> state.chart.connection.name
+                }
+                Text(status, modifier = Modifier.testTag("intraday-connection-state"))
+                if (state.chart.candles.isEmpty()) Text("目前沒有盤中成交") else {
+                    var selected by remember(state.chart.interval) { mutableStateOf<IntradayCandle?>(null) }
+                    val candles = state.chart.candles.map {
+                        Candle(it.bucketStart, it.open, it.high, it.low, it.close, it.volume, it.turnoverAmount)
+                    }
+                    CandlestickChart(candles, emptyList(), emptySet(), selected?.let {
+                        Candle(it.bucketStart, it.open, it.high, it.low, it.close, it.volume, it.turnoverAmount)
+                    }) { chosen -> selected = chosen?.let { c -> state.chart.candles.firstOrNull { it.bucketStart == c.time } } }
+                    selected?.let { Text("${it.bucketStart} O ${it.open} H ${it.high} L ${it.low} C ${it.close} V ${it.volume}", modifier = Modifier.testTag("intraday-ohlcv")) }
+                    Text("成交量 ${state.chart.candles.last().volume}", modifier = Modifier.testTag("intraday-volume"))
+                }
+                TextButton(onClick = { onFollowLatest(!state.chart.followLatest) }) {
+                    Text(if (state.chart.followLatest) "跟隨最新" else "查看歷史")
+                }
+                Text("最後更新 ${state.chart.asOf ?: "--"}")
+            }
+        }
+    }
 }
 
 @Composable

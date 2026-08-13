@@ -3,6 +3,7 @@ import logging
 
 from app.adapters.realtime_base import RealtimeMarketDataProvider
 from app.domain.realtime import ProviderCapabilities
+from app.services.intraday_candle_aggregator import IntradayCandleAggregator
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
 
@@ -15,10 +16,12 @@ class RealtimeProviderManager:
         provider: RealtimeMarketDataProvider,
         cache_service: RealtimeCacheService,
         hub: RealtimeQuoteHub,
+        aggregator: IntradayCandleAggregator | None = None,
     ):
         self.provider = provider
         self.cache_service = cache_service
         self.hub = hub
+        self.aggregator = aggregator
         self._ingestion_task: asyncio.Task | None = None
         self._running = False
         self.reconnect_count = 0
@@ -26,6 +29,13 @@ class RealtimeProviderManager:
     async def start(self):
         self._running = True
         capabilities = await self.provider.get_capabilities()
+        self.hub.provider_status = (
+            "LIVE"
+            if capabilities.is_live_eligible and capabilities.source_type != "FAKE_SIMULATOR"
+            else "SIMULATED"
+            if capabilities.source_type == "FAKE_SIMULATOR"
+            else "UNAVAILABLE"
+        )
         logger.info(
             f"Starting RealtimeProviderManager with provider '{capabilities.provider_name}' "
             f"(License: {capabilities.license_status})"
@@ -49,7 +59,9 @@ class RealtimeProviderManager:
                     if not self._running:
                         break
                     # Save to Redis and publish to hub
-                    await self.cache_service.save_and_publish_quote(quote)
+                    saved = await self.cache_service.save_and_publish_quote(quote)
+                    if saved and self.aggregator is not None:
+                        await self.aggregator.accept(quote)
             except asyncio.CancelledError:
                 break
             except Exception as e:

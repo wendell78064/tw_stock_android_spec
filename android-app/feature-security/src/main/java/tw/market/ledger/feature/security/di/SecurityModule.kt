@@ -19,6 +19,11 @@ import tw.market.ledger.feature.security.domain.SearchSecuritiesUseCase
 import tw.market.ledger.feature.security.domain.SecurityRepository
 import tw.market.ledger.network.SecurityApi
 import tw.market.ledger.network.ChartApi
+import tw.market.ledger.network.RealtimeApi
+import tw.market.ledger.network.RealtimeQuoteClient
+import tw.market.ledger.network.RealtimeSubscriptionManager
+import tw.market.ledger.feature.security.data.DefaultIntradayRepository
+import tw.market.ledger.feature.security.domain.IntradayRepository
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -37,4 +42,8 @@ object SecurityModule {
 
     @Provides @Singleton
     fun indicatorSettings(@ApplicationContext context: Context) = IndicatorSettings(context)
+
+    @Provides @Singleton fun intradayRepository(
+        api: RealtimeApi, client: RealtimeQuoteClient, subscriptions: RealtimeSubscriptionManager,
+    ): IntradayRepository = DefaultIntradayRepository(api, client, subscriptions)
 }

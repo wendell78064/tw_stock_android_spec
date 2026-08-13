@@ -85,7 +85,8 @@ class FakeRealtimeProvider(RealtimeMarketDataProvider):
             change_pct = (change / prev_close * Decimal("100")).quantize(Decimal("0.01"))
 
             now = datetime.now(UTC)
-            status = DataStatus.STALE if self.force_stale else DataStatus.LIVE
+            # Fake data must never be represented as production LIVE.
+            status = DataStatus.STALE if self.force_stale else DataStatus.DELAYED
 
             quote = RealtimeQuote(
                 security_id=f"sec_{code}",

@@ -22,6 +22,8 @@ import tw.market.ledger.model.RealtimeConnectionState
 import tw.market.ledger.model.RealtimeDataStatus
 import tw.market.ledger.model.RealtimeQuote
 import tw.market.ledger.model.RealtimeTradingSession
+import tw.market.ledger.model.IntradayCandle
+import tw.market.ledger.model.IntradayInterval
 import kotlin.math.min
 import kotlin.math.pow
 
@@ -37,6 +39,8 @@ class RealtimeQuoteClient(
 
     private val _quotesFlow = MutableSharedFlow<RealtimeQuote>(extraBufferCapacity = 64)
     val quotesFlow: SharedFlow<RealtimeQuote> = _quotesFlow.asSharedFlow()
+    private val _candlesFlow = MutableSharedFlow<IntradayCandle>(extraBufferCapacity = 64)
+    val candlesFlow: SharedFlow<IntradayCandle> = _candlesFlow.asSharedFlow()
 
     private var webSocket: WebSocket? = null
     private val subscribedKeys = mutableSetOf<Pair<String, String>>() // (market, code)
@@ -79,7 +83,8 @@ class RealtimeQuoteClient(
         val payload = mapOf(
             "type" to type,
             "version" to 1,
-            "securities" to targets
+            "securities" to targets,
+            "channels" to listOf("quote", "candle_1m", "candle_5m")
         )
         val json = moshi.adapter(Map::class.java).toJson(payload)
         webSocket?.send(json)
@@ -124,6 +129,12 @@ class RealtimeQuoteClient(
                     val q = parseQuoteMap(data)
                     if (q != null) {
                         _quotesFlow.tryEmit(q)
+                    }
+                } else if (type == "candle") {
+                    (msg["data"] as? Map<*, *>)?.let(::parseCandleMap)?.let(_candlesFlow::tryEmit)
+                } else if (type == "candle_snapshot") {
+                    (msg["data"] as? List<*>)?.forEach { row ->
+                        (row as? Map<*, *>)?.let(::parseCandleMap)?.let(_candlesFlow::tryEmit)
                     }
                 }
             } catch (e: Exception) {
@@ -176,4 +187,18 @@ class RealtimeQuoteClient(
             null
         }
     }
+
+    private fun parseCandleMap(m: Map<*, *>): IntradayCandle? = try {
+        IntradayCandle(
+            securityId = m["security_id"].toString(), marketId = m["market_id"].toString(),
+            code = m["code"].toString(), interval = IntradayInterval.entries.first { it.apiValue == m["interval"] },
+            session = RealtimeTradingSession.valueOf(m["session"].toString()), bucketStart = m["bucket_start"].toString(),
+            bucketEnd = m["bucket_end"].toString(), open = m["open"].toString(), high = m["high"].toString(),
+            low = m["low"].toString(), close = m["close"].toString(), volume = (m["volume"] as Number).toLong(),
+            turnoverAmount = m["turnover_amount"]?.toString(), quoteCount = (m["quote_count"] as Number).toInt(),
+            isFinal = m["is_final"] as? Boolean ?: false,
+            dataStatus = RealtimeDataStatus.valueOf(m["data_status"]?.toString() ?: "UNAVAILABLE"),
+            provider = m["provider"]?.toString() ?: "UNKNOWN", updatedAt = m["updated_at"].toString(),
+        )
+    } catch (_: Exception) { null }
 }

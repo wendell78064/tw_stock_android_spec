@@ -5,8 +5,9 @@ from collections import defaultdict
 from fastapi import WebSocket
 from redis.asyncio import Redis
 
-from app.domain.realtime import RealtimeQuote
+from app.domain.realtime import IntradayCandle, IntradayInterval, RealtimeQuote
 from app.services.realtime_cache import (
+    CHANNEL_INTRADAY_CANDLES,
     CHANNEL_REALTIME_QUOTES,
     RealtimeCacheService,
 )
@@ -19,6 +20,7 @@ class ConnectionSession:
         self.websocket = websocket
         self.max_subscriptions = max_subscriptions
         self.subscriptions: set[str] = set()  # "MARKET:CODE"
+        self.channels: set[str] = {"quote"}
         self._pending_coalesced: dict[str, RealtimeQuote] = {}
         self.is_alive = True
 
@@ -75,8 +77,12 @@ class RealtimeQuoteHub:
         logger.info(f"Unregistered WS connection. Remaining connections: {len(self.sessions)}")
 
     async def handle_subscribe(
-        self, session: ConnectionSession, targets: list[dict[str, str]]
+        self,
+        session: ConnectionSession,
+        targets: list[dict[str, str]],
+        channels: list[str] | None = None,
     ):
+        session.channels = set(channels or ["quote"]) & {"quote", "candle_1m", "candle_5m"}
         added_keys: list[str] = []
         for t in targets:
             market = t.get("market", "").upper()
@@ -105,7 +111,7 @@ class RealtimeQuoteHub:
             ]
             cached_quotes = await self.cache_service.get_quotes_batch(parsed_targets)
             for q in cached_quotes:
-                if q:
+                if q and "quote" in session.channels:
                     await session.websocket.send_json(
                         {
                             "type": "snapshot",
@@ -113,10 +119,26 @@ class RealtimeQuoteHub:
                             "data": q.model_dump(mode="json"),
                         }
                     )
+            for key in added_keys:
+                market, code = key.split(":", 1)
+                for interval, channel in (
+                    (IntradayInterval.ONE_MINUTE, "candle_1m"),
+                    (IntradayInterval.FIVE_MINUTES, "candle_5m"),
+                ):
+                    if channel in session.channels:
+                        candles = await self.cache_service.get_candles(
+                            interval, market, code, limit=500
+                        )
+                        await session.websocket.send_json(
+                            {
+                                "type": "candle_snapshot",
+                                "version": 1,
+                                "interval": interval.value,
+                                "data": [c.model_dump(mode="json") for c in candles],
+                            }
+                        )
 
-    async def handle_unsubscribe(
-        self, session: ConnectionSession, targets: list[dict[str, str]]
-    ):
+    async def handle_unsubscribe(self, session: ConnectionSession, targets: list[dict[str, str]]):
         for t in targets:
             market = t.get("market", "").upper()
             code = t.get("code", "").upper()
@@ -129,7 +151,7 @@ class RealtimeQuoteHub:
 
     async def _listen_redis_pubsub(self):
         pubsub = self.redis.pubsub()
-        await pubsub.subscribe(CHANNEL_REALTIME_QUOTES)
+        await pubsub.subscribe(CHANNEL_REALTIME_QUOTES, CHANNEL_INTRADAY_CANDLES)
         try:
             async for message in pubsub.listen():
                 if message["type"] == "message":
@@ -138,8 +160,14 @@ class RealtimeQuoteHub:
                         raw = message["data"]
                         if isinstance(raw, bytes):
                             raw = raw.decode("utf-8")
-                        quote = RealtimeQuote.model_validate_json(raw)
-                        self._route_quote(quote)
+                        channel = message.get("channel")
+                        if channel in (
+                            CHANNEL_INTRADAY_CANDLES,
+                            CHANNEL_INTRADAY_CANDLES.encode(),
+                        ):
+                            self._route_candle(IntradayCandle.model_validate_json(raw))
+                        else:
+                            self._route_quote(RealtimeQuote.model_validate_json(raw))
                     except Exception as e:
                         logger.error(f"Error parsing pubsub quote: {e}")
         except asyncio.CancelledError:
@@ -149,10 +177,26 @@ class RealtimeQuoteHub:
         key = quote.composite_key
         target_sessions = self.key_to_sessions.get(key, set())
         for session in target_sessions:
-            if session.is_alive:
+            if session.is_alive and "quote" in session.channels:
                 if key in session._pending_coalesced:
                     self.quotes_coalesced += 1
                 session._pending_coalesced[key] = quote
+
+    def _route_candle(self, candle: IntradayCandle):
+        key = f"{candle.market_id.upper()}:{candle.code.upper()}"
+        channel = "candle_1m" if candle.interval is IntradayInterval.ONE_MINUTE else "candle_5m"
+        for session in self.key_to_sessions.get(key, set()):
+            if session.is_alive and channel in session.channels:
+                asyncio.create_task(
+                    session.websocket.send_json(
+                        {
+                            "type": "candle",
+                            "version": 1,
+                            "interval": candle.interval.value,
+                            "data": candle.model_dump(mode="json"),
+                        }
+                    )
+                )
 
     async def _coalesced_dispatch_loop(self):
         """Flushes coalesced quotes to clients every 100ms to avoid overloading slow clients."""
