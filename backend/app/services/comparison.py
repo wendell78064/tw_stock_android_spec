@@ -32,31 +32,47 @@ from app.repositories.models import (
 )
 
 
+def _decimal_or_none(val) -> Decimal | None:
+    return Decimal(str(val)) if val is not None else None
+
+
 class ComparisonService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
     async def get_latest_trade_date(self) -> date | None:
-        stmt = select(DailyPriceModel.trade_date).order_by(DailyPriceModel.trade_date.desc()).limit(1)
+        stmt = (
+            select(DailyPriceModel.trade_date)
+            .order_by(DailyPriceModel.trade_date.desc())
+            .limit(1)
+        )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
     async def compare_securities(
         self,
-        targets: list[dict[str, str]],  # [{"code": "2330", "market": "TWSE"}] or security_ids
+        targets: list[dict[str, str]],
         window: ComparisonWindow = ComparisonWindow.TWENTY_DAYS,
         target_trade_date: date | None = None,
         config: ComparisonSignalConfig = ComparisonSignalConfig(),
     ) -> ComparisonResult:
         if not targets or len(targets) < 2 or len(targets) > 5:
-            raise AppError("INVALID_SELECTION_COUNT", "Comparison requires between 2 and 5 securities", 400)
+            raise AppError(
+                "INVALID_SELECTION_COUNT",
+                "Comparison requires between 2 and 5 securities",
+                400,
+            )
 
         # Check duplicates
         seen = set()
         for t in targets:
             key = f"{t.get('market', '')}:{t.get('code', '')}"
             if key in seen:
-                raise AppError("DUPLICATE_SECURITY_SELECTION", "Duplicate security in selection", 400)
+                raise AppError(
+                    "DUPLICATE_SECURITY_SELECTION",
+                    "Duplicate security in selection",
+                    400,
+                )
             seen.add(key)
 
         if target_trade_date is None:
@@ -79,12 +95,15 @@ class ComparisonService:
             res = await self.session.execute(stmt)
             sec = res.scalar_one_or_none()
             if not sec:
-                raise AppError("SECURITY_NOT_FOUND", f"Security '{code}' in market '{market}' not found", 404)
+                raise AppError(
+                    "SECURITY_NOT_FOUND",
+                    f"Security '{code}' in market '{market}' not found",
+                    404,
+                )
             sec_list.append(sec)
 
         sec_ids = [s.id for s in sec_list]
 
-        # Calculate window start date
         days_map = {
             ComparisonWindow.ONE_DAY: 1,
             ComparisonWindow.FIVE_DAYS: 7,
@@ -96,7 +115,7 @@ class ComparisonService:
         }
         start_date = trade_date - timedelta(days=days_map.get(window, 30))
 
-        # Bulk fetch price history for all selected securities
+        # Bulk fetch price history
         dp_stmt = (
             select(DailyPriceModel)
             .where(
@@ -167,7 +186,9 @@ class ComparisonService:
         # Common dates intersection & Normalized Performance (base = 100)
         date_sets = []
         for sec in sec_list:
-            d_set = {dp.trade_date for dp in prices_by_sec[sec.id] if dp.close is not None}
+            d_set = {
+                dp.trade_date for dp in prices_by_sec[sec.id] if dp.close is not None
+            }
             date_sets.append(d_set)
 
         common_dates = sorted(list(set.intersection(*date_sets))) if date_sets else []
@@ -191,8 +212,9 @@ class ComparisonService:
                         if dp.trade_date == d and dp.close is not None:
                             c_val = Decimal(str(dp.close))
                             break
-                    if c_val is not None and sec.id in first_closes and first_closes[sec.id] != Decimal("0"):
-                        norm = ((c_val / first_closes[sec.id]) * Decimal("100")).quantize(
+                    base = first_closes.get(sec.id)
+                    if c_val is not None and base is not None and base != Decimal("0"):
+                        norm = ((c_val / base) * Decimal("100")).quantize(
                             Decimal("0.01"), rounding=ROUND_HALF_UP
                         )
                         vals[sec.code] = norm
@@ -203,39 +225,66 @@ class ComparisonService:
         # Build Security Metric Summaries
         summaries: list[SecurityMetricSummary] = []
         for sec in sec_list:
-            plist = sorted(prices_by_sec[sec.id], key=lambda x: x.trade_date, reverse=True)
+            plist = sorted(
+                prices_by_sec[sec.id], key=lambda x: x.trade_date, reverse=True
+            )
             latest_dp = plist[0] if plist else None
-            latest_close = Decimal(str(latest_dp.close)) if latest_dp and latest_dp.close is not None else None
+            latest_close = (
+                Decimal(str(latest_dp.close))
+                if latest_dp and latest_dp.close is not None
+                else None
+            )
 
-            # Returns
-            r1 = Decimal(str(latest_dp.change_percent)) if latest_dp and latest_dp.change_percent is not None else None
-            
-            def calc_return(n_days: int) -> Decimal | None:
-                if len(plist) > n_days and latest_close is not None:
-                    prev_c = Decimal(str(plist[n_days].close)) if plist[n_days].close is not None else None
-                    if prev_c and prev_c != Decimal("0"):
-                        return (((latest_close - prev_c) / prev_c) * Decimal("100")).quantize(
-                            Decimal("0.01"), rounding=ROUND_HALF_UP
-                        )
+            # Returns — inline helper avoids B023 closure-loop-variable issue
+            r1 = (
+                Decimal(str(latest_dp.change_percent))
+                if latest_dp and latest_dp.change_percent is not None
+                else None
+            )
+
+            def _return_for(prices, lc, n: int) -> Decimal | None:
+                if len(prices) > n and lc is not None:
+                    prev_close = prices[n].close
+                    if prev_close is not None:
+                        prev_c = Decimal(str(prev_close))
+                        if prev_c != Decimal("0"):
+                            return (
+                                ((lc - prev_c) / prev_c) * Decimal("100")
+                            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 return None
 
-            r5 = calc_return(5)
-            r10 = calc_return(10)
-            r20 = calc_return(20)
-            r60 = calc_return(60)
+            r5 = _return_for(plist, latest_close, 5)
+            r10 = _return_for(plist, latest_close, 10)
+            r20 = _return_for(plist, latest_close, 20)
+            r60 = _return_for(plist, latest_close, 60)
 
             # Selected window return
             sel_return = None
-            if sec.id in first_closes and latest_close is not None and first_closes[sec.id] != Decimal("0"):
-                sel_return = (((latest_close - first_closes[sec.id]) / first_closes[sec.id]) * Decimal("100")).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                )
+            base = first_closes.get(sec.id)
+            if base is not None and latest_close is not None and base != Decimal("0"):
+                sel_return = (
+                    ((latest_close - base) / base) * Decimal("100")
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
             ti = technicals.get(sec.id)
             inst_list = institutions.get(sec.id, [])
-            f_1d = sum(Decimal(str(i.net_buy_shares)) for i in inst_list if i.institution_type in ("FOREIGN", "FOREIGN_DEALER"))
-            t_1d = sum(Decimal(str(i.net_buy_shares)) for i in inst_list if i.institution_type == "INVESTMENT_TRUST")
-            d_1d = sum(Decimal(str(i.net_buy_shares)) for i in inst_list if i.institution_type in ("DEALER_SELF", "DEALER_HEDGE"))
+            foreign_types = ("FOREIGN", "FOREIGN_DEALER")
+            dealer_types = ("DEALER_SELF", "DEALER_HEDGE")
+            f_1d = sum(
+                Decimal(str(i.net_buy_shares))
+                for i in inst_list
+                if i.institution_type in foreign_types
+            )
+            t_1d = sum(
+                Decimal(str(i.net_buy_shares))
+                for i in inst_list
+                if i.institution_type == "INVESTMENT_TRUST"
+            )
+            d_1d = sum(
+                Decimal(str(i.net_buy_shares))
+                for i in inst_list
+                if i.institution_type in dealer_types
+            )
 
             mar = margins.get(sec.id)
 
@@ -255,16 +304,16 @@ class ComparisonService:
                     return_20d=r20,
                     return_60d=r60,
                     return_selected_window=sel_return,
-                    ma5=Decimal(str(ti.ma5)) if ti and ti.ma5 is not None else None,
-                    ma20=Decimal(str(ti.ma20)) if ti and ti.ma20 is not None else None,
-                    ma60=Decimal(str(ti.ma60)) if ti and ti.ma60 is not None else None,
-                    close_vs_ma20=Decimal(str(ti.close_vs_ma20)) if ti and ti.close_vs_ma20 is not None else None,
-                    close_vs_ma60=Decimal(str(ti.close_vs_ma60)) if ti and ti.close_vs_ma60 is not None else None,
-                    rsi14=Decimal(str(ti.rsi14)) if ti and ti.rsi14 is not None else None,
+                    ma5=_decimal_or_none(ti.ma5 if ti else None),
+                    ma20=_decimal_or_none(ti.ma20 if ti else None),
+                    ma60=_decimal_or_none(ti.ma60 if ti else None),
+                    close_vs_ma20=_decimal_or_none(ti.close_vs_ma20 if ti else None),
+                    close_vs_ma60=_decimal_or_none(ti.close_vs_ma60 if ti else None),
+                    rsi14=_decimal_or_none(ti.rsi14 if ti else None),
                     macd_state=ti.macd_state if ti else None,
                     kd_state=ti.kd_state if ti else None,
                     foreign_1d_net=f_1d if inst_list else None,
-                    foreign_5d_net=f_1d * Decimal("5") if inst_list else None,  # Bulk proxy sum
+                    foreign_5d_net=f_1d * Decimal("5") if inst_list else None,
                     foreign_10d_net=None,
                     foreign_20d_net=None,
                     trust_1d_net=t_1d if inst_list else None,
@@ -274,19 +323,15 @@ class ComparisonService:
                     dealer_1d_net=d_1d if inst_list else None,
                     dealer_5d_net=d_1d * Decimal("5") if inst_list else None,
                     margin_balance_change=(
-                        Decimal(str(mar.margin_balance_change))
-                        if mar and mar.margin_balance_change is not None
+                        _decimal_or_none(mar.margin_balance_change)
+                        if mar
                         else None
                     ),
                     short_balance_change=(
-                        Decimal(str(mar.short_balance_change))
-                        if mar and mar.short_balance_change is not None
-                        else None
+                        _decimal_or_none(mar.short_balance_change) if mar else None
                     ),
                     lending_balance_change=(
-                        Decimal(str(mar.lending_balance_change))
-                        if mar and mar.lending_balance_change is not None
-                        else None
+                        _decimal_or_none(mar.lending_balance_change) if mar else None
                     ),
                     industry_name=ind_n,
                     themes=thm_list,
@@ -318,7 +363,10 @@ class ComparisonService:
                 s2 = summaries[j]
 
                 # Return divergence
-                if s1.return_selected_window is not None and s2.return_selected_window is not None:
+                if (
+                    s1.return_selected_window is not None
+                    and s2.return_selected_window is not None
+                ):
                     diff = s1.return_selected_window - s2.return_selected_window
                     if diff >= config.return_diff_pct_points_threshold:
                         signals.append(
@@ -328,8 +376,10 @@ class ComparisonService:
                                 comparator_code=s2.code,
                                 headline=f"{s1.name} 近期報酬表現優於 {s2.name}",
                                 details=(
-                                    f"{s1.code} 報酬率為 {s1.return_selected_window}%，"
-                                    f"較 {s2.code} ({s2.return_selected_window}%) 高出 {diff} 個百分點"
+                                    f"{s1.code} 報酬率為"
+                                    f" {s1.return_selected_window}%，較 {s2.code}"
+                                    f" ({s2.return_selected_window}%)"
+                                    f" 高出 {diff} 個百分點"
                                 ),
                                 metrics={"diff": str(diff)},
                             )
@@ -342,8 +392,10 @@ class ComparisonService:
                                 comparator_code=s2.code,
                                 headline=f"{s1.name} 近期報酬表現落後 {s2.name}",
                                 details=(
-                                    f"{s1.code} 報酬率為 {s1.return_selected_window}%，"
-                                    f"較 {s2.code} ({s2.return_selected_window}%) 落後 {abs(diff)} 個百分點"
+                                    f"{s1.code} 報酬率為"
+                                    f" {s1.return_selected_window}%，較 {s2.code}"
+                                    f" ({s2.return_selected_window}%)"
+                                    f" 落後 {abs(diff)} 個百分點"
                                 ),
                                 metrics={"diff": str(diff)},
                             )
@@ -351,31 +403,44 @@ class ComparisonService:
 
                 # Institutional divergence
                 if s1.foreign_1d_net is not None and s2.foreign_1d_net is not None:
-                    if s1.foreign_1d_net > Decimal("0") and s2.foreign_1d_net < Decimal("0"):
+                    if (
+                        s1.foreign_1d_net > Decimal("0")
+                        and s2.foreign_1d_net < Decimal("0")
+                    ):
                         signals.append(
                             ObjectiveSignal(
                                 signal_type=SignalType.INSTITUTIONAL_DIVERGENCE,
                                 subject_code=s1.code,
                                 comparator_code=s2.code,
-                                headline=f"{s1.name} 外資買超與 {s2.name} 賣超方向背離",
+                                headline=(
+                                    f"{s1.name} 外資買超與 {s2.name} 賣超方向背離"
+                                ),
                                 details=(
-                                    f"{s1.code} 外資當日買超 {s1.foreign_1d_net} 股，"
-                                    f"而 {s2.code} 為賣超 {abs(s2.foreign_1d_net)} 股"
+                                    f"{s1.code} 外資當日買超"
+                                    f" {s1.foreign_1d_net} 股，而 {s2.code}"
+                                    f" 為賣超 {abs(s2.foreign_1d_net)} 股"
                                 ),
                             )
                         )
 
                 # Technical divergence (MA20)
                 if s1.close_vs_ma20 is not None and s2.close_vs_ma20 is not None:
-                    if s1.close_vs_ma20 > Decimal("0") and s2.close_vs_ma20 < Decimal("0"):
+                    if (
+                        s1.close_vs_ma20 > Decimal("0")
+                        and s2.close_vs_ma20 < Decimal("0")
+                    ):
                         signals.append(
                             ObjectiveSignal(
                                 signal_type=SignalType.TECHNICAL_DIVERGENCE,
                                 subject_code=s1.code,
                                 comparator_code=s2.code,
-                                headline=f"{s1.name} 站上 MA20 且 {s2.name} 位於 MA20 下方",
+                                headline=(
+                                    f"{s1.name} 站上 MA20 且 {s2.name}"
+                                    f" 位於 MA20 下方"
+                                ),
                                 details=(
-                                    f"{s1.code} 收盤價高於 MA20 ({s1.close_vs_ma20}%)，"
+                                    f"{s1.code} 收盤價高於 MA20"
+                                    f" ({s1.close_vs_ma20}%)，"
                                     f"{s2.code} 低於 MA20 ({s2.close_vs_ma20}%)"
                                 ),
                             )
@@ -383,9 +448,13 @@ class ComparisonService:
 
         eff_start = common_dates[0] if common_dates else start_date
         eff_end = common_dates[-1] if common_dates else trade_date
-        coverage = (Decimal(len(common_dates)) / Decimal(days_map.get(window, 30))).quantize(
-            Decimal("0.01"), rounding=ROUND_HALF_UP
-        ) if common_dates else Decimal("0.00")
+        coverage = (
+            (Decimal(len(common_dates)) / Decimal(days_map.get(window, 30))).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            if common_dates
+            else Decimal("0.00")
+        )
 
         return ComparisonResult(
             window=window,
@@ -396,6 +465,8 @@ class ComparisonService:
             normalized_series=normalized_series,
             objective_signals=signals,
             coverage=coverage,
-            data_status=DataStatus.FINAL if coverage >= Decimal("0.80") else DataStatus.PARTIAL,
+            data_status=(
+                DataStatus.FINAL if coverage >= Decimal("0.80") else DataStatus.PARTIAL
+            ),
             as_of=datetime.now(UTC),
         )
