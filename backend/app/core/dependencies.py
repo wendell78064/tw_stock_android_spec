@@ -22,12 +22,6 @@ from app.services.readiness import ReadinessChecker
 from app.services.screener_query import ScreenerQueryService
 
 
-async def comparison_service(
-    session: Annotated[AsyncSession, Depends(database_session)],
-) -> ComparisonService:
-    return ComparisonService(session)
-
-
 def readiness_checker(request: Request) -> ReadinessChecker:
     return request.app.state.readiness_checker
 
@@ -39,6 +33,12 @@ def redis_client(request: Request) -> Redis:
 async def database_session(request: Request) -> AsyncIterator[AsyncSession]:
     async with request.app.state.session_factory() as session:
         yield session
+
+
+async def comparison_service(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> ComparisonService:
+    return ComparisonService(session)
 
 
 async def security_repository(

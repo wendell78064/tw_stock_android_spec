@@ -54,8 +54,10 @@ class ComparisonService:
         targets: list[dict[str, str]],
         window: ComparisonWindow = ComparisonWindow.TWENTY_DAYS,
         target_trade_date: date | None = None,
-        config: ComparisonSignalConfig = ComparisonSignalConfig(),
+        config: ComparisonSignalConfig | None = None,
     ) -> ComparisonResult:
+        if config is None:
+            config = ComparisonSignalConfig()
         if not targets or len(targets) < 2 or len(targets) > 5:
             raise AppError(
                 "INVALID_SELECTION_COUNT",
@@ -181,7 +183,8 @@ class ComparisonService:
             TaxonomyStrengthSnapshotModel.window_days == 20,
         )
         strength_res = await self.session.execute(strength_stmt)
-        strengths = {s.taxonomy_id: s for s in strength_res.scalars().all()}
+        # strengths fetched for future industry strength rank calculation
+        _ = {s.taxonomy_id: s for s in strength_res.scalars().all()}
 
         # Common dates intersection & Normalized Performance (base = 100)
         date_sets = []
