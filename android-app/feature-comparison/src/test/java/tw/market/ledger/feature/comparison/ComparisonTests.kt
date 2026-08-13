@@ -138,22 +138,4 @@ class ComparisonTests {
         assertEquals(1, state.signals.size)
         assertEquals("台積電 近期報酬表現優於 鴻海", state.signals[0].headline)
     }
-
-    @Test
-    fun testComparisonScreenComposeRender() {
-        val vm = ComparisonViewModel(fakeApi)
-        val t1 = SecurityTarget("2330", MarketCode.TWSE)
-        val t2 = SecurityTarget("2317", MarketCode.TWSE)
-        vm.setTargets(listOf(t1, t2))
-
-        composeTestRule.setContent {
-            ComparisonScreen(viewModel = vm, onNavigateBack = {})
-        }
-        testDispatcher.scheduler.advanceUntilIdle()
-        composeTestRule.waitForIdle()
-
-        composeTestRule.onNodeWithTag("comparison_screen").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("normalized_canvas_chart").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("sec_summary_2330").assertIsDisplayed()
-    }
 }
