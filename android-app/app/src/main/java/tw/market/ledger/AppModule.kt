@@ -109,5 +109,13 @@ object AppModule {
     @Provides @Singleton fun industryApi(retrofit: Retrofit): IndustryApi = retrofit.create(IndustryApi::class.java)
     @Provides @Singleton fun screenerApi(retrofit: Retrofit): ScreenerApi = retrofit.create(ScreenerApi::class.java)
     @Provides @Singleton fun comparisonApi(retrofit: Retrofit): tw.market.ledger.network.ComparisonApi = retrofit.create(tw.market.ledger.network.ComparisonApi::class.java)
+
+    @Provides @Singleton
+    fun realtimeQuoteClient(): tw.market.ledger.network.RealtimeQuoteClient =
+        tw.market.ledger.network.RealtimeQuoteClient(okhttp3.OkHttpClient())
+
+    @Provides @Singleton
+    fun realtimeSubscriptionManager(client: tw.market.ledger.network.RealtimeQuoteClient): tw.market.ledger.network.RealtimeSubscriptionManager =
+        tw.market.ledger.network.RealtimeSubscriptionManager(client)
 }
 

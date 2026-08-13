@@ -26,7 +26,7 @@ sealed interface SecurityDetailUiState {
 @HiltViewModel
 class SecurityDetailViewModel @Inject constructor(
     private val detail: GetSecurityUseCase,
-    private val subscriptionManager: RealtimeSubscriptionManager? = null
+    private val subscriptionManager: RealtimeSubscriptionManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<SecurityDetailUiState>(SecurityDetailUiState.Loading)
     val uiState: StateFlow<SecurityDetailUiState> = _uiState.asStateFlow()
@@ -48,20 +48,16 @@ class SecurityDetailViewModel @Inject constructor(
             }
 
             // Realtime quote subscription
-            subscriptionManager?.subscribe(market.name, code)
+            subscriptionManager.subscribe(market.name, code)
         }
 
         viewModelScope.launch {
-            subscriptionManager?.latestQuotes?.collect { map ->
+            subscriptionManager.latestQuotes.collect { map ->
                 val q = map["${market.name.uppercase()}:${code.uppercase()}"]
                 if (q != null) {
                     _realtimeQuote.value = q
                 }
             }
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
     }
 }
