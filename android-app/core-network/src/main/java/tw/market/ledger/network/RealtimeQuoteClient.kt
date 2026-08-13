@@ -147,7 +147,7 @@ class RealtimeQuoteClient(
                     (msg["data"] as? List<*>)?.forEach { row ->
                         (row as? Map<*, *>)?.let(::parseCandleMap)?.let(_candlesFlow::tryEmit)
                     }
-                } else if (type in setOf("market_snapshot", "market_update", "taxonomy_ranking_snapshot", "taxonomy_ranking_update", "taxonomy_detail_update")) {
+                } else if (type in setOf("market_snapshot", "market_update", "taxonomy_ranking_snapshot", "taxonomy_ranking_update", "taxonomy_detail_update", "alert_event", "alert_status")) {
                     _aggregateUpdates.tryEmit(type)
                 }
             } catch (e: Exception) {

@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.api.alerts import router
 from app.core.dependencies import alert_repository
+from app.core.errors import AppError, app_error_handler
 from app.domain.alert import AlertRule, AlertRuleType, AlertScopeType, MarketPoint, validate_rule
 from app.domain.market_data import DataStatus
 from app.services.alert_evaluators import evaluate
@@ -283,6 +284,7 @@ class ApiRepository:
 def test_rule_crud_toggle_and_notification_routes():
     repository = ApiRepository()
     app = FastAPI()
+    app.add_exception_handler(AppError, app_error_handler)
     app.include_router(router, prefix="/v1")
     app.dependency_overrides[alert_repository] = lambda: repository
     client = TestClient(app)
@@ -302,6 +304,15 @@ def test_rule_crud_toggle_and_notification_routes():
     assert client.post("/v1/notifications/read-all").status_code == 200
     assert repository.read_all
     assert client.delete(f"/v1/alerts/rules/{rule_id}").status_code == 204
+    invalid = {
+        **payload,
+        "rule_type": "MA_CONSECUTIVE_ABOVE",
+        "threshold_price": None,
+        "ma_period": 20,
+        "consecutive_days": 3,
+        "evaluation_mode": "REALTIME",
+    }
+    assert client.post("/v1/alerts/rules", json=invalid).status_code == 422
 
 
 class PerformanceEngine(MemoryEngine):

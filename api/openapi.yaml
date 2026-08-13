@@ -992,6 +992,16 @@ paths:
       responses: { "200": { description: Evaluation audit result } }
   /alerts/events:
     get: { operationId: listAlertEvents, tags: [Alerts], responses: { "200": { description: Event history } } }
+  /alerts/realtime/status:
+    get:
+      operationId: getRealtimeAlertStatus
+      tags: [Alerts]
+      responses:
+        "200":
+          description: Realtime alert provider and subscription status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RealtimeAlertStatusEnvelope" }
   /notifications:
     get:
       operationId: listNotifications
@@ -1877,6 +1887,23 @@ components:
         cooldown_minutes: { type: integer, minimum: 0, default: 1440 }
         daily_limit: { type: integer, minimum: 1, default: 5 }
         enabled: { type: boolean, default: true }
+        evaluation_mode: { type: string, enum: [EOD, REALTIME], default: EOD }
+        session_scope: { type: string, enum: [REGULAR], default: REGULAR }
+    RealtimeAlertStatus:
+      type: object
+      required: [provider_status, realtime_available, authorized, active_rule_count, subscribed_security_count]
+      properties:
+        provider_status: { type: string }
+        realtime_available: { type: boolean }
+        authorized: { type: boolean }
+        active_rule_count: { type: integer, minimum: 0 }
+        subscribed_security_count: { type: integer, minimum: 0 }
+        last_quote_at: { type: [string, "null"], format: date-time }
+    RealtimeAlertStatusEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/RealtimeAlertStatus" }
     ScreenerRequest:
       type: object
       required: [expression]

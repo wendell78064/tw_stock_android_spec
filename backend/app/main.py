@@ -29,8 +29,10 @@ from app.repositories.realtime_membership import (
     RealtimeMembershipSnapshot,
     load_realtime_memberships,
 )
+from app.repositories.sql_alert import SqlAlertRepository
 from app.services.intraday_candle_aggregator import IntradayCandleAggregator
 from app.services.readiness import ReadinessChecker
+from app.services.realtime_alerts import RealtimeAlertEvaluationService
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
 from app.services.realtime_provider_manager import RealtimeProviderManager
@@ -60,18 +62,29 @@ async def lifespan(app: FastAPI):
         logger.warning("realtime_membership_unavailable", error=str(error))
         memberships = RealtimeMembershipSnapshot()
     taxonomy_aggregator = RealtimeTaxonomyAggregator(memberships, cache_service)
+    alert_session = app.state.session_factory()
+    realtime_alert_service = RealtimeAlertEvaluationService(
+        redis, SqlAlertRepository(alert_session)
+    )
+    try:
+        await realtime_alert_service.refresh()
+    except Exception as error:
+        logger.warning("realtime_alerts_unavailable", error=str(error))
     provider = (
         FakeRealtimeProvider()
         if settings.app_env.lower() in {"development", "test", "ci"}
         else UnconfiguredRealtimeProvider()
     )
-    manager = RealtimeProviderManager(provider, cache_service, hub, aggregator, taxonomy_aggregator)
+    manager = RealtimeProviderManager(
+        provider, cache_service, hub, aggregator, taxonomy_aggregator, realtime_alert_service
+    )
 
     app.state.realtime_cache_service = cache_service
     app.state.realtime_hub = hub
     app.state.realtime_provider_manager = manager
     app.state.intraday_aggregator = aggregator
     app.state.realtime_taxonomy_aggregator = taxonomy_aggregator
+    app.state.realtime_alert_service = realtime_alert_service
 
     await hub.start()
     await manager.start()
@@ -80,6 +93,7 @@ async def lifespan(app: FastAPI):
 
     await manager.stop()
     await hub.stop()
+    await alert_session.close()
     await redis.aclose()
     await engine.dispose()
 

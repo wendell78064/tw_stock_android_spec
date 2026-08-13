@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 
 from app.domain.realtime import IntradayCandle, IntradayInterval, RealtimeQuote
 from app.domain.realtime_strength import RealtimeTaxonomyType
+from app.services.realtime_alerts import REALTIME_ALERT_CHANNEL
 from app.services.realtime_cache import (
     CHANNEL_INTRADAY_CANDLES,
     CHANNEL_REALTIME_INDUSTRY,
@@ -94,6 +95,7 @@ class RealtimeQuoteHub:
             "market",
             "industry_strength",
             "theme_strength",
+            "alert",
         }
         added_keys: list[str] = []
         for t in targets:
@@ -194,6 +196,7 @@ class RealtimeQuoteHub:
             CHANNEL_REALTIME_MARKET,
             CHANNEL_REALTIME_INDUSTRY,
             CHANNEL_REALTIME_THEME,
+            REALTIME_ALERT_CHANNEL,
         )
         try:
             async for message in pubsub.listen():
@@ -217,6 +220,8 @@ class RealtimeQuoteHub:
                             self._route_global(
                                 "theme_strength", "taxonomy_detail_update", json.loads(raw)
                             )
+                        elif channel in (REALTIME_ALERT_CHANNEL, REALTIME_ALERT_CHANNEL.encode()):
+                            self._route_global("alert", "alert_event", json.loads(raw))
                         elif channel in (
                             CHANNEL_INTRADAY_CANDLES,
                             CHANNEL_INTRADAY_CANDLES.encode(),

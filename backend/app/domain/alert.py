@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -32,6 +32,15 @@ class AlertScopeType(StrEnum):
     WATCHLIST = "WATCHLIST"
 
 
+class AlertEvaluationMode(StrEnum):
+    EOD = "EOD"
+    REALTIME = "REALTIME"
+
+
+class AlertSessionScope(StrEnum):
+    REGULAR = "REGULAR"
+
+
 @dataclass(frozen=True)
 class AlertRule:
     id: UUID
@@ -50,6 +59,8 @@ class AlertRule:
     daily_limit: int
     created_at: datetime
     updated_at: datetime
+    evaluation_mode: AlertEvaluationMode = AlertEvaluationMode.EOD
+    session_scope: AlertSessionScope = AlertSessionScope.REGULAR
 
 
 @dataclass(frozen=True)
@@ -72,6 +83,7 @@ class AlertOccurrence:
     reference_type: str
     message: str
     data_status: DataStatus
+    event_metadata: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -93,6 +105,8 @@ class AlertEvent:
     notification_eligible: bool
     read_at: datetime | None
     created_at: datetime
+    evaluation_mode: AlertEvaluationMode = AlertEvaluationMode.EOD
+    event_metadata: dict = field(default_factory=dict)
 
 
 def validate_rule(
@@ -107,6 +121,8 @@ def validate_rule(
     consecutive_days,
     cooldown_minutes,
     daily_limit,
+    evaluation_mode=AlertEvaluationMode.EOD,
+    session_scope=AlertSessionScope.REGULAR,
 ) -> None:
     scope_values = {
         AlertScopeType.SECURITY: security_id,
@@ -143,3 +159,15 @@ def validate_rule(
         raise ValueError("consecutive_days is only valid for consecutive rules")
     if cooldown_minutes < 0 or daily_limit < 1:
         raise ValueError("cooldown and daily_limit are invalid")
+    if evaluation_mode is AlertEvaluationMode.REALTIME and rule_type in {
+        AlertRuleType.MA_CLOSE_ABOVE,
+        AlertRuleType.MA_CLOSE_BELOW,
+        AlertRuleType.MA_CONSECUTIVE_ABOVE,
+        AlertRuleType.MA_CONSECUTIVE_BELOW,
+    }:
+        raise ValueError("rule type is not supported in REALTIME mode")
+    if (
+        evaluation_mode is AlertEvaluationMode.REALTIME
+        and session_scope is not AlertSessionScope.REGULAR
+    ):
+        raise ValueError("REALTIME alerts only support REGULAR session")

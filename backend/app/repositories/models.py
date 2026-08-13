@@ -110,6 +110,8 @@ class AlertRuleModel(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     cooldown_minutes: Mapped[int] = mapped_column(Integer)
     daily_limit: Mapped[int] = mapped_column(Integer)
+    evaluation_mode: Mapped[str] = mapped_column(String(12), default="EOD")
+    session_scope: Mapped[str] = mapped_column(String(16), default="REGULAR")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -131,6 +133,7 @@ class AlertEventModel(Base):
     notification_eligible: Mapped[bool] = mapped_column(Boolean)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    event_metadata: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class AlertEvaluationRunModel(Base):
@@ -700,4 +703,3 @@ class SavedScreenerModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
-

@@ -6,12 +6,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 
-from app.core.dependencies import alert_repository
+from app.core.dependencies import alert_repository, get_realtime_alert_service
 from app.domain.alert import (
     DEFAULT_COOLDOWN_MINUTES,
     DEFAULT_DAILY_LIMIT,
+    AlertEvaluationMode,
     AlertRuleType,
     AlertScopeType,
+    AlertSessionScope,
 )
 from app.services.alerts import AlertEvaluationService, AlertRuleService
 
@@ -32,6 +34,8 @@ class RuleInput(BaseModel):
     enabled: bool = True
     cooldown_minutes: int = Field(default=DEFAULT_COOLDOWN_MINUTES, ge=0)
     daily_limit: int = Field(default=DEFAULT_DAILY_LIMIT, ge=1)
+    evaluation_mode: AlertEvaluationMode = AlertEvaluationMode.EOD
+    session_scope: AlertSessionScope = AlertSessionScope.REGULAR
 
 
 Repo = Annotated[object, Depends(alert_repository)]
@@ -53,6 +57,8 @@ def rule(r):
         "enabled": r.enabled,
         "cooldown_minutes": r.cooldown_minutes,
         "daily_limit": r.daily_limit,
+        "evaluation_mode": r.evaluation_mode.value,
+        "session_scope": r.session_scope.value,
     }
 
 
@@ -73,6 +79,9 @@ def event(e):
         "data_status": e.data_status.value,
         "notification_eligible": e.notification_eligible,
         "read_at": e.read_at.isoformat() if e.read_at else None,
+        "evaluation_mode": e.evaluation_mode.value,
+        "fingerprint": e.fingerprint,
+        "event_metadata": e.event_metadata,
     }
 
 
@@ -124,6 +133,13 @@ async def evaluate_alerts(repository: Repo, target_trade_date: date | None = Non
 @router.get("/alerts/events", operation_id="listAlertEvents")
 async def alert_events(repository: Repo, limit: int = Query(50, ge=1, le=200)):
     return {"data": [event(x) for x in await repository.list_events(limit=limit)]}
+
+
+@router.get("/alerts/realtime/status", operation_id="getRealtimeAlertStatus")
+async def realtime_status(
+    service: Annotated[object, Depends(get_realtime_alert_service)],
+):
+    return {"data": service.status()}
 
 
 @router.get("/notifications", operation_id="listNotifications")

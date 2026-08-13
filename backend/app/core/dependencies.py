@@ -46,6 +46,10 @@ def get_intraday_aggregator(request: Request):
     return request.app.state.intraday_aggregator
 
 
+def get_realtime_alert_service(request: Request):
+    return request.app.state.realtime_alert_service
+
+
 async def database_session(request: Request) -> AsyncIterator[AsyncSession]:
     async with request.app.state.session_factory() as session:
         yield session

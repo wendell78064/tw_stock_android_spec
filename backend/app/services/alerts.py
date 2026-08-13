@@ -28,6 +28,8 @@ class AlertRuleService:
                         "consecutive_days",
                         "cooldown_minutes",
                         "daily_limit",
+                        "evaluation_mode",
+                        "session_scope",
                     )
                 }
             )
@@ -39,6 +41,8 @@ class AlertRuleService:
             **values,
             "rule_type": values["rule_type"].value,
             "scope_type": values["scope_type"].value,
+            "evaluation_mode": values["evaluation_mode"].value,
+            "session_scope": values["session_scope"].value,
         }
         return await self.repository.save_rule(values, rule_id)
 
@@ -57,7 +61,11 @@ class AlertEvaluationService:
     async def evaluate(self, target_date: date | None = None):
         target = target_date or self._latest_completed(datetime.now(UTC).date())
         run_id = await self.repository.start_run(target)
-        rules = await self.repository.list_rules(True)
+        rules = [
+            rule
+            for rule in await self.repository.list_rules(True)
+            if rule.evaluation_mode.value == "EOD"
+        ]
         membership = await self.repository.resolve_memberships(rules)
         security_ids = set().union(*membership.values()) if membership else set()
         max_days = max([rule.consecutive_days or 2 for rule in rules], default=2)

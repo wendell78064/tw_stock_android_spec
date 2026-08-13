@@ -4,6 +4,7 @@ import logging
 from app.adapters.realtime_base import RealtimeMarketDataProvider
 from app.domain.realtime import ProviderCapabilities
 from app.services.intraday_candle_aggregator import IntradayCandleAggregator
+from app.services.realtime_alerts import RealtimeAlertEvaluationService
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
 from app.services.realtime_strength import RealtimeTaxonomyAggregator
@@ -19,12 +20,14 @@ class RealtimeProviderManager:
         hub: RealtimeQuoteHub,
         aggregator: IntradayCandleAggregator | None = None,
         taxonomy_aggregator: RealtimeTaxonomyAggregator | None = None,
+        alert_evaluator: RealtimeAlertEvaluationService | None = None,
     ):
         self.provider = provider
         self.cache_service = cache_service
         self.hub = hub
         self.aggregator = aggregator
         self.taxonomy_aggregator = taxonomy_aggregator
+        self.alert_evaluator = alert_evaluator
         self._ingestion_task: asyncio.Task | None = None
         self._running = False
         self.reconnect_count = 0
@@ -39,6 +42,10 @@ class RealtimeProviderManager:
             if capabilities.source_type == "FAKE_SIMULATOR"
             else "UNAVAILABLE"
         )
+        if self.alert_evaluator is not None:
+            self.alert_evaluator.provider_status = (
+                "FAKE" if self.hub.provider_status == "SIMULATED" else self.hub.provider_status
+            )
         logger.info(
             f"Starting RealtimeProviderManager with provider '{capabilities.provider_name}' "
             f"(License: {capabilities.license_status})"
@@ -67,6 +74,8 @@ class RealtimeProviderManager:
                         await self.aggregator.accept(quote)
                     if saved and self.taxonomy_aggregator is not None:
                         await self.taxonomy_aggregator.accept(quote)
+                    if saved and self.alert_evaluator is not None:
+                        await self.alert_evaluator.accept(quote)
             except asyncio.CancelledError:
                 break
             except Exception as e:

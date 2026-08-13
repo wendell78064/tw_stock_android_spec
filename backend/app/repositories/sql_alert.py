@@ -5,7 +5,15 @@ from decimal import Decimal
 from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.alert import AlertEvent, AlertRule, AlertRuleType, AlertScopeType, MarketPoint
+from app.domain.alert import (
+    AlertEvaluationMode,
+    AlertEvent,
+    AlertRule,
+    AlertRuleType,
+    AlertScopeType,
+    AlertSessionScope,
+    MarketPoint,
+)
 from app.domain.market_data import DataStatus
 from app.repositories.models import (
     AlertEvaluationRunModel,
@@ -141,6 +149,43 @@ class SqlAlertRepository:
         ).all()
         return history, {row.id: (row.code, row.name, row[3]) for row in info_rows}
 
+    async def realtime_ma_contexts(self, security_ids, rules):
+        from app.services.realtime_alerts import RealtimeMaContext
+
+        if not security_ids:
+            return {}, {}
+        rows = (
+            await self.session.execute(
+                text(
+                    """SELECT security_id,trade_date,close FROM daily_prices
+                    WHERE security_id=ANY(:ids) AND data_status='FINAL'
+                    ORDER BY security_id,trade_date DESC"""
+                ),
+                {"ids": list(security_ids)},
+            )
+        ).all()
+        closes = {}
+        for row in rows:
+            bucket = closes.setdefault(row.security_id, [])
+            if len(bucket) < 239 and row.close is not None:
+                bucket.append(Decimal(row.close))
+        periods = {rule.ma_period for rule in rules if rule.ma_period}
+        contexts = {}
+        for security_id, values in closes.items():
+            for period in periods:
+                prior = values[: period - 1]
+                contexts[(str(security_id), period)] = RealtimeMaContext(
+                    period, sum(prior, Decimal("0")), len(prior)
+                )
+        info_rows = (
+            await self.session.execute(
+                select(SecurityModel.id, SecurityModel.code, SecurityModel.name, MarketModel.code)
+                .join(MarketModel)
+                .where(SecurityModel.id.in_(security_ids))
+            )
+        ).all()
+        return contexts, {row.id: (row.code, row.name, row[3]) for row in info_rows}
+
     async def event_exists(self, fingerprint):
         return (
             await self.session.scalar(
@@ -218,6 +263,7 @@ class SqlAlertRepository:
             data_status=occurrence.data_status,
             fingerprint=fingerprint,
             notification_eligible=eligible,
+            event_metadata=occurrence.event_metadata or None,
             created_at=now,
         )
         self.session.add(row)
@@ -257,8 +303,9 @@ class SqlAlertRepository:
 
     async def list_events(self, unread_only=False, limit=50, event_type=None, security=None):
         query = (
-            select(AlertEventModel, SecurityModel)
+            select(AlertEventModel, SecurityModel, AlertRuleModel.evaluation_mode)
             .join(SecurityModel)
+            .join(AlertRuleModel, AlertRuleModel.id == AlertEventModel.alert_rule_id)
             .order_by(AlertEventModel.triggered_at.desc(), AlertEventModel.id.desc())
             .limit(limit)
         )
@@ -306,10 +353,12 @@ class SqlAlertRepository:
             r.daily_limit,
             r.created_at,
             r.updated_at,
+            AlertEvaluationMode(r.evaluation_mode),
+            AlertSessionScope(r.session_scope),
         )
 
     @staticmethod
-    def _event(r, s):
+    def _event(r, s, evaluation_mode):
         return AlertEvent(
             r.id,
             r.alert_rule_id,
@@ -328,4 +377,6 @@ class SqlAlertRepository:
             r.notification_eligible,
             r.read_at,
             r.created_at,
+            AlertEvaluationMode(evaluation_mode),
+            r.event_metadata or {},
         )
