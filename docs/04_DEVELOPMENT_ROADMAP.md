@@ -168,7 +168,8 @@
 ## Phase 5：合法盤中行情
 
 - Phase 5 / Slice 1 — Realtime Data Provider + WebSocket Foundation: **COMPLETE**
-- Phase 5 / Slice 2 — Intraday Quote + 1m/5m K: **NEXT**
+- Phase 5 / Slice 2 — Intraday Quote + 1m/5m K: **COMPLETE**
+- Phase 5 / Slice 3 — Realtime Market / Industry Strength: **NEXT**
 
 ### 前置條件
 
