@@ -15,31 +15,25 @@ Phase 3 / Slice 2 COMPLETE
 Phase 3 / Slice 3 COMPLETE
 Phase 4 / Slice 1 COMPLETE
 Phase 4 / Slice 2 COMPLETE
+Phase 4 / Slice 3 COMPLETE
 ```
 
-- Current phase: Phase 4 / Slice 2 COMPLETE
-- Latest completed feature: Industry / Theme Strength Ranking
-- Feature commit: `9048f23`
-- DB head: `0010_industry_strength`
+- Current phase: Phase 4 / Slice 3
+- Latest completed feature: Multi-Condition Stock Screener
+- DB head: `0011_stock_screener`
 - Room: version 9
 - Latest tag: `phase-4-slice-2-complete`
-- GitHub Actions: backend PASS / android PASS / android-instrumentation PASS
+- GitHub Actions: WAITING FOR CI
 
-## Phase 4 / Slice 2 Completed Features
+## Phase 4 / Slice 3 Completed Features
 
-- Industry / Theme strength ranking
-- 1/5/10/20/60 trading-day windows
-- Equal-weight performance
-- Breadth
-- MA participation
-- Institutional aggregation
-- Credit aggregation
-- Turnover metrics
-- twml-industry-strength-v1
-- Component scores / coverage
-- Leaders / Laggards
-- Android ranking/detail
-- Offline / Partial / Stale
+- Multi-Condition Typed Screener AST (CONDITION, AND, OR)
+- Centralized Whitelist Field Catalog (`GET /v1/screener/fields`)
+- Bulk Screener Query Engine (`ScreenerQueryService`)
+- Saved Screener CRUD & Run (`/v1/screeners`)
+- Missing Data Semantics (`NON_MATCH` for null, `IS_UNAVAILABLE` match)
+- Android Screener Builder & Result UI (`feature-screener`)
+- Room Offline Cache & Stale Badge Support
 
 ## External and Future
 
@@ -47,9 +41,9 @@ Phase 4 / Slice 2 COMPLETE
 
 ## Next
 
-Phase 4 / Slice 3 — Stock Screener
+Phase 4 / Slice 4 — Stock Comparison
 
-Do not start Phase 4 / Slice 3 without a separate explicit request and Slice definition.
+Do not start Phase 4 / Slice 4 without a separate explicit request and Slice definition.
 
 ## Primary References
 

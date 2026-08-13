@@ -139,8 +139,9 @@
 
 - Phase 4 / Slice 1 — Industry / Theme Foundation：**COMPLETE**
 - Phase 4 / Slice 2 — Industry / Theme Strength Ranking：**COMPLETE**
+- Phase 4 / Slice 3 — Stock Screener：**COMPLETE**
 
-下一工作：**Phase 4 / Slice 3 — Stock Screener**
+下一工作：**Phase 4 / Slice 4 — Stock Comparison**
 
 ### 任務
 
