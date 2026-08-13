@@ -1,6 +1,6 @@
 # 20 — Phase 5 / Slice 3: Realtime Market / Industry Strength
 
-狀態：**IMPLEMENTED — WAITING FOR CI**
+狀態：**COMPLETE**
 
 ## Market Realtime Snapshot
 
@@ -47,9 +47,18 @@
 - Android tests：initial snapshot、disconnect stale、market breadth、industry realtime ranking/components。
 - Performance smoke：1000 securities / 50 taxonomies / 10,000 memberships / 100 quotes，平均 2.024ms/quote；membership 為 process snapshot、Redis writes 僅限 market 與 affected taxonomies，ranking burst publish 由 250ms throttle 限制，in-memory quote state bounded by 1000-member universe。
 
+## Final CI Validation
+
+- GitHub Actions：[Run 31683265696](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31683265696)
+- backend：**PASS**
+- android：**PASS**
+- android-instrumentation：**PASS**
+- GitHub device instrumentation：`:app:connectedDebugAndroidTest` **PASS**，API 35 emulator，25 tests，0 skipped，0 failed。
+- Local device instrumentation execution：**NOT RUN**
+
 ## Database / Limitations
 
-- PostgreSQL head 維持 `0011_stock_screener`；Room version 維持 9。
+- PostgreSQL head 維持 `0011_stock_screener`；Room version 維持 10。
 - Realtime state 僅存 Redis；EOD strength DB 不變。
 - Production Realtime Provider：`UNCONFIGURED`；fake 僅供 dev/test/CI。
 - 不包含 realtime alerts、screener execution、comparison、FCM、Cloud Sync、AI 或 trading。

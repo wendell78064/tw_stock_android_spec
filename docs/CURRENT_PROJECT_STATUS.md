@@ -14,26 +14,28 @@ Phase 4 COMPLETE
 Phase 4 / Slice 4 COMPLETE
 Phase 5 / Slice 1 COMPLETE
 Phase 5 / Slice 2 COMPLETE
-Phase 5 / Slice 3 IMPLEMENTED — WAITING FOR CI
+Phase 5 / Slice 3 COMPLETE
 ```
 
 - Current phase: **Phase 5 / Slice 3 — Realtime Market / Industry Strength**
 - Production Realtime Provider: **UNCONFIGURED**
 - DB head: `0011_stock_screener`
 - Room: version 10
-- Latest tag: `phase-5-slice-2-complete`
-- GitHub Actions CI: **PASS** ([Run 31680550147](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31680550147))
+- Latest tag: `phase-5-slice-3-complete`
+- GitHub Actions CI: **PASS** ([Run 31683265696](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31683265696))
 - CI jobs: backend **PASS**, android **PASS**, android-instrumentation **PASS**
 - CI instrumentation: `connectedDebugAndroidTest` **PASS**, API 35 emulator, 25 tests, 0 skipped/failed
 - Local device instrumentation execution: **NOT RUN**
 
-## Phase 5 / Slice 3 Implemented Features
+## Phase 5 / Slice 3 Completed
 
-- Realtime TWSE/TPEx breadth and coverage snapshots
-- Incremental Industry/Theme aggregation using existing memberships
-- Versioned `twml-industry-realtime-strength-v1` percentile scoring
-- Redis realtime snapshots/rankings and WebSocket global channels
-- Android Market breadth and Industry/Theme intraday ranking UI
+- Realtime Market Breadth
+- Realtime Industry / Theme Aggregation
+- Realtime Strength Ranking and Leaders / Laggards
+- Redis realtime snapshots
+- Realtime WebSocket market/taxonomy channels
+- Android realtime Market / Industry UI
+- Realtime algorithm: `twml-industry-realtime-strength-v1`
 
 ## Database
 

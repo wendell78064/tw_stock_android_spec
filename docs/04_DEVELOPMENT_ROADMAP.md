@@ -169,7 +169,8 @@
 
 - Phase 5 / Slice 1 — Realtime Data Provider + WebSocket Foundation: **COMPLETE**
 - Phase 5 / Slice 2 — Intraday Quote + 1m/5m K: **COMPLETE**
-- Phase 5 / Slice 3 — Realtime Market / Industry Strength: **NEXT**
+- Phase 5 / Slice 3 — Realtime Market / Industry Strength: **COMPLETE**
+- Phase 5 / Slice 4 — Realtime Alert Engine: **NEXT**
 
 ### 前置條件
 
