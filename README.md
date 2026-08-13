@@ -1,89 +1,153 @@
-# 台股持股與市場籌碼 Android App 規格包
+# TW Market Ledger
 
-本規格包用於指導 AI 或開發團隊建立一套涵蓋台股現貨、台指期貨、法人籌碼、信用交易、產業強弱、持股管理及提醒功能的 Android App。
+台股市場分析與個人投資管理系統，包含 FastAPI 後端與 Kotlin／Jetpack Compose Android App。目前已完成 Phase 0～5 軟體功能，以及 Phase 6 / Slice 1 的 Account、Authentication、Cloud Sync Foundation 與 Watchlist 多裝置同步垂直切片。
 
-## 建議閱讀順序
+> 本專案是軟體實作與可重現測試環境，不提供投資建議。正式即時行情仍需合法授權資料供應商。
 
-1. `AGENTS.md`：AI 開發總規則。
-2. `docs/00_MASTER_PRD.md`：完整產品需求。
-3. `docs/01_APP_SCREEN_FLOW.md`：App 畫面與操作流程。
-4. `docs/02_DATABASE_ERD.md`：資料庫 ERD 與欄位規則。
-5. `docs/03_BACKEND_API_SPEC.md`：後端 REST／WebSocket API 規格。
-6. `docs/04_DEVELOPMENT_ROADMAP.md`：分階段開發任務與驗收條件。
-7. `docs/05_DATA_SOURCES_AND_COMPLIANCE.md`：資料來源、更新時序與授權注意事項。
-8. `api/openapi.yaml`：可供產生 Client／Server 型別的 OpenAPI 契約草案。
-9. `db/schema.sql`：核心 PostgreSQL schema 起始版本。
+## Current Status
 
-## 建議專案結構
+| 項目 | 狀態 |
+|---|---|
+| Phase 0～4 | COMPLETE |
+| Phase 5 Realtime Software | COMPLETE |
+| Phase 6 / Slice 1 Account / Cloud Sync | COMPLETE（CI pending） |
+| PostgreSQL | migration `0013_account_sync_foundation` |
+| Android Room | version 11 |
+| Production Realtime Provider | UNCONFIGURED |
+| FCM | UNCONFIGURED |
+
+完整進度請參考 [`docs/CURRENT_PROJECT_STATUS.md`](docs/CURRENT_PROJECT_STATUS.md)。
+
+## Implemented Features
+
+- 台股證券搜尋、日 K、技術指標與市場總覽
+- 三大法人、融資融券與信用交易資料
+- TAIFEX 期貨／選擇權、法人 OI、Put/Call、Max Pain 與連續期貨
+- 投資組合、損益、交易紀錄與持股分析
+- 多群組 Watchlist、排序、備註與目標／停損／加碼價
+- 產業／主題分類、強弱排名、Screener 與股票比較
+- Realtime WebSocket、盤中報價、1m／5m K、行情廣度與即時提醒
+- Android 盤中圖表、即時市場／產業 UI 與提醒介面
+- UUID Account、Argon2id 密碼、短效 access token 與 rotating refresh token
+- 穩定匿名 Device Identity、使用者隔離與登出快取清除
+- Watchlist optimistic concurrency、tombstone、idempotent push、bounded cursor pull 與 bootstrap
+- Android Keystore token storage、single-flight refresh、Room durable outbox 與離線同步狀態
+
+## Architecture
 
 ```text
-tw-stock-app/
-├── AGENTS.md
-├── README.md
-├── android-app/
-├── backend/
-├── api/
-│   └── openapi.yaml
-├── db/
-│   └── schema.sql
-├── docs/
-└── infra/
+Android (Compose / Hilt / Retrofit / Room)
+        │ REST + WebSocket
+        ▼
+FastAPI (Auth / Market / Personal Data / Sync)
+        ├── PostgreSQL 16 + Alembic
+        └── Redis (realtime cache / Pub/Sub)
 ```
 
-## 建議技術棧
+```text
+Account → Device → Authenticated User Scope
+        → Durable Outbox → Idempotent Push
+        → Version Conflict / Tombstone
+        → Incremental Cursor Pull → Device B
+```
 
-### Android
+## Repository Layout
 
-- Kotlin
-- Jetpack Compose + Material 3
-- Navigation Compose
-- MVVM + Repository
-- Hilt
-- Retrofit 或 Ktor Client
-- Kotlin Coroutines / Flow
-- Room
-- DataStore
-- WorkManager
-- Firebase Cloud Messaging
-- MPAndroidChart、Vico 或 Compose 原生圖表元件；正式採用前需驗證 K 線、縮放與效能
+```text
+android-app/   Kotlin, Compose, Room, Retrofit, Hilt
+backend/       FastAPI, SQLAlchemy, Alembic, Pytest
+api/           OpenAPI 3.1 contract
+docs/          PRD, architecture, roadmap, slice reports
+infra/         infrastructure notes
+```
 
-### Backend
+## Quick Start
 
-- Python 3.12+
-- FastAPI
-- Pydantic 2
-- SQLAlchemy 2
-- Alembic
-- PostgreSQL 16
-- TimescaleDB：進入分鐘行情後啟用
-- Redis
-- APScheduler、ARQ 或 Celery：依部署規模選擇
-- WebSocket
-- Pytest
-- Docker Compose
-
-## 重要範圍限制
-
-- 投資組合交易輸入只有：股票代號、買進／賣出、日期時間、股數、成交價格、手續費、零股／整股。
-- 不建立股利、除權息、減資、增資等投資組合事件輸入功能。
-- 圖表仍可使用還原權息價格，以避免長期技術分析失真；這屬行情資料處理，不是持股事件管理。
-- 盤中即時行情必須透過合法授權來源，不以網頁爬蟲作為正式產品資料源。
-
-## 實作狀態
-
-Phase 0 與 Phase 1 已完成並保持驗證。Phase 2／Slice 1 新增大盤現貨與信用資料；Slice 2 新增 TAIFEX 期貨／選擇權盤後日資料、法人期貨 OI、集中度、Put/Call、履約價 OI、Max Pain、連續期貨與 Android Futures Detail。操作與限制見 [`docs/10_PHASE_2_MARKET_SPOT_INSTITUTIONAL_CREDIT.md`](docs/10_PHASE_2_MARKET_SPOT_INSTITUTIONAL_CREDIT.md) 與 [`docs/11_PHASE_2_DERIVATIVES.md`](docs/11_PHASE_2_DERIVATIVES.md)。分鐘與即時行情仍未實作。
-
-快速啟動與固定 Fixture 同步：
+需求：Docker、Docker Compose，以及 Android 開發時所需的 JDK 17／Android SDK。
 
 ```bash
-make up
-make sync-securities
-make backfill-market-spot FROM=2026-05-18 TO=2026-08-07
-make backfill-security CODE=1234 MARKET=TWSE FROM=2025-01-01 TO=2026-08-07
-curl 'http://localhost:8000/v1/securities/search?q=12'
-curl 'http://localhost:8000/v1/securities/1234/candles?market=TWSE&range=1Y&interval=1d&adjustment=ADJUSTED'
-curl 'http://localhost:8000/v1/market/overview'
+docker compose up --build -d
+curl http://localhost:8000/v1/health
+curl http://localhost:8000/v1/ready
 ```
-# Phase 1 / Slice 2 Hardening
 
-技術指標設定現已支援型別化數值參數、DataStore 保存、單項／全部重設，以及自訂參數即時計算。Emulator CI 與操作細節見 [docs/09_PHASE_1_SLICE_2_HARDENING.md](docs/09_PHASE_1_SLICE_2_HARDENING.md)。
+本機 development 會使用 process-local ephemeral auth secret。正式環境必須設定高熵 `AUTH_SECRET`，並由 HTTPS ingress／reverse proxy 終止 TLS；production plaintext HTTP 不受支援。
+
+```bash
+export APP_ENV=production
+export AUTH_SECRET='<secure deployment secret>'
+docker compose up --build -d
+```
+
+## Authentication and Sync
+
+主要 endpoint：
+
+```text
+POST /v1/auth/register
+POST /v1/auth/login
+POST /v1/auth/refresh
+POST /v1/auth/logout
+GET  /v1/me
+POST /v1/devices
+POST /v1/sync/push
+GET  /v1/sync/changes?cursor=0&limit=100
+GET  /v1/sync/bootstrap
+```
+
+Authenticated identity 只取自 bearer token，客戶端不能用 request body 指定資料擁有者。第一個 cloud-sync vertical slice 僅涵蓋 Watchlist；Portfolio、Alerts、Screeners 與 Settings cloud sync 留待後續 Slice。
+
+舊版未歸屬 Watchlist 不會自動綁定第一位註冊者。管理者可明確執行：
+
+```bash
+docker compose run --rm backend \
+  python -m app.cli.claim_legacy_personal_data --user <user-uuid>
+```
+
+## Validation
+
+Phase 6 / Slice 1 本機結果：
+
+- Ruff: PASS
+- Pytest: PASS — 127 tests
+- OpenAPI validation / Kotlin generation: PASS
+- Android lint and unit tests: PASS
+- Debug APK and instrumentation APK: PASS
+- Device instrumentation execution: NOT RUN
+- Alembic `0012 → 0013 → 0012 → 0013`: PASS
+- Room v10 → v11 runtime migration execution: NOT RUN
+- Auth、refresh rotation、user isolation、Device A/B sync、conflict、tombstone 與 Watchlist regression smoke: PASS
+
+```bash
+make backend-lint
+make backend-test
+make openapi-validate
+make openapi-generate
+make android-lint
+make android-test
+make android-build
+make android-ui-test-apk
+```
+
+Incremental sync smoke：1,000 change-log entries 在 2.951 秒完成；最後 100 筆增量 pull 為 9.97 ms，回傳維持 bounded 100 rows。數據僅代表本機測試環境。
+
+## Product and Data Boundaries
+
+- 正式即時行情必須使用合法授權 provider，不以網頁爬蟲充當產品資料源。
+- FCM 與 production realtime provider 尚未設定。
+- 投資組合交易輸入不包含股利、除權息、減資或增資事件。
+- 行情圖表可使用還原權息價格；此為市場資料處理，不是持股事件管理。
+- Auth endpoint 的 production rate limiting 應由 ingress／API gateway 落實。
+
+## Documentation
+
+- [`docs/00_MASTER_PRD.md`](docs/00_MASTER_PRD.md)
+- [`docs/04_DEVELOPMENT_ROADMAP.md`](docs/04_DEVELOPMENT_ROADMAP.md)
+- [`docs/05_DATA_SOURCES_AND_COMPLIANCE.md`](docs/05_DATA_SOURCES_AND_COMPLIANCE.md)
+- [`docs/21_PHASE_5_REALTIME_ALERT_ENGINE.md`](docs/21_PHASE_5_REALTIME_ALERT_ENGINE.md)
+- [`docs/22_PHASE_6_ACCOUNT_CLOUD_SYNC_FOUNDATION.md`](docs/22_PHASE_6_ACCOUNT_CLOUD_SYNC_FOUNDATION.md)
+- [`api/openapi.yaml`](api/openapi.yaml)
+
+## Next
+
+Phase 6 / Slice 2 — Portfolio / Alerts / Screener / Settings Sync（尚未開始）。
