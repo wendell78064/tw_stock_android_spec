@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import UTC, date, datetime, time
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -17,6 +18,11 @@ from app.domain.realtime import (
     IntradayInterval,
     ProviderCapabilities,
     RealtimeQuote,
+)
+from app.domain.realtime_strength import (
+    RealtimeMarketSnapshot,
+    RealtimeTaxonomySnapshot,
+    RealtimeTaxonomyType,
 )
 from app.services.intraday_candle_aggregator import TAIPEI
 from app.services.realtime_cache import RealtimeCacheService
@@ -57,6 +63,112 @@ class IntradayCandleResponse(BaseModel):
     data_status: DataStatus
     as_of: datetime
     provider: str
+
+
+class RealtimeRankingResponse(BaseModel):
+    as_of: datetime
+    provider: str
+    provider_status: str
+    source_type: str
+    data_status: DataStatus
+    coverage: Decimal
+    algorithm_version: str
+    data: list[RealtimeTaxonomySnapshot]
+
+
+@router.get("/realtime/markets", response_model=list[RealtimeMarketSnapshot])
+async def get_realtime_markets(
+    cache_service: Annotated[RealtimeCacheService, Depends(get_realtime_cache_service)],
+) -> list[RealtimeMarketSnapshot]:
+    snapshots = [await cache_service.get_market_snapshot(market) for market in ("TWSE", "TPEx")]
+    return [snapshot for snapshot in snapshots if snapshot is not None]
+
+
+@router.get("/realtime/markets/{market}", response_model=RealtimeMarketSnapshot)
+async def get_realtime_market(
+    market: str,
+    cache_service: Annotated[RealtimeCacheService, Depends(get_realtime_cache_service)],
+) -> RealtimeMarketSnapshot:
+    snapshot = await cache_service.get_market_snapshot(market)
+    if snapshot is None:
+        raise HTTPException(404, f"No realtime market snapshot for {market}")
+    return snapshot
+
+
+async def _ranking_response(
+    taxonomy_type: RealtimeTaxonomyType,
+    cache_service: RealtimeCacheService,
+    sort: str,
+    limit: int,
+) -> RealtimeRankingResponse:
+    ranking = await cache_service.get_taxonomy_ranking(taxonomy_type)
+    sort_fields = {
+        "strength": lambda item: item.realtime_strength_score,
+        "return": lambda item: item.equal_weight_return,
+        "breadth": lambda item: item.advance_ratio,
+        "turnover": lambda item: item.turnover_amount,
+    }
+    key = sort_fields.get(sort)
+    if key is None:
+        raise HTTPException(422, "sort must be strength, return, breadth, or turnover")
+    ranking.sort(
+        key=lambda item: (key(item) is None, -(key(item) or Decimal("0")), item.taxonomy_id)
+    )
+    ranking = ranking[:limit]
+    now = datetime.now(UTC)
+    latest = ranking[0] if ranking else None
+    return RealtimeRankingResponse(
+        as_of=latest.as_of if latest else now,
+        provider=latest.provider if latest else "UNCONFIGURED",
+        provider_status="FAKE" if latest and latest.source_type == "FAKE" else "UNCONFIGURED",
+        source_type=latest.source_type if latest else "NONE",
+        data_status=latest.data_status if latest else DataStatus.UNAVAILABLE,
+        coverage=max((item.coverage_ratio for item in ranking), default=Decimal("0")),
+        algorithm_version=latest.algorithm_version
+        if latest
+        else "twml-industry-realtime-strength-v1",
+        data=ranking,
+    )
+
+
+@router.get("/realtime/industries/strength", response_model=RealtimeRankingResponse)
+async def get_realtime_industry_strengths(
+    cache_service: Annotated[RealtimeCacheService, Depends(get_realtime_cache_service)],
+    sort: str = "strength",
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> RealtimeRankingResponse:
+    return await _ranking_response(RealtimeTaxonomyType.INDUSTRY, cache_service, sort, limit)
+
+
+@router.get("/realtime/themes/strength", response_model=RealtimeRankingResponse)
+async def get_realtime_theme_strengths(
+    cache_service: Annotated[RealtimeCacheService, Depends(get_realtime_cache_service)],
+    sort: str = "strength",
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> RealtimeRankingResponse:
+    return await _ranking_response(RealtimeTaxonomyType.THEME, cache_service, sort, limit)
+
+
+@router.get("/realtime/industries/{taxonomy_id}/strength", response_model=RealtimeTaxonomySnapshot)
+async def get_realtime_industry_strength(
+    taxonomy_id: str,
+    cache_service: Annotated[RealtimeCacheService, Depends(get_realtime_cache_service)],
+) -> RealtimeTaxonomySnapshot:
+    snapshot = await cache_service.get_taxonomy_snapshot(RealtimeTaxonomyType.INDUSTRY, taxonomy_id)
+    if snapshot is None:
+        raise HTTPException(404, "Realtime industry strength unavailable")
+    return snapshot
+
+
+@router.get("/realtime/themes/{taxonomy_id}/strength", response_model=RealtimeTaxonomySnapshot)
+async def get_realtime_theme_strength(
+    taxonomy_id: str,
+    cache_service: Annotated[RealtimeCacheService, Depends(get_realtime_cache_service)],
+) -> RealtimeTaxonomySnapshot:
+    snapshot = await cache_service.get_taxonomy_snapshot(RealtimeTaxonomyType.THEME, taxonomy_id)
+    if snapshot is None:
+        raise HTTPException(404, "Realtime theme strength unavailable")
+    return snapshot
 
 
 @router.get("/intraday/{market}/{code}/candles", response_model=IntradayCandleResponse)

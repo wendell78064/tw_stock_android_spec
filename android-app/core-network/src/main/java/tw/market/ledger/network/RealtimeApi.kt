@@ -79,7 +79,53 @@ data class IntradayCandleEnvelopeDto(
     val provider: String,
 )
 
+@JsonClass(generateAdapter = true)
+data class RealtimeMarketSnapshotDto(
+    @Json(name = "market_id") val marketId: String, @Json(name = "as_of") val asOf: String,
+    @Json(name = "total_members") val totalMembers: Int, @Json(name = "valid_members") val validMembers: Int,
+    @Json(name = "quoted_members") val quotedMembers: Int, @Json(name = "coverage_ratio") val coverageRatio: String,
+    val advancers: Int, val decliners: Int, val unchanged: Int,
+    @Json(name = "advance_ratio") val advanceRatio: String,
+    @Json(name = "turnover_amount") val turnoverAmount: String?,
+    @Json(name = "data_status") val dataStatus: String, val provider: String,
+    @Json(name = "source_type") val sourceType: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class RealtimeStrengthComponentsDto(
+    val momentum: String?, val breadth: String?, val technical: String?, val turnover: String?,
+)
+
+@JsonClass(generateAdapter = true)
+data class RealtimeTaxonomySnapshotDto(
+    @Json(name = "taxonomy_type") val taxonomyType: String,
+    @Json(name = "taxonomy_id") val taxonomyId: String, val code: String, val name: String,
+    @Json(name = "as_of") val asOf: String, @Json(name = "total_members") val totalMembers: Int,
+    @Json(name = "valid_members") val validMembers: Int, @Json(name = "coverage_ratio") val coverageRatio: String,
+    @Json(name = "equal_weight_return") val equalWeightReturn: String?, val advancers: Int,
+    val decliners: Int, val unchanged: Int, @Json(name = "advance_ratio") val advanceRatio: String?,
+    @Json(name = "turnover_amount") val turnoverAmount: String?,
+    @Json(name = "above_ma20_pct_realtime") val aboveMa20PctRealtime: String?,
+    @Json(name = "above_ma60_pct_realtime") val aboveMa60PctRealtime: String?,
+    val components: RealtimeStrengthComponentsDto,
+    @Json(name = "realtime_strength_score") val realtimeStrengthScore: String?,
+    @Json(name = "component_coverage") val componentCoverage: String, val rank: Int?,
+    @Json(name = "data_status") val dataStatus: String, val provider: String,
+    @Json(name = "source_type") val sourceType: String,
+    @Json(name = "algorithm_version") val algorithmVersion: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class RealtimeTaxonomyRankingDto(
+    @Json(name = "as_of") val asOf: String, val provider: String,
+    @Json(name = "provider_status") val providerStatus: String,
+    @Json(name = "data_status") val dataStatus: String, val data: List<RealtimeTaxonomySnapshotDto>,
+)
+
 interface RealtimeApi {
+    @GET("v1/realtime/markets") suspend fun getRealtimeMarkets(): Response<List<RealtimeMarketSnapshotDto>>
+    @GET("v1/realtime/industries/strength") suspend fun getRealtimeIndustries(@Query("sort") sort: String = "strength"): Response<RealtimeTaxonomyRankingDto>
+    @GET("v1/realtime/themes/strength") suspend fun getRealtimeThemes(@Query("sort") sort: String = "strength"): Response<RealtimeTaxonomyRankingDto>
     @GET("v1/intraday/{market}/{code}/candles")
     suspend fun getIntradayCandles(
         @Path("market") market: String,

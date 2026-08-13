@@ -6,6 +6,11 @@ from decimal import Decimal
 from redis.asyncio import Redis
 
 from app.domain.realtime import IntradayCandle, IntradayInterval, RealtimeQuote, TradingSession
+from app.domain.realtime_strength import (
+    RealtimeMarketSnapshot,
+    RealtimeTaxonomySnapshot,
+    RealtimeTaxonomyType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +20,12 @@ CHANNEL_INTRADAY_CANDLES = "realtime:candles"
 KEY_PREFIX_CANDLE = "intraday:candles:"
 KEY_PREFIX_CURRENT = "intraday:current:"
 KEY_PREFIX_BASELINE = "intraday:baseline:"
+CHANNEL_REALTIME_MARKET = "realtime:market"
+CHANNEL_REALTIME_INDUSTRY = "realtime:industry-strength"
+CHANNEL_REALTIME_THEME = "realtime:theme-strength"
+KEY_PREFIX_REALTIME_MARKET = "realtime:market:"
+KEY_PREFIX_REALTIME_TAXONOMY = "realtime:taxonomy:"
+KEY_PREFIX_REALTIME_RANKING = "realtime:ranking:"
 
 
 class RealtimeCacheService:
@@ -159,4 +170,57 @@ class RealtimeCacheService:
             f"{KEY_PREFIX_BASELINE}{quote.market_id.upper()}:{quote.code.upper()}:{quote.session.value}",
             json.dumps(value),
             ex=86400,
+        )
+
+    async def save_market_snapshot(self, snapshot: RealtimeMarketSnapshot) -> None:
+        payload = snapshot.model_dump_json()
+        await self.redis.set(f"{KEY_PREFIX_REALTIME_MARKET}{snapshot.market_id}", payload, ex=120)
+        await self.redis.publish(CHANNEL_REALTIME_MARKET, payload)
+
+    async def get_market_snapshot(self, market: str) -> RealtimeMarketSnapshot | None:
+        raw = await self.redis.get(f"{KEY_PREFIX_REALTIME_MARKET}{market.upper()}")
+        return RealtimeMarketSnapshot.model_validate_json(raw) if raw else None
+
+    async def save_taxonomy_snapshot(self, snapshot: RealtimeTaxonomySnapshot) -> None:
+        taxonomy = snapshot.taxonomy_type.value.lower()
+        payload = snapshot.model_dump_json()
+        await self.redis.set(
+            f"{KEY_PREFIX_REALTIME_TAXONOMY}{taxonomy}:{snapshot.taxonomy_id}",
+            payload,
+            ex=120,
+        )
+        channel = (
+            CHANNEL_REALTIME_INDUSTRY
+            if snapshot.taxonomy_type is RealtimeTaxonomyType.INDUSTRY
+            else CHANNEL_REALTIME_THEME
+        )
+        await self.redis.publish(channel, payload)
+
+    async def get_taxonomy_snapshot(
+        self, taxonomy_type: RealtimeTaxonomyType, taxonomy_id: str
+    ) -> RealtimeTaxonomySnapshot | None:
+        raw = await self.redis.get(
+            f"{KEY_PREFIX_REALTIME_TAXONOMY}{taxonomy_type.value.lower()}:{taxonomy_id}"
+        )
+        return RealtimeTaxonomySnapshot.model_validate_json(raw) if raw else None
+
+    async def save_taxonomy_ranking(
+        self,
+        taxonomy_type: RealtimeTaxonomyType,
+        ranking: list[RealtimeTaxonomySnapshot],
+    ) -> None:
+        await self.redis.set(
+            f"{KEY_PREFIX_REALTIME_RANKING}{taxonomy_type.value.lower()}",
+            json.dumps([item.model_dump(mode="json") for item in ranking], default=str),
+            ex=120,
+        )
+
+    async def get_taxonomy_ranking(
+        self, taxonomy_type: RealtimeTaxonomyType
+    ) -> list[RealtimeTaxonomySnapshot]:
+        raw = await self.redis.get(f"{KEY_PREFIX_REALTIME_RANKING}{taxonomy_type.value.lower()}")
+        return (
+            [RealtimeTaxonomySnapshot.model_validate(item) for item in json.loads(raw)]
+            if raw
+            else []
         )

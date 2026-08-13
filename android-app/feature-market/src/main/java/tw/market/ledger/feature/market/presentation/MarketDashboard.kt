@@ -68,7 +68,29 @@ class MarketDashboardViewModel @Inject constructor(private val overview: GetMark
     val state by viewModel.uiState.collectAsStateWithLifecycle(); val window by viewModel.window.collectAsStateWithLifecycle()
     val institutions by viewModel.institutional.collectAsStateWithLifecycle()
     val futures by viewModel.futures.collectAsStateWithLifecycle()
-    MarketDashboardScreen(state, window, institutions, viewModel::selectWindow, futures, onFuturesClick)
+    val realtimeViewModel: MarketRealtimeViewModel = hiltViewModel()
+    val realtime by realtimeViewModel.state.collectAsStateWithLifecycle()
+    Column { MarketRealtimePanel(realtime); MarketDashboardScreen(state, window, institutions, viewModel::selectWindow, futures, onFuturesClick) }
+}
+
+@Composable fun MarketRealtimePanel(state: MarketRealtimeUiState) {
+    Card(Modifier.fillMaxWidth().padding(12.dp).testTag("realtime-market-breadth")) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("盤中市場廣度", style = MaterialTheme.typography.titleMedium)
+            when (state) {
+                MarketRealtimeUiState.Loading -> CircularProgressIndicator()
+                MarketRealtimeUiState.Unavailable -> Text("即時盤中行情尚未配置")
+                is MarketRealtimeUiState.Content -> {
+                    Text(if (state.stale) "STALE · ${state.connection}" else "${state.connection}")
+                    state.snapshots.forEach { item ->
+                        Text("${item.marketId} 上漲 ${item.advancers} 下跌 ${item.decliners} 平盤 ${item.unchanged}")
+                        Text("上漲比 ${item.advanceRatio} · coverage ${item.coverageRatio} · ${item.dataStatus}")
+                    }
+                    Text("最後更新 ${state.snapshots.maxOf { it.asOf }}")
+                }
+            }
+        }
+    }
 }
 
 @Composable fun MarketDashboardScreen(state: MarketDashboardUiState, window: Int,

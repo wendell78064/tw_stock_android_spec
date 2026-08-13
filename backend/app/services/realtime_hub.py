@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from collections import defaultdict
 
@@ -6,9 +7,13 @@ from fastapi import WebSocket
 from redis.asyncio import Redis
 
 from app.domain.realtime import IntradayCandle, IntradayInterval, RealtimeQuote
+from app.domain.realtime_strength import RealtimeTaxonomyType
 from app.services.realtime_cache import (
     CHANNEL_INTRADAY_CANDLES,
+    CHANNEL_REALTIME_INDUSTRY,
+    CHANNEL_REALTIME_MARKET,
     CHANNEL_REALTIME_QUOTES,
+    CHANNEL_REALTIME_THEME,
     RealtimeCacheService,
 )
 
@@ -82,7 +87,14 @@ class RealtimeQuoteHub:
         targets: list[dict[str, str]],
         channels: list[str] | None = None,
     ):
-        session.channels = set(channels or ["quote"]) & {"quote", "candle_1m", "candle_5m"}
+        session.channels = set(channels or ["quote"]) & {
+            "quote",
+            "candle_1m",
+            "candle_5m",
+            "market",
+            "industry_strength",
+            "theme_strength",
+        }
         added_keys: list[str] = []
         for t in targets:
             market = t.get("market", "").upper()
@@ -137,6 +149,31 @@ class RealtimeQuoteHub:
                                 "data": [c.model_dump(mode="json") for c in candles],
                             }
                         )
+        if "market" in session.channels:
+            markets = [
+                await self.cache_service.get_market_snapshot(market) for market in ("TWSE", "TPEx")
+            ]
+            await session.websocket.send_json(
+                {
+                    "type": "market_snapshot",
+                    "version": 1,
+                    "data": [item.model_dump(mode="json") for item in markets if item],
+                }
+            )
+        for channel, taxonomy_type in (
+            ("industry_strength", RealtimeTaxonomyType.INDUSTRY),
+            ("theme_strength", RealtimeTaxonomyType.THEME),
+        ):
+            if channel in session.channels:
+                ranking = await self.cache_service.get_taxonomy_ranking(taxonomy_type)
+                await session.websocket.send_json(
+                    {
+                        "type": "taxonomy_ranking_snapshot",
+                        "version": 1,
+                        "taxonomy_type": taxonomy_type.value,
+                        "data": [item.model_dump(mode="json") for item in ranking],
+                    }
+                )
 
     async def handle_unsubscribe(self, session: ConnectionSession, targets: list[dict[str, str]]):
         for t in targets:
@@ -151,7 +188,13 @@ class RealtimeQuoteHub:
 
     async def _listen_redis_pubsub(self):
         pubsub = self.redis.pubsub()
-        await pubsub.subscribe(CHANNEL_REALTIME_QUOTES, CHANNEL_INTRADAY_CANDLES)
+        await pubsub.subscribe(
+            CHANNEL_REALTIME_QUOTES,
+            CHANNEL_INTRADAY_CANDLES,
+            CHANNEL_REALTIME_MARKET,
+            CHANNEL_REALTIME_INDUSTRY,
+            CHANNEL_REALTIME_THEME,
+        )
         try:
             async for message in pubsub.listen():
                 if message["type"] == "message":
@@ -161,7 +204,20 @@ class RealtimeQuoteHub:
                         if isinstance(raw, bytes):
                             raw = raw.decode("utf-8")
                         channel = message.get("channel")
-                        if channel in (
+                        if channel in (CHANNEL_REALTIME_MARKET, CHANNEL_REALTIME_MARKET.encode()):
+                            self._route_global("market", "market_update", json.loads(raw))
+                        elif channel in (
+                            CHANNEL_REALTIME_INDUSTRY,
+                            CHANNEL_REALTIME_INDUSTRY.encode(),
+                        ):
+                            self._route_global(
+                                "industry_strength", "taxonomy_detail_update", json.loads(raw)
+                            )
+                        elif channel in (CHANNEL_REALTIME_THEME, CHANNEL_REALTIME_THEME.encode()):
+                            self._route_global(
+                                "theme_strength", "taxonomy_detail_update", json.loads(raw)
+                            )
+                        elif channel in (
                             CHANNEL_INTRADAY_CANDLES,
                             CHANNEL_INTRADAY_CANDLES.encode(),
                         ):
@@ -194,6 +250,21 @@ class RealtimeQuoteHub:
                             "version": 1,
                             "interval": candle.interval.value,
                             "data": candle.model_dump(mode="json"),
+                        }
+                    )
+                )
+
+    def _route_global(self, channel: str, message_type: str, data: dict):
+        for session in self.sessions:
+            if session.is_alive and channel in session.channels:
+                asyncio.create_task(
+                    session.websocket.send_json(
+                        {
+                            "type": message_type,
+                            "version": 1,
+                            "as_of": data.get("as_of"),
+                            "data_status": data.get("data_status"),
+                            "data": data,
                         }
                     )
                 )

@@ -17,6 +17,53 @@ tags:
   - name: Alerts
   - name: Screeners
 paths:
+  /realtime/markets:
+    get:
+      operationId: getRealtimeMarkets
+      tags: [Market]
+      responses:
+        "200":
+          description: Realtime TWSE and TPEx breadth snapshots
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RealtimeMarketSnapshot" } } } }
+  /realtime/markets/{market}:
+    get:
+      operationId: getRealtimeMarket
+      tags: [Market]
+      parameters: [{ in: path, name: market, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Realtime market breadth, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeMarketSnapshot" } } } }
+  /realtime/industries/strength:
+    get:
+      operationId: getRealtimeIndustryStrengths
+      tags: [Industries]
+      parameters:
+        - { in: query, name: sort, schema: { type: string, enum: [strength, return, breadth, turnover], default: strength } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200": { description: Realtime industry ranking, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeTaxonomyRanking" } } } }
+  /realtime/themes/strength:
+    get:
+      operationId: getRealtimeThemeStrengths
+      tags: [Industries]
+      parameters:
+        - { in: query, name: sort, schema: { type: string, enum: [strength, return, breadth, turnover], default: strength } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        "200": { description: Realtime theme ranking, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeTaxonomyRanking" } } } }
+  /realtime/industries/{taxonomyId}/strength:
+    get:
+      operationId: getRealtimeIndustryStrength
+      tags: [Industries]
+      parameters: [{ in: path, name: taxonomyId, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Realtime industry detail, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeTaxonomySnapshot" } } } }
+  /realtime/themes/{taxonomyId}/strength:
+    get:
+      operationId: getRealtimeThemeStrength
+      tags: [Industries]
+      parameters: [{ in: path, name: taxonomyId, required: true, schema: { type: string } }]
+      responses:
+        "200": { description: Realtime theme detail, content: { application/json: { schema: { $ref: "#/components/schemas/RealtimeTaxonomySnapshot" } } } }
   /intraday/{market}/{code}/candles:
     get:
       operationId: getIntradayCandles
@@ -1109,6 +1156,81 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    RealtimeMarketSnapshot:
+      type: object
+      required: [market_id, as_of, exchange_timestamp, total_members, valid_members, quoted_members, coverage_ratio, advancers, decliners, unchanged, advance_ratio, decline_ratio, live_count, stale_count, unavailable_count, data_status, provider, source_type, algorithm_version]
+      properties:
+        market_id: { type: string }
+        as_of: { type: string, format: date-time }
+        exchange_timestamp: { type: string, format: date-time }
+        total_members: { type: integer }
+        valid_members: { type: integer }
+        quoted_members: { type: integer }
+        coverage_ratio: { $ref: "#/components/schemas/DecimalString" }
+        advancers: { type: integer }
+        decliners: { type: integer }
+        unchanged: { type: integer }
+        advance_ratio: { $ref: "#/components/schemas/DecimalString" }
+        decline_ratio: { $ref: "#/components/schemas/DecimalString" }
+        turnover_amount: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        live_count: { type: integer }
+        stale_count: { type: integer }
+        unavailable_count: { type: integer }
+        data_status: { type: string }
+        provider: { type: string }
+        source_type: { type: string }
+        algorithm_version: { type: string }
+    RealtimeStrengthComponents:
+      type: object
+      properties:
+        momentum: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        breadth: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        technical: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        turnover: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+    RealtimeTaxonomySnapshot:
+      type: object
+      required: [taxonomy_type, taxonomy_id, code, name, as_of, total_members, valid_members, quoted_members, coverage_ratio, advancers, decliners, unchanged, components, component_coverage, leaders, laggards, data_status, provider, source_type, algorithm_version]
+      properties:
+        taxonomy_type: { type: string, enum: [INDUSTRY, THEME] }
+        taxonomy_id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        as_of: { type: string, format: date-time }
+        total_members: { type: integer }
+        valid_members: { type: integer }
+        quoted_members: { type: integer }
+        coverage_ratio: { $ref: "#/components/schemas/DecimalString" }
+        equal_weight_return: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        advancers: { type: integer }
+        decliners: { type: integer }
+        unchanged: { type: integer }
+        advance_ratio: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        turnover_amount: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        turnover_share: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        above_ma20_pct_realtime: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        above_ma60_pct_realtime: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        components: { $ref: "#/components/schemas/RealtimeStrengthComponents" }
+        realtime_strength_score: { oneOf: [{ $ref: "#/components/schemas/DecimalString" }, { type: "null" }] }
+        component_coverage: { $ref: "#/components/schemas/DecimalString" }
+        rank: { type: [integer, "null"] }
+        leaders: { type: array, items: { type: object, additionalProperties: true } }
+        laggards: { type: array, items: { type: object, additionalProperties: true } }
+        data_status: { type: string }
+        provider: { type: string }
+        source_type: { type: string }
+        algorithm_version: { type: string }
+    RealtimeTaxonomyRanking:
+      type: object
+      required: [as_of, provider, provider_status, source_type, data_status, coverage, algorithm_version, data]
+      properties:
+        as_of: { type: string, format: date-time }
+        provider: { type: string }
+        provider_status: { type: string }
+        source_type: { type: string }
+        data_status: { type: string }
+        coverage: { $ref: "#/components/schemas/DecimalString" }
+        algorithm_version: { type: string }
+        data: { type: array, items: { $ref: "#/components/schemas/RealtimeTaxonomySnapshot" } }
     IntradayInterval:
       type: string
       enum: [1m, 5m]

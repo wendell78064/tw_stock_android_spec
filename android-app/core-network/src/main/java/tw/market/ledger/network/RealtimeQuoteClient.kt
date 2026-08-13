@@ -41,6 +41,9 @@ class RealtimeQuoteClient(
     val quotesFlow: SharedFlow<RealtimeQuote> = _quotesFlow.asSharedFlow()
     private val _candlesFlow = MutableSharedFlow<IntradayCandle>(extraBufferCapacity = 64)
     val candlesFlow: SharedFlow<IntradayCandle> = _candlesFlow.asSharedFlow()
+    private val _aggregateUpdates = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val aggregateUpdates: SharedFlow<String> = _aggregateUpdates.asSharedFlow()
+    private val globalChannels = mutableSetOf<String>()
 
     private var webSocket: WebSocket? = null
     private val subscribedKeys = mutableSetOf<Pair<String, String>>() // (market, code)
@@ -79,12 +82,20 @@ class RealtimeQuoteClient(
         }
     }
 
+    fun subscribeChannels(vararg channels: String) {
+        globalChannels.addAll(channels)
+        connect()
+        if (_connectionState.value == RealtimeConnectionState.CONNECTED) {
+            sendSubscriptionMessage("subscribe", emptyList())
+        }
+    }
+
     private fun sendSubscriptionMessage(type: String, targets: List<Map<String, String>>) {
         val payload = mapOf(
             "type" to type,
             "version" to 1,
             "securities" to targets,
-            "channels" to listOf("quote", "candle_1m", "candle_5m")
+            "channels" to (listOf("quote", "candle_1m", "candle_5m") + globalChannels).distinct()
         )
         val json = moshi.adapter(Map::class.java).toJson(payload)
         webSocket?.send(json)
@@ -136,6 +147,8 @@ class RealtimeQuoteClient(
                     (msg["data"] as? List<*>)?.forEach { row ->
                         (row as? Map<*, *>)?.let(::parseCandleMap)?.let(_candlesFlow::tryEmit)
                     }
+                } else if (type in setOf("market_snapshot", "market_update", "taxonomy_ranking_snapshot", "taxonomy_ranking_update", "taxonomy_detail_update")) {
+                    _aggregateUpdates.tryEmit(type)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

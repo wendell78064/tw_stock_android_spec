@@ -6,6 +6,7 @@ from app.domain.realtime import ProviderCapabilities
 from app.services.intraday_candle_aggregator import IntradayCandleAggregator
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
+from app.services.realtime_strength import RealtimeTaxonomyAggregator
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +18,13 @@ class RealtimeProviderManager:
         cache_service: RealtimeCacheService,
         hub: RealtimeQuoteHub,
         aggregator: IntradayCandleAggregator | None = None,
+        taxonomy_aggregator: RealtimeTaxonomyAggregator | None = None,
     ):
         self.provider = provider
         self.cache_service = cache_service
         self.hub = hub
         self.aggregator = aggregator
+        self.taxonomy_aggregator = taxonomy_aggregator
         self._ingestion_task: asyncio.Task | None = None
         self._running = False
         self.reconnect_count = 0
@@ -62,6 +65,8 @@ class RealtimeProviderManager:
                     saved = await self.cache_service.save_and_publish_quote(quote)
                     if saved and self.aggregator is not None:
                         await self.aggregator.accept(quote)
+                    if saved and self.taxonomy_aggregator is not None:
+                        await self.taxonomy_aggregator.accept(quote)
             except asyncio.CancelledError:
                 break
             except Exception as e:

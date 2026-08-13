@@ -19,6 +19,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -39,14 +40,41 @@ fun IndustryLandingRoute(
     onIndustryClick: (String) -> Unit,
     onThemeClick: (String) -> Unit,
     viewModel: IndustryLandingViewModel = hiltViewModel(),
+    realtimeViewModel: IndustryRealtimeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    IndustryLandingScreen(
+    val realtime by realtimeViewModel.state.collectAsStateWithLifecycle()
+    Column { IndustryRealtimePanel(realtime, realtimeViewModel::setType); Box(Modifier.weight(1f)) { IndustryLandingScreen(
         uiState = uiState,
         onIndustryClick = onIndustryClick,
         onThemeClick = onThemeClick,
         onRetry = { viewModel.loadData() },
-    )
+    ) } }
+}
+
+@Composable
+fun IndustryRealtimePanel(state: IndustryRealtimeUiState, onType: (Boolean) -> Unit) {
+    Card(Modifier.fillMaxWidth().padding(12.dp).testTag("realtime-strength-panel")) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("強度模式：盤中", style = MaterialTheme.typography.titleMedium)
+                Text("盤後：twml-industry-strength-v1")
+            }
+            when (state) {
+                IndustryRealtimeUiState.Loading -> CircularProgressIndicator()
+                IndustryRealtimeUiState.Unavailable -> Text("即時產業強度尚未配置")
+                is IndustryRealtimeUiState.Content -> {
+                    Row { FilterChip(state.industry, { onType(true) }, { Text("盤中產業") }); FilterChip(!state.industry, { onType(false) }, { Text("盤中題材") }) }
+                    if (state.stale) Text("STALE · 顯示最後 snapshot")
+                    state.rows.take(5).forEach { item ->
+                        Text("#${item.rank ?: "--"} ${item.name} 分數 ${item.realtimeStrengthScore ?: "N/A"} · 報酬 ${item.equalWeightReturn ?: "--"}%")
+                        Text("上漲比 ${item.advanceRatio ?: "--"} · MA20 ${item.aboveMa20PctRealtime ?: "unavailable"} · coverage ${item.coverageRatio} · ${item.dataStatus}")
+                        Text("Momentum ${item.components.momentum ?: "unavailable"} · Breadth ${item.components.breadth ?: "unavailable"} · Technical ${item.components.technical ?: "unavailable"} · Turnover ${item.components.turnover ?: "unavailable"}")
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

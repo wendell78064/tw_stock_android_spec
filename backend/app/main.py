@@ -25,11 +25,16 @@ from app.api.watchlists import router as watchlists_router
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
+from app.repositories.realtime_membership import (
+    RealtimeMembershipSnapshot,
+    load_realtime_memberships,
+)
 from app.services.intraday_candle_aggregator import IntradayCandleAggregator
 from app.services.readiness import ReadinessChecker
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
 from app.services.realtime_provider_manager import RealtimeProviderManager
+from app.services.realtime_strength import RealtimeTaxonomyAggregator
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -48,17 +53,25 @@ async def lifespan(app: FastAPI):
     cache_service = RealtimeCacheService(redis)
     hub = RealtimeQuoteHub(redis, cache_service)
     aggregator = IntradayCandleAggregator(cache_service)
+    try:
+        async with app.state.session_factory() as membership_session:
+            memberships = await load_realtime_memberships(membership_session)
+    except Exception as error:
+        logger.warning("realtime_membership_unavailable", error=str(error))
+        memberships = RealtimeMembershipSnapshot()
+    taxonomy_aggregator = RealtimeTaxonomyAggregator(memberships, cache_service)
     provider = (
         FakeRealtimeProvider()
         if settings.app_env.lower() in {"development", "test", "ci"}
         else UnconfiguredRealtimeProvider()
     )
-    manager = RealtimeProviderManager(provider, cache_service, hub, aggregator)
+    manager = RealtimeProviderManager(provider, cache_service, hub, aggregator, taxonomy_aggregator)
 
     app.state.realtime_cache_service = cache_service
     app.state.realtime_hub = hub
     app.state.realtime_provider_manager = manager
     app.state.intraday_aggregator = aggregator
+    app.state.realtime_taxonomy_aggregator = taxonomy_aggregator
 
     await hub.start()
     await manager.start()

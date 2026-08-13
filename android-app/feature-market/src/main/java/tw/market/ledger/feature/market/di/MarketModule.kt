@@ -14,6 +14,10 @@ import tw.market.ledger.database.DerivativesDao
 import tw.market.ledger.feature.market.data.DefaultDerivativesRepository
 import tw.market.ledger.feature.market.domain.DerivativesRepository
 import tw.market.ledger.feature.market.domain.GetFuturesOverviewUseCase
+import tw.market.ledger.feature.market.data.DefaultRealtimeMarketRepository
+import tw.market.ledger.feature.market.domain.RealtimeMarketRepository
+import tw.market.ledger.network.RealtimeApi
+import tw.market.ledger.network.RealtimeQuoteClient
 
 @Module @InstallIn(SingletonComponent::class)
 object MarketModule {
@@ -22,4 +26,5 @@ object MarketModule {
     @Provides fun derivativesRepository(api: DerivativesApi, dao: DerivativesDao): DerivativesRepository =
         DefaultDerivativesRepository(api, dao)
     @Provides fun futuresOverview(repository: DerivativesRepository) = GetFuturesOverviewUseCase(repository)
+    @Provides fun realtimeMarketRepository(api: RealtimeApi, client: RealtimeQuoteClient): RealtimeMarketRepository = DefaultRealtimeMarketRepository(api, client)
 }
