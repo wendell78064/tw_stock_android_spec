@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 
 from app.api.schemas import (
     CreateSavedScreenerInput,
-    Meta,
+    MetaResponse,
     RunScreenerInput,
     SavedScreenerEnvelope,
     SavedScreenerListEnvelope,
@@ -47,7 +47,7 @@ async def get_screener_fields() -> ScreenerFieldsEnvelope:
     now = datetime.now(UTC)
     return ScreenerFieldsEnvelope(
         data=fields,
-        meta=Meta(
+        meta=MetaResponse(
             as_of=now,
             received_at=now,
             data_status="FINAL",
@@ -99,7 +99,7 @@ async def run_screener(
         data=items,
         total_count=total_count,
         trade_date=trade_date,
-        meta=Meta(
+        meta=MetaResponse(
             as_of=now,
             received_at=now,
             data_status="FINAL" if results else "UNAVAILABLE",
@@ -132,7 +132,7 @@ async def list_saved_screeners(
             }
             for s in screeners
         ],
-        meta=Meta(
+        meta=MetaResponse(
             as_of=now,
             received_at=now,
             data_status="FINAL",
@@ -174,7 +174,7 @@ async def create_saved_screener(
             "created_at": screener.created_at,
             "updated_at": screener.updated_at,
         },
-        meta=Meta(
+        meta=MetaResponse(
             as_of=now,
             received_at=now,
             data_status="FINAL",
@@ -208,7 +208,7 @@ async def get_saved_screener(
             "created_at": screener.created_at,
             "updated_at": screener.updated_at,
         },
-        meta=Meta(
+        meta=MetaResponse(
             as_of=now,
             received_at=now,
             data_status="FINAL",
@@ -255,7 +255,7 @@ async def update_saved_screener(
             "created_at": screener.created_at,
             "updated_at": screener.updated_at,
         },
-        meta=Meta(
+        meta=MetaResponse(
             as_of=now,
             received_at=now,
             data_status="FINAL",
@@ -325,7 +325,7 @@ async def run_saved_screener(
         data=items,
         total_count=total_count,
         trade_date=trade_date,
-        meta=Meta(
+        meta=MetaResponse(
             as_of=now,
             received_at=now,
             data_status="FINAL" if results else "UNAVAILABLE",
