@@ -18,22 +18,26 @@ Phase 4 / Slice 2 COMPLETE
 Phase 4 / Slice 3 COMPLETE
 ```
 
-- Current phase: Phase 4 / Slice 3
+- Current phase: Phase 4 / Slice 3 COMPLETE
 - Latest completed feature: Multi-Condition Stock Screener
+- Feature commit: `acb6e94`
 - DB head: `0011_stock_screener`
 - Room: version 9
-- Latest tag: `phase-4-slice-2-complete`
-- GitHub Actions: WAITING FOR CI
+- Latest tag: `phase-4-slice-3-complete`
+- GitHub Actions: backend PASS / android PASS / android-instrumentation PASS
 
 ## Phase 4 / Slice 3 Completed Features
 
-- Multi-Condition Typed Screener AST (CONDITION, AND, OR)
-- Centralized Whitelist Field Catalog (`GET /v1/screener/fields`)
-- Bulk Screener Query Engine (`ScreenerQueryService`)
-- Saved Screener CRUD & Run (`/v1/screeners`)
-- Missing Data Semantics (`NON_MATCH` for null, `IS_UNAVAILABLE` match)
-- Android Screener Builder & Result UI (`feature-screener`)
-- Room Offline Cache & Stale Badge Support
+- Typed Screener AST
+- Nested AND / OR
+- Screener Field Catalog
+- Missing Data Semantics
+- Saved Screener
+- Bulk Query Engine
+- Sorting / Pagination
+- Android Screener Builder
+- Result Screen
+- Offline Cache
 
 ## External and Future
 

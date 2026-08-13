@@ -21,7 +21,13 @@ The Multi-Condition Stock Screener enables flexible, deterministic cross-section
 - **CRUD Endpoints**: `/v1/screeners` (Create, List, Get, Patch, Delete, Run).
 - **Android Offline Cache**: Room database cache for saved screeners, field metadata, and last query results with `STALE` status indicator.
 
-## Validation & Test Coverage
+## Validation & CI Status
 
-- Backend unit tests (`tests/test_screener.py`): AST validation, invalid operator/field rejection, AST dict conversion, API endpoints.
-- Android unit & UI tests (`feature-screener`): Repository caching, ViewModel builder logic, Compose rendering.
+- GitHub CI: PASS
+- backend: PASS
+- android: PASS
+- android-instrumentation: PASS
+- connectedDebugAndroidTest: PASS
+- Android API 35 / Google APIs / x86_64
+- Backend unit tests (`tests/test_screener.py`): AST validation, invalid operator/field rejection, AST dict conversion, API endpoints PASS.
+- Android unit & UI tests (`feature-screener`): Repository caching, ViewModel builder logic, Compose rendering PASS.
