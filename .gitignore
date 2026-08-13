@@ -3,6 +3,8 @@
 .gradle/
 **/.kotlin/
 **/build/
+**/.kotlin_old/
+**/build_old/
 __pycache__/
 .pytest_cache/
 .ruff_cache/
