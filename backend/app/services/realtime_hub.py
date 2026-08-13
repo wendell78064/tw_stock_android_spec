@@ -1,12 +1,11 @@
 import asyncio
 from collections import defaultdict
-import json
 import logging
-from typing import Any
-from fastapi import WebSocket, WebSocketDisconnect
+
+from fastapi import WebSocket
 from redis.asyncio import Redis
 
-from app.domain.realtime import DataStatus, RealtimeQuote
+from app.domain.realtime import RealtimeQuote
 from app.services.realtime_cache import CHANNEL_REALTIME_QUOTES, RealtimeCacheService
 
 logger = logging.getLogger(__name__)
@@ -98,7 +97,9 @@ class RealtimeQuoteHub:
 
         # Immediate snapshot delivery from Redis
         if added_keys:
-            parsed_targets = [{"market": k.split(":")[0], "code": k.split(":")[1]} for k in added_keys]
+            parsed_targets = [
+                {"market": k.split(":")[0], "code": k.split(":")[1]} for k in added_keys
+            ]
             cached_quotes = await self.cache_service.get_quotes_batch(parsed_targets)
             for q in cached_quotes:
                 if q:

@@ -1,11 +1,15 @@
-import asyncio
 import json
 import logging
 from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from app.core.dependencies import get_realtime_cache_service, get_realtime_hub, get_realtime_provider_manager
+from app.core.dependencies import (
+    get_realtime_cache_service,
+    get_realtime_hub,
+    get_realtime_provider_manager,
+)
 from app.domain.realtime import ProviderCapabilities, RealtimeQuote
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
@@ -39,7 +43,9 @@ class RealtimeHealthResponse(BaseModel):
 
 @router.get("/quotes/health", response_model=RealtimeHealthResponse)
 async def get_realtime_health(
-    manager: Annotated[RealtimeProviderManager, Depends(get_realtime_provider_manager)],
+    manager: Annotated[
+        RealtimeProviderManager, Depends(get_realtime_provider_manager)
+    ],
     hub: Annotated[RealtimeQuoteHub, Depends(get_realtime_hub)],
 ) -> RealtimeHealthResponse:
     capabilities = await manager.get_capabilities()
@@ -63,18 +69,25 @@ async def get_realtime_health(
 async def get_latest_quote(
     market: str,
     code: str,
-    cache_service: Annotated[RealtimeCacheService, Depends(get_realtime_cache_service)],
+    cache_service: Annotated[
+        RealtimeCacheService, Depends(get_realtime_cache_service)
+    ],
 ) -> RealtimeQuote:
     quote = await cache_service.get_quote(market, code)
     if not quote:
-        raise HTTPException(status_code=404, detail=f"No realtime quote cached for {market}:{code}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No realtime quote cached for {market}:{code}",
+        )
     return quote
 
 
 @router.post("/quotes/batch", response_model=list[RealtimeQuote | None])
 async def get_quotes_batch(
     payload: BatchQuoteRequestInput,
-    cache_service: Annotated[RealtimeCacheService, Depends(get_realtime_cache_service)],
+    cache_service: Annotated[
+        RealtimeCacheService, Depends(get_realtime_cache_service)
+    ],
 ) -> list[RealtimeQuote | None]:
     targets = [{"market": t.market, "code": t.code} for t in payload.targets]
     return await cache_service.get_quotes_batch(targets)

@@ -24,7 +24,7 @@ class RealtimeSubscriptionManager(
     init {
         scope.launch {
             client.quotesFlow.collect { quote ->
-                val current = _latestQuotes.value.toMutableMap()
+                val current: MutableMap<String, RealtimeQuote> = _latestQuotes.value.toMutableMap()
                 current[quote.compositeKey] = quote
                 _latestQuotes.value = current
             }
@@ -54,6 +54,8 @@ class RealtimeSubscriptionManager(
     }
 
     fun getQuoteState(market: String, code: String): RealtimeQuote? {
-        return _latestQuotes.value["${market.uppercase()}:${code.uppercase()}"]
+        val key = "${market.uppercase()}:${code.uppercase()}"
+        val map: Map<String, RealtimeQuote> = _latestQuotes.value
+        return map[key]
     }
 }

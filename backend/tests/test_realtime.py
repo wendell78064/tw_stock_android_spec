@@ -1,16 +1,23 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from starlette.testclient import TestClient
 
-from app.adapters.fake_realtime_provider import FakeRealtimeProvider, UnconfiguredRealtimeProvider
-from app.domain.realtime import DataStatus, LicenseStatus, RealtimeQuote, TradingSession
+from app.adapters.fake_realtime_provider import (
+    FakeRealtimeProvider,
+    UnconfiguredRealtimeProvider,
+)
+from app.domain.realtime import (
+    DataStatus,
+    LicenseStatus,
+    RealtimeQuote,
+)
 from app.main import app
 from app.services.realtime_cache import RealtimeCacheService
-from app.services.realtime_hub import ConnectionSession, RealtimeQuoteHub
+from app.services.realtime_hub import RealtimeQuoteHub
 
 
 class FakeRedis:
@@ -129,7 +136,10 @@ async def test_hub_subscription_limits_and_routing():
     session = await hub.register_connection(mock_ws)
 
     # Subscribe 2 securities (at max limit)
-    await hub.handle_subscribe(session, [{"market": "TWSE", "code": "2330"}, {"market": "TWSE", "code": "2317"}])
+    await hub.handle_subscribe(
+        session,
+        [{"market": "TWSE", "code": "2330"}, {"market": "TWSE", "code": "2317"}],
+    )
     assert len(session.subscriptions) == 2
 
     # Subscribe 3rd security -> Should be rejected with error message
@@ -187,7 +197,12 @@ def test_http_quote_snapshot_api_endpoints():
     # POST batch -> 200 OK
     resp_batch = client.post(
         "/v1/quotes/batch",
-        json={"targets": [{"market": "TWSE", "code": "2330"}, {"market": "TWSE", "code": "9999"}]},
+        json={
+            "targets": [
+                {"market": "TWSE", "code": "2330"},
+                {"market": "TWSE", "code": "9999"},
+            ]
+        },
     )
     assert resp_batch.status_code == 200
     batch_data = resp_batch.json()

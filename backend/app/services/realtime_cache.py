@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any
+
 from redis.asyncio import Redis
 
 from app.domain.realtime import RealtimeQuote
@@ -50,7 +50,7 @@ class RealtimeCacheService:
         return quotes
 
     async def save_and_publish_quote(self, quote: RealtimeQuote) -> bool:
-        """Saves quote if newer than cached, then publishes to Redis channel for multi-worker hub."""
+        """Saves quote if newer than cached, then publishes to Redis channel."""
         key = self._get_key(quote.market_id, quote.code)
         existing = await self.get_quote(quote.market_id, quote.code)
 

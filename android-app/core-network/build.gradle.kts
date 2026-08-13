@@ -22,6 +22,7 @@ dependencies {
     implementation("com.squareup.moshi:moshi-adapters:1.15.2")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.squareup.retrofit2:converter-scalars:2.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 }
 
 tasks.named("preBuild").configure { dependsOn(rootProject.tasks.named("openApiGenerate")) }

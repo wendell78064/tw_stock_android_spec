@@ -1,8 +1,8 @@
 import asyncio
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 import random
-from typing import AsyncGenerator
 
 from app.adapters.realtime_base import RealtimeMarketDataProvider
 from app.domain.realtime import (
