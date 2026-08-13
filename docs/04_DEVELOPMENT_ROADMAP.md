@@ -165,12 +165,20 @@
 - 篩選器 AND／OR 結果可重現。
 - 比較圖起點正規化一致。
 
-## Phase 5：合法盤中行情
+## Phase 5：合法盤中行情 — **SOFTWARE COMPLETE**
 
 - Phase 5 / Slice 1 — Realtime Data Provider + WebSocket Foundation: **COMPLETE**
 - Phase 5 / Slice 2 — Intraday Quote + 1m/5m K: **COMPLETE**
 - Phase 5 / Slice 3 — Realtime Market / Industry Strength: **COMPLETE**
-- Phase 5 / Slice 4 — Realtime Alert Engine: **NEXT**
+- Phase 5 / Slice 4 — Realtime Alert Engine: **COMPLETE**
+
+External production gates remain open：
+
+- Authorized and configured realtime data provider with `realtime_available`。
+- Realtime redistribution/license confirmation。
+- FCM remote push configuration if required。
+
+Phase 5 software completion does not mean production realtime readiness.
 
 ### 前置條件
 
@@ -199,7 +207,7 @@
 - 盤中同規則不重複轟炸。
 - App 背景恢復後資料正確。
 
-## Phase 6：完整產品功能
+## Phase 6：Productization / Ecosystem — **NEXT**
 
 - 多裝置同步。
 - 生物辨識。

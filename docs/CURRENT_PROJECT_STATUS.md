@@ -15,27 +15,26 @@ Phase 4 / Slice 4 COMPLETE
 Phase 5 / Slice 1 COMPLETE
 Phase 5 / Slice 2 COMPLETE
 Phase 5 / Slice 3 COMPLETE
-Phase 5 / Slice 4 IMPLEMENTED — WAITING FOR CI
+Phase 5 / Slice 4 COMPLETE
+Phase 5 SOFTWARE COMPLETE
 ```
 
 - Current phase: **Phase 5 / Slice 4 — Realtime Alert Engine**
 - Production Realtime Provider: **UNCONFIGURED**
 - DB head: `0012_realtime_alert_engine`
 - Room: version 10
-- Latest tag: `phase-5-slice-3-complete`
-- GitHub Actions CI: **PASS** ([Run 31683265696](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31683265696))
+- Latest tags: `phase-5-slice-4-complete`, `phase-5-software-complete`
+- GitHub Actions CI: **PASS** ([Run 31684839240](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31684839240))
 - CI jobs: backend **PASS**, android **PASS**, android-instrumentation **PASS**
 - CI instrumentation: `connectedDebugAndroidTest` **PASS**, API 35 emulator, 25 tests, 0 skipped/failed
 - Local device instrumentation execution: **NOT RUN**
 
-## Phase 5 / Slice 4 Implemented
+## Phase 5 Software Completed
 
-- EOD/REALTIME alert evaluation separation
-- Realtime price and dynamic daily MA crossings
-- Redis relation state, replay protection, cooldown and daily limit
-- Dynamic portfolio/watchlist/security subscription aggregation
-- Alert WebSocket channel and realtime status API
-- Android realtime rule editor, notification badge and local dedup
+- Slice 1: Realtime Provider / WebSocket Foundation
+- Slice 2: Intraday 1m / 5m Candles
+- Slice 3: Realtime Market / Industry Strength
+- Slice 4: Realtime Alert Engine
 
 ## Database
 
@@ -44,13 +43,16 @@ Phase 5 / Slice 4 IMPLEMENTED — WAITING FOR CI
 
 ## External and Future
 
+- Production Realtime Provider: `UNCONFIGURED`
 - FCM remote push: `UNCONFIGURED`
+- External production gates: authorized realtime data provider, redistribution/license confirmation, and FCM configuration if remote push is required.
+- Phase 5 is **software complete**, not production realtime ready.
 
 ## Next
 
-Await Phase 5 / Slice 4 CI validation and closeout.
+Phase 6 — Productization / Ecosystem
 
-Do not start Slice 4 without explicit request and Slice definition.
+Do not start Phase 6 without explicit request and Slice definition.
 
 ## Primary References
 

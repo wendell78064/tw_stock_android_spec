@@ -1,6 +1,6 @@
 # 21 — Phase 5 / Slice 4: Realtime Alert Engine
 
-狀態：**IMPLEMENTED — WAITING FOR CI**
+狀態：**COMPLETE**
 
 ## EOD / Realtime Boundary
 
@@ -44,8 +44,19 @@
 - Android：mode selector、supported filtering、provider banner、realtime badge、local notification fingerprint dedup、既有 ViewModel regression。
 - Performance smoke：100 securities × 20 rules = 2,000 affected evaluations；100-security burst 32.779ms，平均 0.328ms/security quote。MA context/membership bulk cached、無 per-rule DB 或 per-quote history query。
 
+## Final CI Validation
+
+- GitHub Actions：[Run 31684839240](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31684839240)
+- backend：**PASS**
+- android：**PASS**
+- android-instrumentation：**PASS**
+- GitHub device instrumentation：`:app:connectedDebugAndroidTest` **PASS**，API 35 emulator，25 tests，0 skipped，0 failed。
+- Local device instrumentation execution：**NOT RUN**
+- PostgreSQL `0011 → 0012 → 0011 → 0012` migration round-trip：**PASS**。
+
 ## Database / Limitations
 
 - PostgreSQL migration：`0012_realtime_alert_engine`；Room 維持 version 10。
 - Durable rules/events 存 PostgreSQL，transient relation state 存 Redis。
 - 不包含 FCM remote push、Cloud Sync、AI、broker/auto trading、realtime screener/comparison automation。
+- Phase 5 software implementation 已完成，但 production realtime 尚受 authorized/configured/available/redistribution license provider 與必要時 FCM 設定之外部條件限制；不得描述為 production realtime ready。
