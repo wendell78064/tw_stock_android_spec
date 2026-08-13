@@ -64,7 +64,7 @@ private fun AppNavigation() {
         topBar = {
             TopAppBar(
                 title = { Text("TW Market Ledger") },
-                actions = { TextButton(onClick = { navController.navigate("alerts") }) { Text("提醒") }; TextButton(onClick = { navController.navigate("notifications") }) { Text("通知") }; TextButton(onClick = { navController.navigate("security-search") }) { Text("搜尋") } },
+                actions = { TextButton(onClick = { navController.navigate("account") }) { Text("帳號") }; TextButton(onClick = { navController.navigate("alerts") }) { Text("提醒") }; TextButton(onClick = { navController.navigate("notifications") }) { Text("通知") }; TextButton(onClick = { navController.navigate("security-search") }) { Text("搜尋") } },
             )
         }, bottomBar = {
             NavigationBar {
@@ -81,6 +81,7 @@ private fun AppNavigation() {
             startDestination = "home",
             modifier = Modifier.fillMaxSize().padding(padding),
         ) {
+            composable("account") { AccountRoute(hiltViewModel()) }
             composable("home") { MarketDashboardRoute(onFuturesClick = { navController.navigate("futures/$it") }) }
             composable("industry") { IndustryLandingRoute(
                 onIndustryClick = { navController.navigate("industry/$it") },
@@ -174,4 +175,3 @@ private fun AppNavigation() {
         }
     }
 }
-

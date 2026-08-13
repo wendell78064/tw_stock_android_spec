@@ -69,6 +69,9 @@ class WatchlistModel(Base):
     sort_order: Mapped[int] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class WatchlistItemModel(Base):
@@ -88,6 +91,67 @@ class WatchlistItemModel(Base):
     add_price: Mapped[object | None] = mapped_column(Numeric(24, 8))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class UserModel(Base):
+    __tablename__ = "users"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    login_identifier: Mapped[str] = mapped_column(String(320), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(512))
+    status: Mapped[str] = mapped_column(String(16), default="ACTIVE")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AuthSessionModel(Base):
+    __tablename__ = "auth_sessions"
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    refresh_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class UserDeviceModel(Base):
+    __tablename__ = "user_devices"
+    __table_args__ = (UniqueConstraint("user_id", "device_public_id"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    device_public_id: Mapped[str] = mapped_column(String(128))
+    name: Mapped[str | None] = mapped_column(String(120))
+    platform: Mapped[str] = mapped_column(String(24))
+    app_version: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SyncChangeModel(Base):
+    __tablename__ = "sync_changes"
+    sequence: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    entity_type: Mapped[str] = mapped_column(String(32))
+    entity_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True))
+    operation: Mapped[str] = mapped_column(String(8))
+    version: Mapped[int] = mapped_column(Integer)
+    payload: Mapped[dict | None] = mapped_column(JSONB)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SyncOperationModel(Base):
+    __tablename__ = "sync_operations"
+    __table_args__ = (UniqueConstraint("user_id", "operation_id"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    device_id: Mapped[UUID] = mapped_column(ForeignKey("user_devices.id", ondelete="CASCADE"))
+    operation_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True))
+    result: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class AlertRuleModel(Base):
@@ -281,7 +345,6 @@ class TaxonomyStrengthSnapshotModel(Base):
     data_status: Mapped[str] = mapped_column(String(32), default="FINAL")
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
 
 
 class DailyPriceModel(Base):

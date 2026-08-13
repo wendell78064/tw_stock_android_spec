@@ -17,12 +17,14 @@ Phase 5 / Slice 2 COMPLETE
 Phase 5 / Slice 3 COMPLETE
 Phase 5 / Slice 4 COMPLETE
 Phase 5 SOFTWARE COMPLETE
+Phase 6 / Slice 1 COMPLETE (local validation; CI pending)
 ```
 
-- Current phase: **Phase 5 / Slice 4 — Realtime Alert Engine**
+- Current: **Phase 6 / Slice 1 — Account / Cloud Sync Foundation**
+- Previous: **Phase 5 SOFTWARE COMPLETE**
 - Production Realtime Provider: **UNCONFIGURED**
-- DB head: `0012_realtime_alert_engine`
-- Room: version 10
+- DB head: `0013_account_sync_foundation`
+- Room: version 11
 - Latest tags: `phase-5-slice-4-complete`, `phase-5-software-complete`
 - GitHub Actions CI: **PASS** ([Run 31684839240](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31684839240))
 - CI jobs: backend **PASS**, android **PASS**, android-instrumentation **PASS**
@@ -50,9 +52,7 @@ Phase 5 SOFTWARE COMPLETE
 
 ## Next
 
-Phase 6 — Productization / Ecosystem
-
-Do not start Phase 6 without explicit request and Slice definition.
+Complete Phase 6 / Slice 1 CI validation before starting Slice 2.
 
 ## Primary References
 
@@ -60,6 +60,7 @@ Do not start Phase 6 without explicit request and Slice definition.
 - `docs/19_PHASE_5_INTRADAY_CANDLES.md`
 - `docs/20_PHASE_5_REALTIME_MARKET_INDUSTRY_STRENGTH.md`
 - `docs/21_PHASE_5_REALTIME_ALERT_ENGINE.md`
+- `docs/22_PHASE_6_ACCOUNT_CLOUD_SYNC_FOUNDATION.md`
 - `docs/17_PHASE_4_STOCK_COMPARISON.md`
 - `docs/05_DATA_SOURCES_AND_COMPLIANCE.md`
 - `docs/04_DEVELOPMENT_ROADMAP.md`

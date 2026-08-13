@@ -33,8 +33,16 @@ import tw.market.ledger.network.AlertApi
 import tw.market.ledger.database.TaxonomyDao
 import tw.market.ledger.network.IndustryApi
 import tw.market.ledger.database.MIGRATION_9_10
+import tw.market.ledger.database.MIGRATION_10_11
+import tw.market.ledger.database.CloudSyncDao
 import tw.market.ledger.database.ScreenerDao
 import tw.market.ledger.network.ScreenerApi
+import tw.market.ledger.network.AuthApi
+import tw.market.ledger.network.SyncApi
+import tw.market.ledger.network.TokenSessionStore
+import tw.market.ledger.network.TokenRefresher
+import tw.market.ledger.network.BearerAuthInterceptor
+import tw.market.ledger.network.RotatingTokenAuthenticator
 
 
 private val MIGRATION_5_6 = object : Migration(5, 6) {
@@ -70,7 +78,7 @@ object AppModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): TWMarketDatabase =
         Room.databaseBuilder(context, TWMarketDatabase::class.java, "tw-market-ledger.db")
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
             .build()
 
     @Provides fun securityDao(database: TWMarketDatabase): SecurityDao = database.securityDao()
@@ -82,13 +90,22 @@ object AppModule {
     @Provides fun alertDao(database: TWMarketDatabase): AlertDao = database.alertDao()
     @Provides fun taxonomyDao(database: TWMarketDatabase): TaxonomyDao = database.taxonomyDao()
     @Provides fun screenerDao(database: TWMarketDatabase): ScreenerDao = database.screenerDao()
+    @Provides fun cloudSyncDao(database: TWMarketDatabase): CloudSyncDao = database.cloudSyncDao()
 
     @Provides @Singleton
-    fun retrofit(): Retrofit {
+    fun retrofit(sessionStore: TokenSessionStore, tokenRefresher: TokenRefresher): Retrofit {
         val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+        val client = okhttp3.OkHttpClient.Builder()
+            .addInterceptor(BearerAuthInterceptor(sessionStore))
+            .authenticator(RotatingTokenAuthenticator(sessionStore, tokenRefresher)).build()
         return Retrofit.Builder().baseUrl(BuildConfig.API_BASE_URL)
-            .addConverterFactory(MoshiConverterFactory.create(moshi)).build()
+            .client(client).addConverterFactory(MoshiConverterFactory.create(moshi)).build()
     }
+
+    @Provides fun tokenStore(store: KeystoreSessionStore): TokenSessionStore = store
+    @Provides fun tokenRefresher(manager: AuthSessionManager): TokenRefresher = manager
+    @Provides @Singleton fun authApi(retrofit: Retrofit): AuthApi = retrofit.create(AuthApi::class.java)
+    @Provides @Singleton fun syncApi(retrofit: Retrofit): SyncApi = retrofit.create(SyncApi::class.java)
 
     @Provides @Singleton
     fun securityApi(retrofit: Retrofit): SecurityApi = retrofit.create(SecurityApi::class.java)

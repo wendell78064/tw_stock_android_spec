@@ -16,18 +16,24 @@ class SqlWatchlistRepository:
     async def list_watchlists(self):
         rows = (
             await self.session.scalars(
-                select(WatchlistModel).order_by(WatchlistModel.sort_order, WatchlistModel.id)
+                select(WatchlistModel)
+                .where(WatchlistModel.user_id.is_(None), WatchlistModel.deleted_at.is_(None))
+                .order_by(WatchlistModel.sort_order, WatchlistModel.id)
             )
         ).all()
         return [self._watchlist(row) for row in rows]
 
     async def get_watchlist(self, watchlist_id):
         row = await self.session.get(WatchlistModel, watchlist_id)
-        return self._watchlist(row) if row else None
+        return (
+            self._watchlist(row) if row and row.user_id is None and row.deleted_at is None else None
+        )
 
     async def create_watchlist(self, name):
         order = await self.session.scalar(
-            select(func.coalesce(func.max(WatchlistModel.sort_order), -1))
+            select(func.coalesce(func.max(WatchlistModel.sort_order), -1)).where(
+                WatchlistModel.user_id.is_(None), WatchlistModel.deleted_at.is_(None)
+            )
         )
         now = datetime.now(UTC)
         row = WatchlistModel(name=name, sort_order=order + 1, created_at=now, updated_at=now)
@@ -38,7 +44,7 @@ class SqlWatchlistRepository:
 
     async def rename_watchlist(self, watchlist_id, name):
         row = await self.session.get(WatchlistModel, watchlist_id)
-        if not row:
+        if not row or row.user_id is not None or row.deleted_at is not None:
             return None
         row.name, row.updated_at = name, datetime.now(UTC)
         await self.session.commit()
@@ -46,7 +52,9 @@ class SqlWatchlistRepository:
 
     async def delete_watchlist(self, watchlist_id):
         result = await self.session.execute(
-            delete(WatchlistModel).where(WatchlistModel.id == watchlist_id)
+            delete(WatchlistModel).where(
+                WatchlistModel.id == watchlist_id, WatchlistModel.user_id.is_(None)
+            )
         )
         await self.session.commit()
         return bool(result.rowcount)
@@ -56,7 +64,9 @@ class SqlWatchlistRepository:
         existing = set(
             (
                 await self.session.scalars(
-                    select(WatchlistModel.id).where(WatchlistModel.id.in_(ids))
+                    select(WatchlistModel.id).where(
+                        WatchlistModel.id.in_(ids), WatchlistModel.user_id.is_(None)
+                    )
                 )
             ).all()
         )
@@ -78,6 +88,7 @@ class SqlWatchlistRepository:
             .join(SecurityModel, SecurityModel.id == WatchlistItemModel.security_id)
             .join(MarketModel, MarketModel.id == SecurityModel.market_id)
             .where(WatchlistItemModel.watchlist_id == watchlist_id)
+            .where(WatchlistItemModel.user_id.is_(None), WatchlistItemModel.deleted_at.is_(None))
             .order_by(WatchlistItemModel.sort_order, WatchlistItemModel.id)
         )
         return [self._item(*row) for row in (await self.session.execute(statement)).all()]
@@ -88,7 +99,10 @@ class SqlWatchlistRepository:
             .join(SecurityModel, SecurityModel.id == WatchlistItemModel.security_id)
             .join(MarketModel, MarketModel.id == SecurityModel.market_id)
             .where(
-                WatchlistItemModel.watchlist_id == watchlist_id, WatchlistItemModel.id == item_id
+                WatchlistItemModel.watchlist_id == watchlist_id,
+                WatchlistItemModel.id == item_id,
+                WatchlistItemModel.user_id.is_(None),
+                WatchlistItemModel.deleted_at.is_(None),
             )
         )
         row = (await self.session.execute(statement)).one_or_none()
@@ -114,7 +128,7 @@ class SqlWatchlistRepository:
 
     async def update_item(self, watchlist_id, item_id, **values):
         row = await self.session.get(WatchlistItemModel, item_id)
-        if not row or row.watchlist_id != watchlist_id:
+        if not row or row.watchlist_id != watchlist_id or row.user_id is not None:
             return None
         for key, value in values.items():
             setattr(row, key, value)
@@ -125,7 +139,9 @@ class SqlWatchlistRepository:
     async def delete_item(self, watchlist_id, item_id):
         result = await self.session.execute(
             delete(WatchlistItemModel).where(
-                WatchlistItemModel.watchlist_id == watchlist_id, WatchlistItemModel.id == item_id
+                WatchlistItemModel.watchlist_id == watchlist_id,
+                WatchlistItemModel.id == item_id,
+                WatchlistItemModel.user_id.is_(None),
             )
         )
         await self.session.commit()
@@ -139,6 +155,7 @@ class SqlWatchlistRepository:
                     select(WatchlistItemModel.id).where(
                         WatchlistItemModel.watchlist_id == watchlist_id,
                         WatchlistItemModel.id.in_(ids),
+                        WatchlistItemModel.user_id.is_(None),
                     )
                 )
             ).all()
@@ -162,7 +179,7 @@ class SqlWatchlistRepository:
           FROM watchlist_items wi
           JOIN securities s ON s.id=wi.security_id
           JOIN markets m ON m.id=s.market_id
-          WHERE wi.watchlist_id=:watchlist_id
+          WHERE wi.watchlist_id=:watchlist_id AND wi.user_id IS NULL AND wi.deleted_at IS NULL
         ), prices AS (
           SELECT DISTINCT ON (security_id) security_id, trade_date, close, data_status,
             close - lag_close AS change,

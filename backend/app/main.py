@@ -11,6 +11,7 @@ from app.adapters.fake_realtime_provider import (
     UnconfiguredRealtimeProvider,
 )
 from app.api.alerts import router as alerts_router
+from app.api.auth import router as auth_router
 from app.api.comparison import router as comparison_router
 from app.api.derivatives import router as derivatives_router
 from app.api.health import router as health_router
@@ -20,6 +21,7 @@ from app.api.portfolios import router as portfolios_router
 from app.api.realtime import router as realtime_router
 from app.api.screener import router as screener_router
 from app.api.securities import router as securities_router
+from app.api.sync import router as sync_router
 from app.api.themes import router as themes_router
 from app.api.watchlists import router as watchlists_router
 from app.core.errors import AppError, app_error_handler
@@ -107,6 +109,8 @@ app.include_router(derivatives_router, prefix="/v1")
 app.include_router(portfolios_router, prefix="/v1")
 app.include_router(watchlists_router, prefix="/v1")
 app.include_router(alerts_router, prefix="/v1")
+app.include_router(auth_router, prefix="/v1")
+app.include_router(sync_router, prefix="/v1")
 app.include_router(industries_router, prefix="/v1")
 app.include_router(themes_router, prefix="/v1")
 app.include_router(screener_router)

@@ -8,6 +8,8 @@ servers:
 security:
   - bearerAuth: []
 tags:
+  - name: Auth
+  - name: Sync
   - name: Market
   - name: Securities
   - name: Futures
@@ -17,6 +19,64 @@ tags:
   - name: Alerts
   - name: Screeners
 paths:
+  /auth/register:
+    post:
+      security: []
+      tags: [Auth]
+      operationId: registerAccount
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AuthCredentials" } } } }
+      responses: { "201": { description: Account created } }
+  /auth/login:
+    post:
+      security: []
+      tags: [Auth]
+      operationId: login
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AuthCredentials" } } } }
+      responses: { "200": { description: Rotating session tokens, content: { application/json: { schema: { $ref: "#/components/schemas/AuthTokenEnvelope" } } } }, "401": { description: Unauthenticated } }
+  /auth/refresh:
+    post:
+      security: []
+      tags: [Auth]
+      operationId: refreshSession
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RefreshTokenInput" } } } }
+      responses: { "200": { description: Rotated tokens, content: { application/json: { schema: { $ref: "#/components/schemas/AuthTokenEnvelope" } } } }, "401": { description: Unauthenticated } }
+  /auth/logout:
+    post:
+      security: []
+      tags: [Auth]
+      operationId: logout
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RefreshTokenInput" } } } }
+      responses: { "204": { description: Session revoked } }
+  /me:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAccount
+      responses: { "200": { description: Current account } }
+  /devices:
+    post:
+      tags: [Auth]
+      operationId: registerDevice
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/DeviceInput" } } } }
+      responses: { "200": { description: Stable device registration } }
+  /sync/push:
+    post:
+      tags: [Sync]
+      operationId: pushSyncOperations
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SyncPushInput" } } } }
+      responses: { "200": { description: "Per-operation accepted, duplicate, conflict, or rejected status" }, "403": { description: Device is outside authenticated user scope } }
+  /sync/changes:
+    get:
+      tags: [Sync]
+      operationId: getSyncChanges
+      parameters:
+        - { in: query, name: cursor, schema: { type: integer, minimum: 0, default: 0 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses: { "200": { description: Bounded incremental user-scoped changes } }
+  /sync/bootstrap:
+    get:
+      tags: [Sync]
+      operationId: bootstrapSync
+      responses: { "200": { description: Current user watchlist snapshot and cursor } }
   /realtime/markets:
     get:
       operationId: getRealtimeMarkets
@@ -1166,6 +1226,53 @@ components:
       required: true
       schema: { type: string, format: uuid }
   schemas:
+    AuthCredentials:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier: { type: string, minLength: 1, maxLength: 320 }
+        password: { type: string, minLength: 1, maxLength: 256, format: password, writeOnly: true }
+    RefreshTokenInput:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string, minLength: 32, writeOnly: true }
+    AuthTokens:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in]
+      properties:
+        access_token: { type: string, writeOnly: true }
+        refresh_token: { type: string, writeOnly: true }
+        token_type: { type: string, enum: [bearer] }
+        expires_in: { type: integer }
+    AuthTokenEnvelope:
+      type: object
+      required: [data]
+      properties: { data: { $ref: "#/components/schemas/AuthTokens" } }
+    DeviceInput:
+      type: object
+      required: [device_public_id, platform]
+      properties:
+        device_public_id: { type: string, minLength: 16, maxLength: 128 }
+        name: { type: [string, "null"] }
+        platform: { type: string }
+        app_version: { type: [string, "null"] }
+    SyncOperationInput:
+      type: object
+      required: [operation_id, entity_type, entity_id, operation, base_version]
+      properties:
+        operation_id: { type: string, format: uuid }
+        entity_type: { type: string, enum: [WATCHLIST, WATCHLIST_ITEM] }
+        entity_id: { type: string, format: uuid }
+        operation: { type: string, enum: [UPSERT, DELETE] }
+        base_version: { type: integer, minimum: 0 }
+        payload: { type: [object, "null"], additionalProperties: true }
+    SyncPushInput:
+      type: object
+      required: [device_id, operations]
+      properties:
+        device_id: { type: string, format: uuid }
+        operations: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/SyncOperationInput" } }
     RealtimeMarketSnapshot:
       type: object
       required: [market_id, as_of, exchange_timestamp, total_members, valid_members, quoted_members, coverage_ratio, advancers, decliners, unchanged, advance_ratio, decline_ratio, live_count, stale_count, unavailable_count, data_status, provider, source_type, algorithm_version]
