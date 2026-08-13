@@ -194,7 +194,7 @@ async def get_saved_screener(
 ) -> SavedScreenerEnvelope:
     screener = await repository.get_screener(id)
     if screener is None:
-        raise AppError("SCREENER_NOT_FOUND", f"Saved screener '{id}' not found")
+        raise AppError("SCREENER_NOT_FOUND", f"Saved screener '{id}' not found", 404)
 
     now = datetime.now(UTC)
     return SavedScreenerEnvelope(
@@ -241,7 +241,7 @@ async def update_saved_screener(
         sort_direction=input_data.sort_direction,
     )
     if screener is None:
-        raise AppError("SCREENER_NOT_FOUND", f"Saved screener '{id}' not found")
+        raise AppError("SCREENER_NOT_FOUND", f"Saved screener '{id}' not found", 404)
 
     now = datetime.now(UTC)
     return SavedScreenerEnvelope(
@@ -275,7 +275,7 @@ async def delete_saved_screener(
 ) -> Response:
     deleted = await repository.delete_screener(id)
     if not deleted:
-        raise AppError("SCREENER_NOT_FOUND", f"Saved screener '{id}' not found")
+        raise AppError("SCREENER_NOT_FOUND", f"Saved screener '{id}' not found", 404)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -293,7 +293,7 @@ async def run_saved_screener(
 ) -> ScreenerResultEnvelope:
     screener = await repository.get_screener(id)
     if screener is None:
-        raise AppError("SCREENER_NOT_FOUND", f"Saved screener '{id}' not found")
+        raise AppError("SCREENER_NOT_FOUND", f"Saved screener '{id}' not found", 404)
 
     results, total_count, trade_date = await query_service.execute_screener(
         expression=screener.expression,
