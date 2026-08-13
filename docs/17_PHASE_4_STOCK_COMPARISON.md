@@ -25,5 +25,29 @@ The Stock Comparison module allows users to select 2 to 5 securities (across TWS
 ## Validation & Test Coverage
 
 - **Backend Unit Tests**: `tests/test_comparison.py` (Selection validation, deterministic thresholds).
-- **Android Unit Tests**: `feature-comparison/src/test/.../ComparisonTests.kt` (Selection limits, ViewModel flow, Compose rendering).
+- **Android Unit Tests**: `feature-comparison/src/test/.../ComparisonTests.kt` (Selection limits, ViewModel flow).
 - **Android Instrumentation Tests**: `app/src/androidTest/.../ComparisonInstrumentationTest.kt` (Full UI rendering).
+
+## CI Record
+
+GitHub Actions Run: **31667324690**
+
+| Job | Result |
+|-----|--------|
+| backend | PASS |
+| android | PASS |
+| android-instrumentation | PASS |
+
+## CI Stabilization Fixes
+
+These fixes were made to stabilise CI after the initial implementation commit.
+They are infrastructure / linting corrections, not product feature changes.
+
+- **Ruff E501**: Wrapped all lines exceeding 100 chars in `comparison.py` and `api/comparison.py`.
+- **Ruff B023**: Extracted inner `calc_return` closure to standalone `_return_for()` helper to properly capture loop variables.
+- **Ruff F821**: Moved `comparison_service` dependency function below `database_session` to resolve forward-reference.
+- **Ruff B008**: Replaced `ComparisonSignalConfig()` default argument with `None` sentinel initialised inside function body.
+- **Ruff F841**: Renamed unused `strengths` assignment to `_`.
+- **pytest DB fixture**: Switched `test_comparison.py` to use `dependency_overrides` with `AsyncMock` session instead of relying on `app.state.session_factory`.
+- **Robolectric offline Maven**: Removed `@RunWith(RobolectricTestRunner::class)` / `@Config(sdk=[34])` and Robolectric/ui-test deps from `feature-comparison`; tests converted to pure JUnit4 + coroutines-test which does not require SDK artifact download.
+

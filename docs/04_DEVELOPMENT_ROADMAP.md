@@ -135,14 +135,16 @@
 - Phase 3 / Slice 2 — Watchlist：COMPLETE
 - Phase 3 / Slice 3 — Alert Engine：COMPLETE
 
-## Phase 4：Industry / Theme / Strength / Screener
+## Phase 4：Industry / Theme / Strength / Screener / Comparison
+
+狀態：**COMPLETE**
 
 - Phase 4 / Slice 1 — Industry / Theme Foundation：**COMPLETE**
 - Phase 4 / Slice 2 — Industry / Theme Strength Ranking：**COMPLETE**
 - Phase 4 / Slice 3 — Stock Screener：**COMPLETE**
 - Phase 4 / Slice 4 — Stock Comparison：**COMPLETE**
 
-下一工作：**Phase 5 — 合法盤中行情**
+下一工作：**Phase 5 — 合法盤中行情（需另行明確 Slice 定義後才可開始）**
 
 ### 任務
 
