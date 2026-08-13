@@ -30,6 +30,18 @@ def redis_client(request: Request) -> Redis:
     return request.app.state.redis
 
 
+def get_realtime_cache_service(request: Request):
+    return request.app.state.realtime_cache_service
+
+
+def get_realtime_hub(request: Request):
+    return request.app.state.realtime_hub
+
+
+def get_realtime_provider_manager(request: Request):
+    return request.app.state.realtime_provider_manager
+
+
 async def database_session(request: Request) -> AsyncIterator[AsyncSession]:
     async with request.app.state.session_factory() as session:
         yield session

@@ -179,8 +179,19 @@ fun SecurityDetailRoute(
 }
 
 @Composable
-fun SecurityDetailScreen(state: SecurityDetailUiState) {
+fun SecurityDetailScreen(state: SecurityDetailUiState, realtimeQuote: RealtimeQuote? = null) {
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        realtimeQuote?.let { q ->
+            Row(
+                modifier = Modifier.fillMaxWidth().testTag("realtime-quote-badge"),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("即時價格: $${q.lastPrice} (${q.changePercent ?: "0"}%)", modifier = Modifier.testTag("realtime-last-price"))
+                Text("[${q.dataStatus.name}]", color = if (q.dataStatus == RealtimeDataStatus.LIVE) Color.Red else Color.Gray, modifier = Modifier.testTag("realtime-status-badge"))
+            }
+            HorizontalDivider()
+        }
         when (state) {
             SecurityDetailUiState.Loading -> CircularProgressIndicator()
             is SecurityDetailUiState.Error -> StateMessage("載入失敗：${state.message}")

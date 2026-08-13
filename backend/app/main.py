@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.adapters.fake_realtime_provider import FakeRealtimeProvider
 from app.api.alerts import router as alerts_router
 from app.api.comparison import router as comparison_router
 from app.api.derivatives import router as derivatives_router
@@ -13,6 +14,7 @@ from app.api.health import router as health_router
 from app.api.industries import router as industries_router
 from app.api.market import router as market_router
 from app.api.portfolios import router as portfolios_router
+from app.api.realtime import router as realtime_router
 from app.api.screener import router as screener_router
 from app.api.securities import router as securities_router
 from app.api.themes import router as themes_router
@@ -21,6 +23,9 @@ from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
 from app.services.readiness import ReadinessChecker
+from app.services.realtime_cache import RealtimeCacheService
+from app.services.realtime_hub import RealtimeQuoteHub
+from app.services.realtime_provider_manager import RealtimeProviderManager
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -34,10 +39,26 @@ async def lifespan(app: FastAPI):
     app.state.redis = redis
     app.state.readiness_checker = ReadinessChecker(engine, redis)
     app.state.session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    # Realtime Quote Pipeline Initialization
+    cache_service = RealtimeCacheService(redis)
+    hub = RealtimeQuoteHub(redis, cache_service)
+    provider = FakeRealtimeProvider()
+    manager = RealtimeProviderManager(provider, cache_service, hub)
+
+    app.state.realtime_cache_service = cache_service
+    app.state.realtime_hub = hub
+    app.state.realtime_provider_manager = manager
+
+    await hub.start()
+    await manager.start()
+
     yield
+
+    await manager.stop()
+    await hub.stop()
     await redis.aclose()
     await engine.dispose()
-
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
@@ -53,6 +74,7 @@ app.include_router(industries_router, prefix="/v1")
 app.include_router(themes_router, prefix="/v1")
 app.include_router(screener_router)
 app.include_router(comparison_router)
+app.include_router(realtime_router)
 
 
 

@@ -1,0 +1,179 @@
+package tw.market.ledger.network
+
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
+import tw.market.ledger.model.RealtimeConnectionState
+import tw.market.ledger.model.RealtimeDataStatus
+import tw.market.ledger.model.RealtimeQuote
+import tw.market.ledger.model.RealtimeTradingSession
+import kotlin.math.min
+import kotlin.math.pow
+
+class RealtimeQuoteClient(
+    private val okHttpClient: OkHttpClient,
+    private val serverUrl: String = "ws://10.0.2.2:8000/v1/ws/quotes"
+) {
+    private val scope = CoroutineScope(Dispatchers.IO + Job())
+    private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+
+    private val _connectionState = MutableStateFlow(RealtimeConnectionState.DISCONNECTED)
+    val connectionState: StateFlow<RealtimeConnectionState> = _connectionState.asStateFlow()
+
+    private val _quotesFlow = MutableSharedFlow<RealtimeQuote>(extraBufferCapacity = 64)
+    val quotesFlow: SharedFlow<RealtimeQuote> = _quotesFlow.asSharedFlow()
+
+    private var webSocket: WebSocket? = null
+    private val subscribedKeys = mutableSetOf<Pair<String, String>>() // (market, code)
+    private var reconnectAttempt = 0
+    private var isExplicitDisconnect = false
+
+    fun connect() {
+        isExplicitDisconnect = false
+        if (_connectionState.value == RealtimeConnectionState.CONNECTED || _connectionState.value == RealtimeConnectionState.CONNECTING) {
+            return
+        }
+        _connectionState.value = RealtimeConnectionState.CONNECTING
+
+        val request = Request.Builder().url(serverUrl).build()
+        webSocket = okHttpClient.newWebSocket(request, createWebSocketListener())
+    }
+
+    fun disconnect() {
+        isExplicitDisconnect = true
+        webSocket?.close(1000, "App disconnect requested")
+        webSocket = null
+        _connectionState.value = RealtimeConnectionState.DISCONNECTED
+    }
+
+    fun subscribe(market: String, code: String) {
+        subscribedKeys.add(Pair(market.uppercase(), code.uppercase()))
+        if (_connectionState.value == RealtimeConnectionState.CONNECTED) {
+            sendSubscriptionMessage("subscribe", listOf(mapOf("market" to market, "code" to code)))
+        }
+    }
+
+    fun unsubscribe(market: String, code: String) {
+        subscribedKeys.remove(Pair(market.uppercase(), code.uppercase()))
+        if (_connectionState.value == RealtimeConnectionState.CONNECTED) {
+            sendSubscriptionMessage("unsubscribe", listOf(mapOf("market" to market, "code" to code)))
+        }
+    }
+
+    private fun sendSubscriptionMessage(type: String, targets: List<Map<String, String>>) {
+        val payload = mapOf(
+            "type" to type,
+            "version" to 1,
+            "securities" to targets
+        )
+        val json = moshi.adapter(Map::class.java).toJson(payload)
+        webSocket?.send(json)
+    }
+
+    private fun resubscribeAll() {
+        if (subscribedKeys.isNotEmpty()) {
+            val targets = subscribedKeys.map { mapOf("market" to it.first, "code" to it.second) }
+            sendSubscriptionMessage("subscribe", targets)
+        }
+    }
+
+    private fun scheduleReconnect() {
+        if (isExplicitDisconnect) return
+        _connectionState.value = RealtimeConnectionState.RECONNECTING
+        reconnectAttempt++
+
+        val backoffSeconds = min(30.0, 2.0.pow(reconnectAttempt.toDouble())).toLong()
+        scope.launch {
+            delay(backoffSeconds * 1000)
+            if (!isExplicitDisconnect) {
+                connect()
+            }
+        }
+    }
+
+    private fun createWebSocketListener() = object : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) {
+            _connectionState.value = RealtimeConnectionState.CONNECTED
+            reconnectAttempt = 0
+            resubscribeAll()
+        }
+
+        override fun onMessage(webSocket: WebSocket, text: String) {
+            try {
+                val mapAdapter = moshi.adapter(Map::class.java)
+                val msg = mapAdapter.fromJson(text) ?: return
+                val type = msg["type"] as? String ?: return
+
+                if (type == "quote" || type == "snapshot") {
+                    val data = msg["data"] as? Map<*, *> ?: return
+                    val q = parseQuoteMap(data)
+                    if (q != null) {
+                        _quotesFlow.tryEmit(q)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            _connectionState.value = RealtimeConnectionState.UNAVAILABLE
+            scheduleReconnect()
+        }
+
+        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            _connectionState.value = RealtimeConnectionState.DISCONNECTED
+            if (!isExplicitDisconnect) {
+                scheduleReconnect()
+            }
+        }
+    }
+
+    private fun parseQuoteMap(m: Map<*, *>): RealtimeQuote? {
+        return try {
+            RealtimeQuote(
+                securityId = m["security_id"].toString(),
+                marketId = m["market_id"].toString(),
+                code = m["code"].toString(),
+                exchangeTimestamp = m["exchange_timestamp"].toString(),
+                receivedAt = m["received_at"].toString(),
+                lastPrice = m["last_price"].toString(),
+                lastSize = (m["last_size"] as? Number)?.toInt() ?: 0,
+                openPrice = m["open_price"]?.toString(),
+                highPrice = m["high_price"]?.toString(),
+                lowPrice = m["low_price"]?.toString(),
+                previousClose = m["previous_close"]?.toString(),
+                totalVolume = (m["total_volume"] as? Number)?.toLong() ?: 0L,
+                turnoverAmount = m["turnover_amount"]?.toString(),
+                bidPrice = m["bid_price"]?.toString(),
+                bidSize = (m["bid_size"] as? Number)?.toInt(),
+                askPrice = m["ask_price"]?.toString(),
+                askSize = (m["ask_size"] as? Number)?.toInt(),
+                change = m["change"]?.toString(),
+                changePercent = m["change_percent"]?.toString(),
+                session = RealtimeTradingSession.valueOf(m["session"]?.toString() ?: "REGULAR"),
+                sequence = (m["sequence"] as? Number)?.toLong(),
+                dataStatus = RealtimeDataStatus.valueOf(m["data_status"]?.toString() ?: "LIVE"),
+                provider = m["provider"]?.toString() ?: "UNKNOWN",
+                delaySeconds = (m["delay_seconds"] as? Number)?.toInt() ?: 0
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+}

@@ -11,44 +11,29 @@ Phase 2 COMPLETE
 Phase 3 COMPLETE
 Phase 4 COMPLETE
 
-Phase 3 / Slice 1 COMPLETE
-Phase 3 / Slice 2 COMPLETE
-Phase 3 / Slice 3 COMPLETE
-Phase 4 / Slice 1 COMPLETE
-Phase 4 / Slice 2 COMPLETE
-Phase 4 / Slice 3 COMPLETE
 Phase 4 / Slice 4 COMPLETE
+Phase 5 / Slice 1 IN_PROGRESS
 ```
 
-- Current phase: **Phase 4 — COMPLETE**
+- Current phase: **Phase 5 / Slice 1 — Realtime Data Provider + WebSocket Foundation**
+- Previous phase: Phase 4 COMPLETE
+- Realtime Production Provider: **UNCONFIGURED** (Software foundation complete with deterministic FakeRealtimeProvider)
 - DB head: `0011_stock_screener`
 - Room: version 9
 - Latest tag: `phase-4-complete`
-- GitHub Actions CI: **PASS** (Run 31667324690)
+- GitHub Actions CI: **WAITING FOR CI**
 
-## Phase 4 Completed Slices
+## Phase 5 / Slice 1 Completed Features
 
-### Slice 1 — Industry / Theme Foundation
-- Industry and theme taxonomy, indicator stocks, DB schema, API, Android UI.
-
-### Slice 2 — Industry / Theme Strength Ranking
-- Equal-weight and market-cap-weighted strength scores, historical snapshots, Android ranking UI.
-
-### Slice 3 — Stock Screener
-- Condition-based screener with AND/OR logic, saved screeners, Android screener builder UI.
-
-### Slice 4 — Stock Comparison
-- 2–5 security comparison with selection validation
-- Base-100 normalized performance charting (common date intersection)
-- Comparison windows: 1D, 5D, 10D, 20D, 60D, 1Y, 5Y
-- Technical comparison (MA, RSI14, MACD, KD)
-- Institutional net flow comparison (Foreign, Trust, Dealer)
-- Credit trading comparison (Margin, Short, Lending)
-- Industry / theme membership comparison
-- Industry strength comparison
-- Deterministic objective divergence signals (PRICE_OUTPERFORMANCE, PRICE_UNDERPERFORMANCE, INSTITUTIONAL_DIVERGENCE, TECHNICAL_DIVERGENCE)
-- Android `feature-comparison` UI, ViewModel, NormalizedCanvasChart
-- Selected-set internal ranking
+- `RealtimeMarketDataProvider` interface with `ProviderCapabilities` and license boundaries
+- Deterministic `FakeRealtimeProvider` & `UnconfiguredRealtimeProvider`
+- Domain model `RealtimeQuote` using Decimal for prices/amounts & ISO UTC timestamps
+- Redis Realtime Cache with TTL, out-of-order rejection, and Pub/Sub channel (`realtime:quotes`)
+- WebSocket Hub (`RealtimeQuoteHub`) with subscription limits (100/conn), snapshot delivery, & 100ms coalescing backpressure
+- HTTP snapshot endpoints (`GET /v1/quotes/{market}/{code}`, `POST /v1/quotes/batch`, `GET /v1/quotes/health`)
+- Android `RealtimeQuoteClient` with OkHttp WebSocket & exponential backoff reconnect
+- Android `RealtimeSubscriptionManager` with reference counting
+- Android `SecurityDetailScreen` integration with LIVE price badge and real-time streaming updates
 
 ## External and Future
 
@@ -56,18 +41,14 @@ Phase 4 / Slice 4 COMPLETE
 
 ## Next
 
-Phase 5 — Realtime / Intraday Market Data
+Phase 5 / Slice 2 — Intraday Quote + 1m/5m K-line aggregation
 
-Do not start Phase 5 without a separate explicit request and Slice definition.
+Do not start Slice 2 without explicit request.
 
 ## Primary References
 
+- `docs/18_PHASE_5_REALTIME_FOUNDATION.md`
 - `docs/17_PHASE_4_STOCK_COMPARISON.md`
-- `docs/16_PHASE_4_STOCK_SCREENER.md`
-- `docs/15_PHASE_4_INDUSTRY_THEME_STRENGTH.md`
-- `docs/14_PHASE_3_ALERT_ENGINE.md`
-- `docs/13_PHASE_3_WATCHLIST.md`
-- `docs/12_PHASE_3_PORTFOLIO_CORE.md`
 - `docs/05_DATA_SOURCES_AND_COMPLIANCE.md`
 - `docs/04_DEVELOPMENT_ROADMAP.md`
 - `api/openapi.yaml`
