@@ -273,9 +273,21 @@ class ComparisonService:
                     trust_20d_net=None,
                     dealer_1d_net=d_1d if inst_list else None,
                     dealer_5d_net=d_1d * Decimal("5") if inst_list else None,
-                    margin_balance_change=Decimal(str(mar.margin_balance_change)) if mar and mar.margin_balance_change is not None else None,
-                    short_balance_change=Decimal(str(mar.short_balance_change)) if mar and mar.short_balance_change is not None else None,
-                    lending_balance_change=Decimal(str(mar.lending_balance_change)) if mar and mar.lending_balance_change is not None else None,
+                    margin_balance_change=(
+                        Decimal(str(mar.margin_balance_change))
+                        if mar and mar.margin_balance_change is not None
+                        else None
+                    ),
+                    short_balance_change=(
+                        Decimal(str(mar.short_balance_change))
+                        if mar and mar.short_balance_change is not None
+                        else None
+                    ),
+                    lending_balance_change=(
+                        Decimal(str(mar.lending_balance_change))
+                        if mar and mar.lending_balance_change is not None
+                        else None
+                    ),
                     industry_name=ind_n,
                     themes=thm_list,
                     industry_strength_score=None,
@@ -285,7 +297,11 @@ class ComparisonService:
 
         # Selected-set ranks
         def assign_ranks(attr_name: str, rank_attr: str, reverse: bool = True):
-            valid_items = [(i, getattr(s, attr_name)) for i, s in enumerate(summaries) if getattr(s, attr_name) is not None]
+            valid_items = [
+                (i, getattr(s, attr_name))
+                for i, s in enumerate(summaries)
+                if getattr(s, attr_name) is not None
+            ]
             valid_items.sort(key=lambda x: x[1], reverse=reverse)
             for rank, (idx, _) in enumerate(valid_items, start=1):
                 setattr(summaries[idx], rank_attr, rank)
@@ -311,7 +327,10 @@ class ComparisonService:
                                 subject_code=s1.code,
                                 comparator_code=s2.code,
                                 headline=f"{s1.name} 近期報酬表現優於 {s2.name}",
-                                details=f"{s1.code} 報酬率為 {s1.return_selected_window}%，較 {s2.code} ({s2.return_selected_window}%) 高出 {diff} 個百分點",
+                                details=(
+                                    f"{s1.code} 報酬率為 {s1.return_selected_window}%，"
+                                    f"較 {s2.code} ({s2.return_selected_window}%) 高出 {diff} 個百分點"
+                                ),
                                 metrics={"diff": str(diff)},
                             )
                         )
@@ -322,7 +341,10 @@ class ComparisonService:
                                 subject_code=s1.code,
                                 comparator_code=s2.code,
                                 headline=f"{s1.name} 近期報酬表現落後 {s2.name}",
-                                details=f"{s1.code} 報酬率為 {s1.return_selected_window}%，較 {s2.code} ({s2.return_selected_window}%) 落後 {abs(diff)} 個百分點",
+                                details=(
+                                    f"{s1.code} 報酬率為 {s1.return_selected_window}%，"
+                                    f"較 {s2.code} ({s2.return_selected_window}%) 落後 {abs(diff)} 個百分點"
+                                ),
                                 metrics={"diff": str(diff)},
                             )
                         )
@@ -336,7 +358,10 @@ class ComparisonService:
                                 subject_code=s1.code,
                                 comparator_code=s2.code,
                                 headline=f"{s1.name} 外資買超與 {s2.name} 賣超方向背離",
-                                details=f"{s1.code} 外資當日買超 {s1.foreign_1d_net} 股，而 {s2.code} 為賣超 {abs(s2.foreign_1d_net)} 股",
+                                details=(
+                                    f"{s1.code} 外資當日買超 {s1.foreign_1d_net} 股，"
+                                    f"而 {s2.code} 為賣超 {abs(s2.foreign_1d_net)} 股"
+                                ),
                             )
                         )
 
@@ -349,7 +374,10 @@ class ComparisonService:
                                 subject_code=s1.code,
                                 comparator_code=s2.code,
                                 headline=f"{s1.name} 站上 MA20 且 {s2.name} 位於 MA20 下方",
-                                details=f"{s1.code} 收盤價高於 MA20 ({s1.close_vs_ma20}%)，{s2.code} 低於 MA20 ({s2.close_vs_ma20}%)",
+                                details=(
+                                    f"{s1.code} 收盤價高於 MA20 ({s1.close_vs_ma20}%)，"
+                                    f"{s2.code} 低於 MA20 ({s2.close_vs_ma20}%)"
+                                ),
                             )
                         )
 
