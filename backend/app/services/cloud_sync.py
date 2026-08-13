@@ -38,7 +38,8 @@ class CloudSyncService:
         priors = {row.operation_id: row for row in prior_rows}
         results = []
         for operation in operations:
-            results.append(await self._apply(user_id, device_id, operation, priors.get(operation["operation_id"])))
+            prior = priors.get(operation["operation_id"])
+            results.append(await self._apply(user_id, device_id, operation, prior))
         await self.session.commit()
         return results
 

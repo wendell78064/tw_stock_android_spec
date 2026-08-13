@@ -9,6 +9,7 @@ from app.core.errors import AppError
 from app.repositories.models import (
     AuthSessionModel,
     SyncChangeModel,
+    SyncOperationModel,
     UserDeviceModel,
     UserModel,
     WatchlistModel,
