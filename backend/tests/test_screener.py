@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 import pytest
 from starlette.testclient import TestClient
 
+from app.core.dependencies import screener_query_service, screener_repository
 from app.core.errors import AppError
 from app.domain.market_data import DataStatus
 from app.domain.screener import (
@@ -13,11 +14,19 @@ from app.domain.screener import (
     ScreenerResultSecurity,
 )
 from app.domain.security import MarketCode
+from app.main import app
 from app.services.screener_ast import (
     dict_to_expression,
     expression_to_dict,
     validate_expression,
 )
+
+
+@pytest.fixture
+def app_client():
+    client = TestClient(app)
+    yield app, client
+    app.dependency_overrides.clear()
 
 
 class InMemoryScreenerRepository:
@@ -148,7 +157,7 @@ def test_ast_validation_invalid_operator():
     )
     with pytest.raises(AppError) as exc:
         validate_expression(expr)
-    assert exc.value.code == "INVALID_AST_VALUE"
+    assert exc.value.code == "INVALID_AST_OPERATOR"
 
 
 def test_ast_dict_conversion():
@@ -169,7 +178,8 @@ def test_ast_dict_conversion():
     assert serialized == data
 
 
-def test_api_get_screener_fields(client: TestClient):
+def test_api_get_screener_fields(app_client):
+    app, client = app_client
     response = client.get("/v1/screener/fields")
     assert response.status_code == 200
     data = response.json()["data"]
@@ -180,11 +190,9 @@ def test_api_get_screener_fields(client: TestClient):
     assert "industry_strength_score" in field_ids
 
 
-def test_api_run_screener(client: TestClient, app_client):
+def test_api_run_screener(app_client):
     app, client = app_client
-    app.dependency_overrides[
-        "app.core.dependencies.screener_query_service"
-    ] = lambda: InMemoryScreenerQueryService()
+    app.dependency_overrides[screener_query_service] = lambda: InMemoryScreenerQueryService()
 
     payload = {
         "expression": {
@@ -204,12 +212,10 @@ def test_api_run_screener(client: TestClient, app_client):
     assert res["data"][0]["code"] == "2330"
 
 
-def test_api_saved_screener_crud(client: TestClient, app_client):
+def test_api_saved_screener_crud(app_client):
     app, client = app_client
     in_memory_repo = InMemoryScreenerRepository()
-    app.dependency_overrides[
-        "app.core.dependencies.screener_repository"
-    ] = lambda: in_memory_repo
+    app.dependency_overrides[screener_repository] = lambda: in_memory_repo
 
     # Create
     create_payload = {
