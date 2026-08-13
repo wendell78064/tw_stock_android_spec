@@ -4,10 +4,10 @@
 
 ## Validation & CI Status
 
-- GitHub CI PASS
-- backend PASS
-- android PASS
-- android-instrumentation PASS
+- GitHub CI: PASS
+- backend: PASS
+- android: PASS
+- android-instrumentation: PASS
 - Local Backend Strength Tests: 32/32 PASS
 
 ## Algorithm Specification
