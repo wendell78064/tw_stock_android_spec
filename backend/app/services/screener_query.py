@@ -7,12 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.market_data import DataStatus
-from app.domain.security import MarketCode
 from app.domain.screener import (
     ScreenerExpression,
     ScreenerOperator,
     ScreenerResultSecurity,
 )
+from app.domain.security import MarketCode
 from app.repositories.models import (
     DailyPriceModel,
     IndustryModel,
