@@ -6,7 +6,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.market import DataStatus, MarketCode
+from app.domain.market_data import DataStatus
+from app.domain.security import MarketCode
 from app.domain.screener import (
     ScreenerExpression,
     ScreenerOperator,
