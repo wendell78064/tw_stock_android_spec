@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "TWMarketLedger"
-include(":app", ":core-model", ":core-network", ":core-database", ":core-ui", ":feature-market", ":feature-security", ":feature-portfolio", ":feature-watchlist", ":feature-alert", ":feature-industry", ":feature-screener")
+include(":app", ":core-model", ":core-network", ":core-database", ":core-ui", ":feature-market", ":feature-security", ":feature-portfolio", ":feature-watchlist", ":feature-alert", ":feature-industry", ":feature-screener", ":feature-comparison")

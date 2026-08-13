@@ -534,3 +534,84 @@ class SavedScreenerListEnvelope(BaseModel):
     meta: MetaResponse
 
 
+class SecurityTargetInput(BaseModel):
+    code: str
+    market: MarketCode
+
+
+class RunComparisonInput(BaseModel):
+    targets: list[SecurityTargetInput]
+    window: str = "20D"
+    trade_date: date | None = None
+
+
+class NormalizedPointSchema(BaseModel):
+    trade_date: date
+    values: dict[str, str | None]
+
+
+class ObjectiveSignalSchema(BaseModel):
+    signal_type: str
+    subject_code: str
+    comparator_code: str
+    headline: str
+    details: str
+    metrics: dict[str, Any] = {}
+
+
+class ComparisonSecuritySummarySchema(BaseModel):
+    security_id: UUID
+    code: str
+    name: str
+    market: MarketCode
+    latest_close: str | None = None
+    return_1d: str | None = None
+    return_5d: str | None = None
+    return_10d: str | None = None
+    return_20d: str | None = None
+    return_60d: str | None = None
+    return_selected_window: str | None = None
+    ma5: str | None = None
+    ma20: str | None = None
+    ma60: str | None = None
+    close_vs_ma20: str | None = None
+    close_vs_ma60: str | None = None
+    rsi14: str | None = None
+    macd_state: str | None = None
+    kd_state: str | None = None
+    foreign_1d_net: str | None = None
+    foreign_5d_net: str | None = None
+    trust_1d_net: str | None = None
+    trust_5d_net: str | None = None
+    dealer_1d_net: str | None = None
+    dealer_5d_net: str | None = None
+    margin_balance_change: str | None = None
+    short_balance_change: str | None = None
+    lending_balance_change: str | None = None
+    industry_name: str | None = None
+    themes: list[str] = []
+    industry_strength_score: str | None = None
+    industry_strength_rank: int | None = None
+    selected_set_return_rank: int | None = None
+    selected_set_rsi_rank: int | None = None
+    selected_set_foreign_rank: int | None = None
+    data_status: DataStatus
+
+
+class ComparisonResultSchema(BaseModel):
+    window: str
+    requested_start: date
+    effective_start: date
+    effective_end: date
+    securities: list[ComparisonSecuritySummarySchema]
+    normalized_series: list[NormalizedPointSchema]
+    objective_signals: list[ObjectiveSignalSchema]
+    coverage: str
+
+
+class ComparisonEnvelope(BaseModel):
+    data: ComparisonResultSchema
+    meta: MetaResponse
+
+
+

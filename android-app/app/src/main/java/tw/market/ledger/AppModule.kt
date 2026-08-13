@@ -108,5 +108,6 @@ object AppModule {
     @Provides @Singleton fun alertApi(retrofit: Retrofit): AlertApi = retrofit.create(AlertApi::class.java)
     @Provides @Singleton fun industryApi(retrofit: Retrofit): IndustryApi = retrofit.create(IndustryApi::class.java)
     @Provides @Singleton fun screenerApi(retrofit: Retrofit): ScreenerApi = retrofit.create(ScreenerApi::class.java)
+    @Provides @Singleton fun comparisonApi(retrofit: Retrofit): tw.market.ledger.network.ComparisonApi = retrofit.create(tw.market.ledger.network.ComparisonApi::class.java)
 }
 

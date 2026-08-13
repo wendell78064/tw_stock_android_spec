@@ -7,6 +7,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.alerts import router as alerts_router
+from app.api.comparison import router as comparison_router
 from app.api.derivatives import router as derivatives_router
 from app.api.health import router as health_router
 from app.api.industries import router as industries_router
@@ -51,6 +52,7 @@ app.include_router(alerts_router, prefix="/v1")
 app.include_router(industries_router, prefix="/v1")
 app.include_router(themes_router, prefix="/v1")
 app.include_router(screener_router)
+app.include_router(comparison_router)
 
 
 

@@ -17,8 +17,15 @@ from app.repositories.sql_price import SqlPriceRepository
 from app.repositories.sql_screener import SqlScreenerRepository
 from app.repositories.sql_security import SqlSecurityRepository
 from app.repositories.sql_watchlist import SqlWatchlistRepository
+from app.services.comparison import ComparisonService
 from app.services.readiness import ReadinessChecker
 from app.services.screener_query import ScreenerQueryService
+
+
+async def comparison_service(
+    session: Annotated[AsyncSession, Depends(database_session)],
+) -> ComparisonService:
+    return ComparisonService(session)
 
 
 def readiness_checker(request: Request) -> ReadinessChecker:

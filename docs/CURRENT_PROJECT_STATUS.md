@@ -16,28 +16,25 @@ Phase 3 / Slice 3 COMPLETE
 Phase 4 / Slice 1 COMPLETE
 Phase 4 / Slice 2 COMPLETE
 Phase 4 / Slice 3 COMPLETE
+Phase 4 / Slice 4 COMPLETE
 ```
 
-- Current phase: Phase 4 / Slice 3 COMPLETE
-- Latest completed feature: Multi-Condition Stock Screener
-- Feature commit: `acb6e94`
+- Current phase: Phase 4 / Slice 4
+- Latest completed feature: Stock Comparison
 - DB head: `0011_stock_screener`
 - Room: version 9
 - Latest tag: `phase-4-slice-3-complete`
-- GitHub Actions: backend PASS / android PASS / android-instrumentation PASS
+- GitHub Actions: WAITING FOR CI
 
-## Phase 4 / Slice 3 Completed Features
+## Phase 4 / Slice 4 Completed Features
 
-- Typed Screener AST
-- Nested AND / OR
-- Screener Field Catalog
-- Missing Data Semantics
-- Saved Screener
-- Bulk Query Engine
-- Sorting / Pagination
-- Android Screener Builder
-- Result Screen
-- Offline Cache
+- Multi-Security Selection (2–5 securities limit & duplicate validation)
+- Base 100 Normalized Performance Charting with Common Date Intersection
+- Flexible Comparison Windows (1D, 5D, 10D, 20D, 60D, 1Y, 5Y)
+- Metric Summaries (Price, Technicals, Institutional Net Flows, Credit, Taxonomy, Industry Strength)
+- Deterministic Objective Divergence Signals (`ComparisonSignalConfig`)
+- Android `feature-comparison` UI & ViewModels
+- Selected-Set Internal Ranking
 
 ## External and Future
 
@@ -45,9 +42,9 @@ Phase 4 / Slice 3 COMPLETE
 
 ## Next
 
-Phase 4 / Slice 4 — Stock Comparison
+Phase 5 — Legal Realtime Market Data
 
-Do not start Phase 4 / Slice 4 without a separate explicit request and Slice definition.
+Do not start Phase 5 without a separate explicit request and Slice definition.
 
 ## Primary References
 
