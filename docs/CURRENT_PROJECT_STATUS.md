@@ -12,28 +12,27 @@ Phase 3 COMPLETE
 Phase 4 COMPLETE
 
 Phase 4 / Slice 4 COMPLETE
-Phase 5 / Slice 1 IN_PROGRESS
+Phase 5 / Slice 1 COMPLETE
 ```
 
-- Current phase: **Phase 5 / Slice 1 — Realtime Data Provider + WebSocket Foundation**
-- Previous phase: Phase 4 COMPLETE
-- Realtime Production Provider: **UNCONFIGURED** (Software foundation complete with deterministic FakeRealtimeProvider)
+- Current phase: **Phase 5 / Slice 1 — COMPLETE** (Software Foundation)
+- Production Realtime Provider: **UNCONFIGURED**
 - DB head: `0011_stock_screener`
 - Room: version 9
-- Latest tag: `phase-4-complete`
-- GitHub Actions CI: **WAITING FOR CI**
+- Latest tag: `phase-5-slice-1-complete`
+- GitHub Actions CI: **PASS** (Run 31670900266)
 
 ## Phase 5 / Slice 1 Completed Features
 
-- `RealtimeMarketDataProvider` interface with `ProviderCapabilities` and license boundaries
-- Deterministic `FakeRealtimeProvider` & `UnconfiguredRealtimeProvider`
-- Domain model `RealtimeQuote` using Decimal for prices/amounts & ISO UTC timestamps
-- Redis Realtime Cache with TTL, out-of-order rejection, and Pub/Sub channel (`realtime:quotes`)
-- WebSocket Hub (`RealtimeQuoteHub`) with subscription limits (100/conn), snapshot delivery, & 100ms coalescing backpressure
-- HTTP snapshot endpoints (`GET /v1/quotes/{market}/{code}`, `POST /v1/quotes/batch`, `GET /v1/quotes/health`)
-- Android `RealtimeQuoteClient` with OkHttp WebSocket & exponential backoff reconnect
-- Android `RealtimeSubscriptionManager` with reference counting
-- Android `SecurityDetailScreen` integration with LIVE price badge and real-time streaming updates
+- Realtime provider abstraction (`RealtimeMarketDataProvider`)
+- Capability and license boundary (`ProviderCapabilities`)
+- Fake realtime provider (`FakeRealtimeProvider`) & safe placeholder (`UnconfiguredRealtimeProvider`)
+- Redis realtime cache (TTL 120s, out-of-order rejection) & Pub/Sub channel
+- WebSocket quote transport (`/v1/ws/quotes`, Protocol v1, max 100 securities/connection, 100ms coalescing)
+- HTTP snapshot & batch APIs (`GET /v1/quotes/{market}/{code}`, `POST /v1/quotes/batch`, `GET /v1/quotes/health`)
+- Android realtime client (`RealtimeQuoteClient` with OkHttp WebSocket & exponential backoff)
+- Shared subscription manager (`RealtimeSubscriptionManager` with reference counting)
+- Security Detail LIVE price integration
 
 ## External and Future
 
@@ -41,9 +40,9 @@ Phase 5 / Slice 1 IN_PROGRESS
 
 ## Next
 
-Phase 5 / Slice 2 — Intraday Quote + 1m/5m K-line aggregation
+Phase 5 / Slice 2 — Intraday Quote + 1m/5m K
 
-Do not start Slice 2 without explicit request.
+Do not start Slice 2 without explicit request and Slice definition.
 
 ## Primary References
 
