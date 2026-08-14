@@ -14,7 +14,7 @@ from app.repositories.models import (
     MarketModel,
     PortfolioModel,
     SecurityModel,
-    UserDeviceModel,
+    UserSettingModel,
 )
 from app.services.ai_grounding import (
     AIAnalysisService,
@@ -237,10 +237,11 @@ async def test_push_token_lifecycle_and_dispatch():
 
     # 1. Register Token
     await service.register_token(user_id, device_pub, token, platform="ANDROID")
-    dev = (await session.scalars(select(UserDeviceModel))).first()
-    assert dev is not None
-    assert dev.push_token == token
-    assert dev.revoked_at is None
+    setting = (await session.scalars(select(UserSettingModel))).first()
+    assert setting is not None
+    assert setting.value["token"] == token
+    assert setting.value["active"] is True
+    assert setting.deleted_at is None
 
     # 2. Dispatch Alert Event
     event_id = uuid4()
@@ -268,7 +269,8 @@ async def test_push_token_lifecycle_and_dispatch():
 
     # 4. Unregister Token (e.g. on logout)
     await service.unregister_token(user_id, device_pub)
-    assert dev.push_token is None
+    assert setting.deleted_at is not None
+    assert setting.value["active"] is False
 
     # 5. Dispatch after unregister -> no messages sent
     event_id2 = uuid4()

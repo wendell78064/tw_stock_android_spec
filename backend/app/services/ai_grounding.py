@@ -427,8 +427,8 @@ class AIAnalysisService:
     def _compute_cache_key(
         self, grounding: GroundingPackage, user_id: UUID | None = None
     ) -> str:
-        content = f"{grounding.analysis_type}:{grounding.prompt_version}:{grounding.as_of}:"
-        for f in grounding.facts:
+        content = f"{grounding.analysis_type}:{grounding.prompt_version}:"
+        for f in sorted(grounding.facts, key=lambda x: (x.category, x.key)):
             content += f"{f.category}_{f.key}_{f.value}:"
         fingerprint = hashlib.sha256(content.encode("utf-8")).hexdigest()
         user_scope = str(user_id) if user_id else "global"

@@ -10,7 +10,7 @@ from app.domain.push import (
     PushNotificationPayload,
     PushProviderType,
 )
-from app.repositories.models import UserDeviceModel
+from app.repositories.models import UserSettingModel
 
 
 class PushNotificationProvider(Protocol):
@@ -103,42 +103,43 @@ class PushNotificationService:
         token: str,
         platform: str = "ANDROID",
     ) -> None:
-        stmt = select(UserDeviceModel).where(
-            UserDeviceModel.user_id == user_id,
-            UserDeviceModel.device_public_id == device_public_id,
+        stmt = select(UserSettingModel).where(
+            UserSettingModel.user_id == user_id,
+            UserSettingModel.key == f"push_token:{device_public_id}",
+            UserSettingModel.deleted_at.is_(None),
         )
-        device = (await self.session.scalars(stmt)).first()
+        setting = (await self.session.scalars(stmt)).first()
         now_utc = datetime.now(UTC)
 
-        if device:
-            device.push_token = token
-            device.platform = platform
-            device.last_seen_at = now_utc
-            device.revoked_at = None
+        if setting:
+            setting.value = {"token": token, "platform": platform, "active": True}
+            setting.updated_at = now_utc
+            setting.version += 1
         else:
-            new_device = UserDeviceModel(
+            new_setting = UserSettingModel(
                 id=uuid4(),
                 user_id=user_id,
-                device_public_id=device_public_id,
-                push_token=token,
-                platform=platform,
+                key=f"push_token:{device_public_id}",
+                value={"token": token, "platform": platform, "active": True},
                 created_at=now_utc,
-                last_seen_at=now_utc,
+                updated_at=now_utc,
+                version=1,
             )
-            self.session.add(new_device)
+            self.session.add(new_setting)
         await self.session.commit()
 
     async def unregister_token(
         self, user_id: UUID, device_public_id: str
     ) -> None:
-        stmt = select(UserDeviceModel).where(
-            UserDeviceModel.user_id == user_id,
-            UserDeviceModel.device_public_id == device_public_id,
+        stmt = select(UserSettingModel).where(
+            UserSettingModel.user_id == user_id,
+            UserSettingModel.key == f"push_token:{device_public_id}",
+            UserSettingModel.deleted_at.is_(None),
         )
-        device = (await self.session.scalars(stmt)).first()
-        if device:
-            device.push_token = None
-            device.revoked_at = datetime.now(UTC)
+        setting = (await self.session.scalars(stmt)).first()
+        if setting:
+            setting.value = {"token": None, "active": False}
+            setting.deleted_at = datetime.now(UTC)
             await self.session.commit()
 
     async def dispatch_alert_event(
@@ -165,14 +166,23 @@ class PushNotificationService:
                 return []
             self._local_dedup_set.add(str(event_id))
 
-        # 2. Lookup active user devices with valid push tokens
-        stmt = select(UserDeviceModel).where(
-            UserDeviceModel.user_id == user_id,
-            UserDeviceModel.revoked_at.is_(None),
-            UserDeviceModel.push_token.isnot(None),
+        # 2. Lookup active user tokens from settings
+        stmt = select(UserSettingModel).where(
+            UserSettingModel.user_id == user_id,
+            UserSettingModel.deleted_at.is_(None),
         )
-        devices = (await self.session.scalars(stmt)).all()
-        if not devices:
+        settings = (await self.session.scalars(stmt)).all()
+        token_entries = []
+        for s in settings:
+            if (
+                s.key.startswith("push_token:")
+                and isinstance(s.value, dict)
+                and s.value.get("active")
+                and s.value.get("token")
+            ):
+                token_entries.append(s.value["token"])
+
+        if not token_entries:
             return []
 
         payload = PushNotificationPayload(
@@ -184,9 +194,8 @@ class PushNotificationService:
         )
 
         results = []
-        for dev in devices:
-            if dev.push_token:
-                res = await self.provider.send(dev.push_token, payload)
-                results.append(res)
+        for tok in token_entries:
+            res = await self.provider.send(tok, payload)
+            results.append(res)
 
         return results
