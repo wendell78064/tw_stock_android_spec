@@ -66,6 +66,7 @@ private class FakeDao : PortfolioDao {
     override suspend fun clearHoldings(portfolioId: String) { holdingRows=emptyList() }
     override suspend fun clearTransactions(portfolioId: String) { transactionRows=emptyList() }
     override suspend fun summary(portfolioId: String) = summaryRow
+    override suspend fun firstSummary() = summaryRow
     override suspend fun holdings(portfolioId: String) = holdingRows
     override suspend fun transactions(portfolioId: String) = transactionRows
 }
