@@ -209,7 +209,7 @@ Phase 5 software completion does not mean production realtime readiness.
 
 ## Phase 6：Productization / Ecosystem — **IN PROGRESS**
 
-- Slice 1 — Account / Auth + Cloud Sync Foundation; Watchlist multi-device vertical slice — **COMPLETE (CI pending)**
+- Slice 1 — Account / Auth + Cloud Sync Foundation; Watchlist multi-device vertical slice — **COMPLETE**
 - Slice 2 — Portfolio / Alerts / Screener / Settings Sync — **NEXT (do not start)**
 
 - 多裝置同步。
