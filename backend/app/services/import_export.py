@@ -13,6 +13,7 @@ from app.core.errors import AppError
 from app.domain.portfolio import LotType, TransactionSide
 from app.repositories.models import (
     DailyPriceModel,
+    MarketModel,
     PortfolioModel,
     PortfolioTransactionModel,
     SecurityModel,
@@ -76,6 +77,16 @@ def unescape_formula(value: str | None) -> str:
     return text
 
 
+def resolve_market_code(sec, market_map=None) -> str:
+    if not sec:
+        return "TWSE"
+    if hasattr(sec, "market") and sec.market:
+        return sec.market
+    if hasattr(sec, "market_id") and market_map:
+        return market_map.get(sec.market_id, "TWSE")
+    return "TWSE"
+
+
 @dataclass
 class ImportRowError:
     row: int
@@ -119,7 +130,7 @@ class ExportService:
             )
         ).all()
 
-        # Preload securities
+        # Preload securities and markets
         sec_ids = {tx.security_id for tx in transactions}
         securities = {}
         if sec_ids:
@@ -130,6 +141,9 @@ class ExportService:
             ).all()
             securities = {sec.id: sec for sec in sec_rows}
 
+        market_rows = (await self.session.scalars(select(MarketModel))).all()
+        market_map = {m.id: m.code for m in market_rows}
+
         output = io.StringIO()
         output.write(UTF8_BOM)
         writer = csv.writer(output, lineterminator="\r\n")
@@ -137,7 +151,7 @@ class ExportService:
 
         for tx in transactions:
             sec = securities.get(tx.security_id)
-            market = sec.market if sec else "TWSE"
+            market = resolve_market_code(sec, market_map)
             code = sec.code if sec else ""
             local_dt = tx.executed_at.astimezone(TAIPEI_TZ)
             writer.writerow(
@@ -407,6 +421,9 @@ class ExportService:
             ).all()
             securities = {sec.id: sec for sec in sec_rows}
 
+        market_rows = (await self.session.scalars(select(MarketModel))).all()
+        market_map = {m.id: m.code for m in market_rows}
+
         group_map = {g.id: g for g in groups}
 
         output = io.StringIO()
@@ -425,7 +442,7 @@ class ExportService:
                     str(g.id),
                     escape_formula(g.name),
                     str(g.sort_order),
-                    sec.market,
+                    resolve_market_code(sec, market_map),
                     sec.code,
                     str(item.sort_order),
                     escape_formula(item.note) if item.note else "",
@@ -693,9 +710,11 @@ class ImportService:
                 422,
             )
 
-        # Preload all securities in memory for fast bulk lookup
+        # Preload all securities and markets in memory for fast bulk lookup
+        market_rows = (await self.session.scalars(select(MarketModel))).all()
+        market_map = {m.id: m.code for m in market_rows}
         sec_rows = (await self.session.scalars(select(SecurityModel))).all()
-        sec_by_pair = {(s.market, s.code): s for s in sec_rows}
+        sec_by_pair = {(resolve_market_code(s, market_map), s.code): s for s in sec_rows}
         sec_by_code: dict[str, list[SecurityModel]] = {}
         for s in sec_rows:
             sec_by_code.setdefault(s.code, []).append(s)
@@ -850,7 +869,7 @@ class ImportService:
                         "row_number": row_idx,
                         "transaction_id": str(tx_id),
                         "security_id": str(matched_sec.id),
-                        "market": matched_sec.market,
+                        "market": resolve_market_code(matched_sec, market_map),
                         "code": matched_sec.code,
                         "name": matched_sec.name,
                         "side": side.value,
@@ -1066,8 +1085,11 @@ class ImportService:
         groups_dict: dict[str, dict] = {}
         errors = []
 
+        # Preload securities and markets
+        market_rows = (await self.session.scalars(select(MarketModel))).all()
+        market_map = {m.id: m.code for m in market_rows}
         sec_rows = (await self.session.scalars(select(SecurityModel))).all()
-        sec_by_pair = {(s.market, s.code): s for s in sec_rows}
+        sec_by_pair = {(resolve_market_code(s, market_map), s.code): s for s in sec_rows}
 
         for row_idx, row in enumerate(rows[1:], start=2):
             if not row or all(not cell.strip() for cell in row):
@@ -1129,7 +1151,7 @@ class ImportService:
                 {
                     "row_number": row_idx,
                     "security_id": str(sec.id),
-                    "market": sec.market,
+                    "market": resolve_market_code(sec, market_map),
                     "code": sec.code,
                     "name": sec.name,
                     "note": note,

@@ -41,11 +41,25 @@ class FakeSession:
                 return self.sequence
         if self.scalar_results:
             return self.scalar_results.pop(0)
-        # Check if scalar is a simple single-object query
+
+        user_id = None
+        target_id = None
+        for crit in getattr(statement, "_where_criteria", ()):
+            col_name = getattr(getattr(crit, "left", None), "name", None)
+            val = getattr(getattr(crit, "right", None), "value", None)
+            if col_name == "user_id":
+                user_id = val
+            elif col_name in ("portfolio_id", "id"):
+                target_id = val
+
         entity = getattr(statement, "column_descriptions", [{}])[0].get("entity")
         if entity:
             for (kind, _), value in self.objects.items():
                 if kind is entity:
+                    if user_id is not None and getattr(value, "user_id", None) != user_id:
+                        continue
+                    if target_id is not None and getattr(value, "id", None) != target_id:
+                        continue
                     return value
         return None
 
@@ -109,7 +123,7 @@ async def test_portfolio_transactions_export():
     portfolio_id = uuid4()
     sec_id = uuid4()
 
-    sec = SecurityModel(
+    sec = SimpleNamespace(
         id=sec_id,
         market="TWSE",
         code="2330",
@@ -160,7 +174,6 @@ async def test_portfolio_transactions_export():
         "format_version,transaction_id,portfolio_name,market,code,side,"
         "trade_date,trade_time,shares,price,fee,lot_type"
     )
-    # Row check: escaped formula, Taipei time (01:30 UTC -> 09:30 Taipei), Decimal precision
     row = lines[1].split(",")
     assert row[0] == "twml-portfolio-csv-v1"
     assert row[1] == str(tx_id)
@@ -206,7 +219,7 @@ async def test_watchlists_export():
     sec_id = uuid4()
     item_id = uuid4()
 
-    sec = SecurityModel(
+    sec = SimpleNamespace(
         id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True
     )
     group = WatchlistModel(
@@ -257,7 +270,9 @@ async def test_portfolio_pdf_report_generation():
     sec_id = uuid4()
     tx_id = uuid4()
 
-    sec = SecurityModel(id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True)
+    sec = SimpleNamespace(
+        id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True
+    )
     pf = PortfolioModel(
         id=portfolio_id, user_id=user_id, name="Growth Fund", base_currency="TWD", version=1
     )
@@ -295,7 +310,9 @@ async def test_portfolio_import_dry_run_and_apply():
     portfolio_id = uuid4()
     sec_id = uuid4()
 
-    sec = SecurityModel(id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True)
+    sec = SimpleNamespace(
+        id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True
+    )
     pf = PortfolioModel(
         id=portfolio_id, user_id=user_id, name="Main Portfolio", base_currency="TWD", version=1
     )
@@ -339,7 +356,9 @@ async def test_portfolio_import_oversell_rejection():
     portfolio_id = uuid4()
     sec_id = uuid4()
 
-    sec = SecurityModel(id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True)
+    sec = SimpleNamespace(
+        id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True
+    )
     pf = PortfolioModel(
         id=portfolio_id, user_id=user_id, name="Test PF", base_currency="TWD", version=1
     )
@@ -369,7 +388,9 @@ async def test_watchlist_import_merge_and_replace():
     user_id = uuid4()
     sec_id = uuid4()
 
-    sec = SecurityModel(id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True)
+    sec = SimpleNamespace(
+        id=sec_id, market="TWSE", code="2330", name="TSMC", is_active=True
+    )
     session.objects[(SecurityModel, sec_id)] = sec
 
     wl_csv = (
