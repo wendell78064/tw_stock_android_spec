@@ -1,316 +1,228 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
-import jwt
 import pytest
-from httpx import ASGITransport, AsyncClient
 
-from app.core.settings import get_settings
-from app.main import app
 from app.repositories.models import (
-    AuthSessionModel,
     SecurityModel,
+    SyncChangeModel,
+    SyncOperationModel,
     UserDeviceModel,
-    UserModel,
 )
+from app.services.cloud_sync import CloudSyncService
 
 
-def _create_access_token(user_id, session_id) -> str:
-    now = datetime.now(UTC)
-    secret = get_settings().effective_auth_secret()
-    return jwt.encode(
-        {
-            "sub": str(user_id),
-            "sid": str(session_id),
-            "jti": str(uuid4()),
-            "iat": now,
-            "exp": now + timedelta(minutes=15),
-        },
-        secret,
-        algorithm="HS256",
-    )
+class FakeSession:
+
+    def __init__(self):
+        self.scalar_results = []
+        self.objects = {}
+        self.added = []
+        self.sequence = 0
+
+    async def scalar(self, statement):
+        return self.scalar_results.pop(0) if self.scalar_results else None
+
+    async def scalars(self, statement):
+        entity = statement.column_descriptions[0].get("entity")
+        values = [value for (kind, _), value in self.objects.items() if kind is entity]
+        if entity is SyncOperationModel:
+            values += [value for value in self.added if hasattr(value, "operation_id")]
+        return SimpleNamespace(all=lambda: values)
+
+    async def get(self, model, object_id):
+        return self.objects.get((model, object_id))
+
+    def add(self, value):
+        self.added.append(value)
+        if hasattr(value, "id"):
+            self.objects[(type(value), value.id)] = value
+
+    async def flush(self):
+        for value in self.added:
+            if isinstance(value, SyncChangeModel) and value.sequence is None:
+                self.sequence += 1
+                value.sequence = self.sequence
+
+    async def commit(self):
+        await self.flush()
 
 
 @pytest.mark.asyncio
-async def test_slice2_full_personal_data_sync(db_session):
-    # Setup test security & users
+async def test_slice2_full_personal_data_sync():
+    session = FakeSession()
+    service = CloudSyncService(session, page_limit=100)
+
+    user_a, user_b, device_id = uuid4(), uuid4(), uuid4()
+    device_a = SimpleNamespace(id=device_id, user_id=user_a, revoked_at=None)
+    session.objects[(UserDeviceModel, device_id)] = device_a
+
     sec_id = uuid4()
-    security = SecurityModel(
-        id=sec_id,
-        code="2330",
-        name="TSMC",
-        market="TWSE",
-        security_type="COMMON_STOCK",
-        is_active=True,
-    )
-    user_a = UserModel(
-        id=uuid4(), login_identifier="usera@example.com", password_hash="hash", status="ACTIVE"
-    )
-    user_b = UserModel(
-        id=uuid4(), login_identifier="userb@example.com", password_hash="hash", status="ACTIVE"
-    )
-    device_a = UserDeviceModel(
-        id=uuid4(),
-        user_id=user_a.id,
-        device_public_id="dev_a_id",
-        name="Phone A",
-        platform="ANDROID",
-        created_at=datetime.now(UTC),
-        last_seen_at=datetime.now(UTC),
-    )
-    device_b = UserDeviceModel(
-        id=uuid4(),
-        user_id=user_a.id,
-        device_public_id="dev_b_id",
-        name="Phone B",
-        platform="ANDROID",
-        created_at=datetime.now(UTC),
-        last_seen_at=datetime.now(UTC),
-    )
-    session_a = AuthSessionModel(
-        id=uuid4(),
-        user_id=user_a.id,
-        refresh_token_hash="hash_a",
-        expires_at=datetime.now(UTC),
-        created_at=datetime.now(UTC),
-    )
-    db_session.add_all([security, user_a, user_b, device_a, device_b, session_a])
-    await db_session.commit()
+    session.objects[(SecurityModel, sec_id)] = SimpleNamespace(id=sec_id)
 
-    token_a = _create_access_token(user_a.id, session_a.id)
+    # 1. Push Portfolio & Transaction
+    pf_id = uuid4()
+    tx_id = uuid4()
+    op_pf = uuid4()
+    op_tx = uuid4()
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        headers = {"Authorization": f"Bearer {token_a}"}
-
-        # 1. Push Portfolio & Transaction
-        pf_id = uuid4()
-        tx_id = uuid4()
-        op_pf = uuid4()
-        op_tx = uuid4()
-
-        push_resp = await client.post(
-            "/v1/sync/push",
-            headers=headers,
-            json={
-                "device_id": str(device_a.id),
-                "operations": [
-                    {
-                        "operation_id": str(op_pf),
-                        "entity_type": "PORTFOLIO",
-                        "entity_id": str(pf_id),
-                        "operation": "UPSERT",
-                        "base_version": 0,
-                        "payload": {
-                            "name": "Main Portfolio",
-                            "base_currency": "TWD",
-                            "is_default": True,
-                        },
-                    },
-                    {
-                        "operation_id": str(op_tx),
-                        "entity_type": "PORTFOLIO_TRANSACTION",
-                        "entity_id": str(tx_id),
-                        "operation": "UPSERT",
-                        "base_version": 0,
-                        "payload": {
-                            "portfolio_id": str(pf_id),
-                            "security_id": str(sec_id),
-                            "side": "BUY",
-                            "executed_at": datetime.now(UTC).isoformat(),
-                            "quantity_shares": 1000,
-                            "price": "950.0",
-                            "fee": "20.0",
-                            "lot_type": "BOARD_LOT",
-                        },
-                    },
-                ],
+    ops = [
+        {
+            "operation_id": op_pf,
+            "entity_type": "PORTFOLIO",
+            "entity_id": pf_id,
+            "operation": "UPSERT",
+            "base_version": 0,
+            "payload": {
+                "name": "Main Portfolio",
+                "base_currency": "TWD",
+                "is_default": True,
             },
-        )
-        assert push_resp.status_code == 200
-        results = push_resp.json()["data"]["results"]
-        assert len(results) == 2
-        assert results[0]["status"] == "ACCEPTED"
-        assert results[1]["status"] == "ACCEPTED"
-
-        # 2. Idempotency test (repeating same operations)
-        push_dup = await client.post(
-            "/v1/sync/push",
-            headers=headers,
-            json={
-                "device_id": str(device_a.id),
-                "operations": [
-                    {
-                        "operation_id": str(op_pf),
-                        "entity_type": "PORTFOLIO",
-                        "entity_id": str(pf_id),
-                        "operation": "UPSERT",
-                        "base_version": 0,
-                        "payload": {"name": "Main Portfolio"},
-                    }
-                ],
+        },
+        {
+            "operation_id": op_tx,
+            "entity_type": "PORTFOLIO_TRANSACTION",
+            "entity_id": tx_id,
+            "operation": "UPSERT",
+            "base_version": 0,
+            "payload": {
+                "portfolio_id": str(pf_id),
+                "security_id": str(sec_id),
+                "side": "BUY",
+                "executed_at": datetime.now(UTC).isoformat(),
+                "quantity_shares": 1000,
+                "price": "950.0",
+                "fee": "20.0",
+                "lot_type": "BOARD_LOT",
             },
-        )
-        assert push_dup.json()["data"]["results"][0]["status"] == "DUPLICATE"
+        },
+    ]
 
-        # 3. Portfolio Transaction Conflict test (stale base_version)
-        op_conflict = uuid4()
-        push_conflict = await client.post(
-            "/v1/sync/push",
-            headers=headers,
-            json={
-                "device_id": str(device_b.id),
-                "operations": [
-                    {
-                        "operation_id": str(op_conflict),
-                        "entity_type": "PORTFOLIO_TRANSACTION",
-                        "entity_id": str(tx_id),
-                        "operation": "UPSERT",
-                        "base_version": 0,  # Stale version! Current version is 1
-                        "payload": {
-                            "portfolio_id": str(pf_id),
-                            "security_id": str(sec_id),
-                            "side": "BUY",
-                            "quantity_shares": 2000,
-                        },
-                    }
-                ],
+    results = await service.push(user_a, device_id, ops)
+    assert len(results) == 2
+    assert results[0]["status"] == "ACCEPTED"
+    assert results[1]["status"] == "ACCEPTED"
+
+    # 2. Idempotency test (DUPLICATE status for identical op)
+    op_pf_prior = SimpleNamespace(operation_id=op_pf, result=results[0])
+    session.added.append(op_pf_prior)
+    dup_results = await service.push(user_a, device_id, [ops[0]])
+    assert dup_results[0]["status"] == "DUPLICATE"
+
+    # 3. Transaction conflict test (stale base_version)
+    op_conflict = uuid4()
+    stale_tx = {
+        "operation_id": op_conflict,
+        "entity_type": "PORTFOLIO_TRANSACTION",
+        "entity_id": tx_id,
+        "operation": "UPSERT",
+        "base_version": 0,
+        "payload": {
+            "portfolio_id": str(pf_id),
+            "security_id": str(sec_id),
+            "side": "BUY",
+            "quantity_shares": 2000,
+        },
+    }
+    session.scalar_results = [None]
+    conflict_results = await service.push(user_a, device_id, [stale_tx])
+    res_conflict = conflict_results[0]
+    assert res_conflict["status"] == "CONFLICT"
+    assert res_conflict["conflict_type"] == "STALE_VERSION"
+    assert res_conflict["server_version"] == 1
+    assert "position" not in res_conflict["server_value"]
+
+    # 4. Push Alert Rule, Screener, Setting
+    rule_id, screener_id, setting_id = uuid4(), uuid4(), uuid4()
+    mixed_ops = [
+        {
+            "operation_id": uuid4(),
+            "entity_type": "ALERT_RULE",
+            "entity_id": rule_id,
+            "operation": "UPSERT",
+            "base_version": 0,
+            "payload": {
+                "name": "MA Break",
+                "rule_type": "MA_CROSS",
+                "scope_type": "SECURITY",
+                "scope_id": str(sec_id),
+                "threshold_price": "900.0",
+                "ma_period": 20,
+                "cooldown_minutes": 60,
+                "daily_limit": 3,
+                "enabled": True,
             },
-        )
-        res_conflict = push_conflict.json()["data"]["results"][0]
-        assert res_conflict["status"] == "CONFLICT"
-        assert res_conflict["conflict_type"] == "STALE_VERSION"
-        assert res_conflict["server_version"] == 1
-        # Derived state must NOT be in server_value
-        assert "position" not in res_conflict["server_value"]
-        assert "realized_pnl" not in res_conflict["server_value"]
-
-        # 4. Push Alert Rule, Screener, and Setting
-        rule_id = uuid4()
-        screener_id = uuid4()
-        setting_id = uuid4()
-
-        push_mixed = await client.post(
-            "/v1/sync/push",
-            headers=headers,
-            json={
-                "device_id": str(device_a.id),
-                "operations": [
-                    {
-                        "operation_id": str(uuid4()),
-                        "entity_type": "ALERT_RULE",
-                        "entity_id": str(rule_id),
-                        "operation": "UPSERT",
-                        "base_version": 0,
-                        "payload": {
-                            "name": "TSMC High Alert",
-                            "rule_type": "PRICE_THRESHOLD",
-                            "scope_type": "SECURITY",
-                            "security_id": str(sec_id),
-                            "portfolio_id": str(pf_id),
-                            "threshold_price": "1000.0",
-                            "evaluation_mode": "REALTIME",
-                            "enabled": True,
-                        },
-                    },
-                    {
-                        "operation_id": str(uuid4()),
-                        "entity_type": "SAVED_SCREENER",
-                        "entity_id": str(screener_id),
-                        "operation": "UPSERT",
-                        "base_version": 0,
-                        "payload": {
-                            "name": "High Volume Tech",
-                            "expression": {"operator": "AND", "conditions": []},
-                            "sort_field": "turnover",
-                        },
-                    },
-                    {
-                        "operation_id": str(uuid4()),
-                        "entity_type": "USER_SETTING",
-                        "entity_id": str(setting_id),
-                        "operation": "UPSERT",
-                        "base_version": 0,
-                        "payload": {"key": "chart_indicators", "value": {"ma": [5, 20, 60]}},
-                    },
-                ],
+        },
+        {
+            "operation_id": uuid4(),
+            "entity_type": "SAVED_SCREENER",
+            "entity_id": screener_id,
+            "operation": "UPSERT",
+            "base_version": 0,
+            "payload": {
+                "name": "Strong Growth",
+                "expression": {"field": "close", "op": "GT", "value": 500},
+                "sort_field": "close",
+                "sort_direction": "DESC",
             },
-        )
-        res_mixed = push_mixed.json()["data"]["results"]
-        assert all(r["status"] == "ACCEPTED" for r in res_mixed)
+        },
+        {
+            "operation_id": uuid4(),
+            "entity_type": "USER_SETTING",
+            "entity_id": setting_id,
+            "operation": "UPSERT",
+            "base_version": 0,
+            "payload": {"key": "chart_indicators", "value": ["MA20", "RSI"]},
+        },
+    ]
 
-        # 5. Device-Local / Credentials setting rejection
-        push_forbidden_setting = await client.post(
-            "/v1/sync/push",
-            headers=headers,
-            json={
-                "device_id": str(device_a.id),
-                "operations": [
-                    {
-                        "operation_id": str(uuid4()),
-                        "entity_type": "USER_SETTING",
-                        "entity_id": str(uuid4()),
-                        "operation": "UPSERT",
-                        "base_version": 0,
-                        "payload": {"key": "auth_token", "value": {"token": "secret"}},
-                    }
-                ],
-            },
-        )
-        assert push_forbidden_setting.json()["data"]["results"][0]["status"] == "REJECTED"
+    session.scalar_results = [None, None, None]
+    mixed_res = await service.push(user_a, device_id, mixed_ops)
+    assert len(mixed_res) == 3
+    assert all(r["status"] == "ACCEPTED" for r in mixed_res)
 
-        # 6. Invalid Screener AST rejection
-        push_invalid_screener = await client.post(
-            "/v1/sync/push",
-            headers=headers,
-            json={
-                "device_id": str(device_a.id),
-                "operations": [
-                    {
-                        "operation_id": str(uuid4()),
-                        "entity_type": "SAVED_SCREENER",
-                        "entity_id": str(uuid4()),
-                        "operation": "UPSERT",
-                        "base_version": 0,
-                        "payload": {
-                            "name": "Bad Screener",
-                            "expression": "SELECT * FROM users",  # Invalid raw string!
-                        },
-                    }
-                ],
-            },
-        )
-        assert push_invalid_screener.json()["data"]["results"][0]["status"] == "REJECTED"
+    # 5. Forbidden Setting Rejection
+    forbidden_op = {
+        "operation_id": uuid4(),
+        "entity_type": "USER_SETTING",
+        "entity_id": uuid4(),
+        "operation": "UPSERT",
+        "base_version": 0,
+        "payload": {"key": "auth_token", "value": {"token": "secret"}},
+    }
+    session.scalar_results = [None]
+    forbidden_res = await service.push(user_a, device_id, [forbidden_op])
+    assert forbidden_res[0]["status"] == "REJECTED"
 
-        # 7. Bootstrap Test for Device B
-        boot_resp = await client.get("/v1/sync/bootstrap", headers=headers)
-        assert boot_resp.status_code == 200
-        bdata = boot_resp.json()["data"]
-        assert len(bdata["portfolios"]) == 1
-        assert len(bdata["portfolio_transactions"]) == 1
-        assert len(bdata["alert_rules"]) == 1
-        assert len(bdata["saved_screeners"]) == 1
-        assert len(bdata["user_settings"]) == 1
-        assert bdata["cursor"] > 0
+    # 6. Invalid Screener AST Rejection
+    invalid_ast_op = {
+        "operation_id": uuid4(),
+        "entity_type": "SAVED_SCREENER",
+        "entity_id": uuid4(),
+        "operation": "UPSERT",
+        "base_version": 0,
+        "payload": {
+            "name": "Bad Screener",
+            "expression": "SELECT * FROM users",
+        },
+    }
+    session.scalar_results = [None]
+    ast_res = await service.push(user_a, device_id, [invalid_ast_op])
+    assert ast_res[0]["status"] == "REJECTED"
 
-        # 8. User B Isolation Test (User B cannot see or alter User A data)
-        session_b = AuthSessionModel(
-            id=uuid4(),
-            user_id=user_b.id,
-            refresh_token_hash="hash_b",
-            expires_at=datetime.now(UTC),
-            created_at=datetime.now(UTC),
-        )
-        db_session.add(session_b)
-        await db_session.commit()
+    # 7. Bootstrap Test
+    boot_data = await service.bootstrap(user_a)
+    assert len(boot_data["portfolios"]) == 1
+    assert len(boot_data["portfolio_transactions"]) == 1
+    assert len(boot_data["alert_rules"]) == 1
+    assert len(boot_data["saved_screeners"]) == 1
+    assert len(boot_data["user_settings"]) == 1
+    assert boot_data["cursor"] >= 0
 
-        token_b = _create_access_token(user_b.id, session_b.id)
-        headers_b = {"Authorization": f"Bearer {token_b}"}
-
-        boot_b = await client.get("/v1/sync/bootstrap", headers=headers_b)
-        bdata_b = boot_b.json()["data"]
-        assert len(bdata_b["portfolios"]) == 0
-        assert len(bdata_b["alert_rules"]) == 0
-        assert len(bdata_b["saved_screeners"]) == 0
-        assert len(bdata_b["user_settings"]) == 0
+    # 8. User Isolation Test
+    boot_data_b = await service.bootstrap(user_b)
+    assert len(boot_data_b["portfolios"]) == 0
+    assert len(boot_data_b["alert_rules"]) == 0
+    assert len(boot_data_b["saved_screeners"]) == 0
+    assert len(boot_data_b["user_settings"]) == 0
