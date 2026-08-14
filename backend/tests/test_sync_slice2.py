@@ -7,16 +7,10 @@ from httpx import ASGITransport, AsyncClient
 from app.core.security import create_access_token
 from app.main import app
 from app.repositories.models import (
-    AlertRuleModel,
     AuthSessionModel,
-    PortfolioModel,
-    PortfolioTransactionModel,
-    SavedScreenerModel,
     SecurityModel,
     UserDeviceModel,
     UserModel,
-    UserSettingModel,
-    WatchlistModel,
 )
 
 
