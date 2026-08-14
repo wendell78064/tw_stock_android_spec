@@ -473,7 +473,7 @@ class CloudSyncService:
             "alert_rules": [self._payload("ALERT_RULE", row) for row in alerts],
             "saved_screeners": [self._payload("SAVED_SCREENER", row) for row in screeners],
             "user_settings": [self._payload("USER_SETTING", row) for row in settings],
-            "cursor": cursor,
+            "cursor": cursor or 0,
             "server_time": datetime.now(UTC).isoformat(),
         }
 

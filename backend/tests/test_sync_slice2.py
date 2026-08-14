@@ -22,9 +22,13 @@ class FakeSession:
         self.sequence = 0
 
     async def scalar(self, statement):
+        for col in getattr(statement, "selected_columns", ()):
+            col_str = str(col).lower()
+            if "sequence" in col_str or "max" in col_str or "coalesce" in col_str:
+                return self.sequence
         if self.scalar_results:
             return self.scalar_results.pop(0)
-        return self.sequence
+        return None
 
     async def scalars(self, statement):
         entity = statement.column_descriptions[0].get("entity")
@@ -201,7 +205,6 @@ async def test_slice2_full_personal_data_sync():
         "base_version": 0,
         "payload": {"key": "auth_token", "value": {"token": "secret"}},
     }
-    session.scalar_results = [None]
     forbidden_res = await service.push(user_a, device_id, [forbidden_op])
     assert forbidden_res[0]["status"] == "REJECTED"
 
@@ -217,7 +220,6 @@ async def test_slice2_full_personal_data_sync():
             "expression": "SELECT * FROM users",
         },
     }
-    session.scalar_results = [None]
     ast_res = await service.push(user_a, device_id, [invalid_ast_op])
     assert ast_res[0]["status"] == "REJECTED"
 
