@@ -16,18 +16,18 @@ Phase 6 / Slice 1 COMPLETE
 Phase 6 / Slice 2 COMPLETE
 Phase 6 / Slice 3 COMPLETE
 Phase 6 / Slice 4 COMPLETE
-Phase 6 / Slice 5 IN PROGRESS
+Phase 6 / Slice 5 COMPLETE
 ```
 
-- Current: **Phase 6 / Slice 5 — AI / Production Integration Hardening**
+- Current: **Phase 6 / Slice 5 — COMPLETE**
 - Previous: **Phase 6 / Slice 4 COMPLETE**
 - AI Provider: `UNCONFIGURED` (Software implementation complete; `FakeAIProvider` in dev/test)
 - Production Realtime Provider: `UNCONFIGURED` (Multi-predicate production gate enforced)
 - FCM: `UNCONFIGURED` (Token lifecycle & dedup software integration complete)
 - Database: `0014_personal_data_sync`
 - Room: version 12
-- Latest tag: `phase-6-slice-4-complete`
-- GitHub Actions CI: **PASS** ([Run 31776152277](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31776152277))
+- Latest tag: `phase-6-slice-5-complete`
+- GitHub Actions CI: **PASS** ([Run 31779872354](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31779872354))
 - CI jobs: backend **PASS**, android **PASS**, android-instrumentation **PASS**
 
 ## Phase 6 / Slice 5 Completed Features
@@ -47,7 +47,7 @@ Phase 6 / Slice 5 IN PROGRESS
 - PostgreSQL: `0014_personal_data_sync`
 - Room: version 12
 
-## External and Future
+## External Production Gates (Unconfigured)
 
 - Production Realtime Provider: `UNCONFIGURED` (Requires authorized licensed feed)
 - FCM remote push: `UNCONFIGURED` (Requires production Firebase project credentials)

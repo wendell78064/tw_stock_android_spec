@@ -207,13 +207,13 @@ Phase 5 software completion does not mean production realtime readiness.
 - 盤中同規則不重複轟炸。
 - App 背景恢復後資料正確。
 
-## Phase 6：Productization / Ecosystem — **IN PROGRESS**
+## Phase 6：Productization / Ecosystem — **COMPLETE**
 
 - Slice 1 — Account / Auth + Cloud Sync Foundation; Watchlist multi-device vertical slice — **COMPLETE**
 - Slice 2 — Portfolio / Alerts / Screener / Settings Sync — **COMPLETE**
 - Slice 3 — Import / Export / Reports — **COMPLETE**
 - Slice 4 — Biometrics / Widget / Product Polish — **COMPLETE**
-- Slice 5 — AI / Production Integration Hardening — **NEXT (do not start)**
+- Slice 5 — AI / Production Integration Hardening — **COMPLETE**
 
 - 多裝置同步。
 - 生物辨識。
