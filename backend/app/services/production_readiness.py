@@ -45,7 +45,7 @@ class RealtimeProductionGate:
         return {
             "status": "LIVE",
             "can_serve_live": True,
-            "source_type": capabilities.source_type.value,
+            "source_type": capabilities.source_type,
         }
 
 

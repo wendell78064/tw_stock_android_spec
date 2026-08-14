@@ -9,7 +9,7 @@ from app.domain.ai import (
     AnalysisType,
     StatementType,
 )
-from app.domain.realtime import LicenseStatus, ProviderCapabilities, SourceType
+from app.domain.realtime import LicenseStatus, ProviderCapabilities
 from app.repositories.models import (
     MarketModel,
     PortfolioModel,
@@ -292,7 +292,7 @@ def test_realtime_production_gate():
     delayed_cap = ProviderCapabilities(
         provider_name="DelayedVendor",
         configured=True,
-        source_type=SourceType.DELAYED,
+        source_type="DELAYED",
         realtime_available=False,
         delay_seconds=900,
         license_status=LicenseStatus.AUTHORIZED,
@@ -307,10 +307,10 @@ def test_realtime_production_gate():
     unauth_cap = ProviderCapabilities(
         provider_name="MockVendor",
         configured=True,
-        source_type=SourceType.BROKER,
+        source_type="BROKER",
         realtime_available=True,
         delay_seconds=0,
-        license_status=LicenseStatus.UNAUTHORIZED,
+        license_status=LicenseStatus.NOT_AUTHORIZED,
         redistribution_allowed=True,
     )
     res3 = RealtimeProductionGate.evaluate(unauth_cap)
@@ -321,7 +321,7 @@ def test_realtime_production_gate():
     no_redist_cap = ProviderCapabilities(
         provider_name="PrivateFeed",
         configured=True,
-        source_type=SourceType.EXCHANGE_DIRECT,
+        source_type="EXCHANGE_DIRECT",
         realtime_available=True,
         delay_seconds=0,
         license_status=LicenseStatus.AUTHORIZED,
@@ -335,7 +335,7 @@ def test_realtime_production_gate():
     live_cap = ProviderCapabilities(
         provider_name="ExchangeDirect",
         configured=True,
-        source_type=SourceType.EXCHANGE_DIRECT,
+        source_type="EXCHANGE_DIRECT",
         realtime_available=True,
         delay_seconds=0,
         license_status=LicenseStatus.AUTHORIZED,
