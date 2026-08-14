@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag name for the release (e.g. dev-build or v0.1.0-dev)"
+        required: false
+        default: "dev-build"
+      release_title:
+        description: "Release Title"
+        required: false
+        default: "TW Market Ledger — Development Build"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Build Debug APK
+        run: ./gradlew --no-daemon openApiValidate openApiGenerate :app:assembleDebug
+      - name: Rename APK Asset
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk tw-market-ledger-debug.apk
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ inputs.tag_name }}
+          TITLE: ${{ inputs.release_title }}
+        run: |
+          gh release create "$TAG_NAME" tw-market-ledger-debug.apk \
+            --title "$TITLE" \
+            --notes "## TW Market Ledger — Development Build
+
+- **Status**: Development Build (Software Implementation Complete)
+- **Artifact**: \`tw-market-ledger-debug.apk\`
+- **Target API**: Android 15 (API 35) / Minimum API 26
+
+> **Notice**: This build is signed with a standard development/debug keystore for testing and evaluation purposes. External production feeds (Realtime quote license, FCM, LLM credentials) remain unconfigured." \
+            --prerelease \
+            --clobber
