@@ -15,30 +15,28 @@ Phase 5 SOFTWARE COMPLETE
 Phase 6 / Slice 1 COMPLETE
 Phase 6 / Slice 2 COMPLETE
 Phase 6 / Slice 3 COMPLETE
-Phase 6 / Slice 4 IN PROGRESS
+Phase 6 / Slice 4 COMPLETE
 ```
 
-- Current: **Phase 6 / Slice 4 — Biometrics / Widget / Product Polish**
+- Current: **Phase 6 / Slice 4 — COMPLETE**
 - Previous: **Phase 6 / Slice 3 COMPLETE**
 - Database: `0014_personal_data_sync`
 - Room: version 12
 - Production Realtime Provider: `UNCONFIGURED`
 - FCM: `UNCONFIGURED`
-- Latest tag: `phase-6-slice-3-complete`
-- GitHub Actions CI: **PASS** ([Run 31774398279](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31774398279))
+- Latest tag: `phase-6-slice-4-complete`
+- GitHub Actions CI: **PASS** ([Run 31776152277](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31776152277))
 - CI jobs: backend **PASS**, android **PASS**, android-instrumentation **PASS**
 
-## Phase 6 / Slice 3 Completed Features
+## Phase 6 / Slice 4 Completed Features
 
-- Portfolio transactions, holdings, and summary CSV export (UTF-8 BOM, Decimal precision, Taipei timezone)
-- Watchlists CSV export
-- Formula injection escaping policy (`=`, `+`, `-`, `@`)
-- Portfolio report PDF generation
-- Two-phase import workflow (Dry-run preview with validation & Confirmed atomic apply)
-- Chronological accounting replay & oversell rejection
-- Duplicate detection & re-import idempotency
-- Cloud Sync integration (`SyncChangeModel` sequence and version increments)
-- Android SAF file picker integration & ViewModels
+- Official Android `BiometricPrompt` & Device Credential fallback (`AppLockManager`)
+- Lifecycle-aware background relock with configurable timeouts (`0`, `1`, `5`, `15` min)
+- Privacy Mode masking (`••••••`) in UI and Home Screen Widgets
+- Home Screen Widgets: `SummaryWidgetProvider` and `WatchlistWidgetProvider` reading Room caches
+- Productized Settings screen: Account & Sync, Security, Privacy, Widgets, Theme, and Diagnostics
+- Common UI components: `SkeletonBox`, `EmptyStateView`, `ErrorStateView` with retry, `StatusBadge`
+- Centralized `TaiwanMarketFormatter` handling prices, shares, amounts, and `Asia/Taipei` dates
 
 ## Database
 
@@ -52,15 +50,13 @@ Phase 6 / Slice 4 IN PROGRESS
 
 ## Next
 
-Phase 6 / Slice 4 — Biometrics / Widget / Product Polish
+Phase 6 / Slice 5 — AI / Production Integration Hardening
 
-Do not start Slice 4 without explicit request.
+Do not start Slice 5 without explicit request.
 
 ## Primary References
 
+- `docs/25_PHASE_6_BIOMETRICS_WIDGET_PRODUCT_POLISH.md`
 - `docs/24_PHASE_6_IMPORT_EXPORT_REPORTS.md`
 - `docs/23_PHASE_6_PERSONAL_DATA_SYNC.md`
 - `docs/22_PHASE_6_ACCOUNT_CLOUD_SYNC_FOUNDATION.md`
-- `docs/04_DEVELOPMENT_ROADMAP.md`
-- `api/openapi.yaml`
-

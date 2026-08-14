@@ -1,6 +1,6 @@
 # Phase 6 / Slice 4 — Biometrics / Widget / Product Polish
 
-狀態：**IN PROGRESS** (Awaiting GitHub CI)
+狀態：**COMPLETE**
 
 ## Overview
 
@@ -64,3 +64,14 @@ Phase 6 Slice 4 delivers the user security layer, home screen widgets, centraliz
 
 - **PostgreSQL Head**: `0014_personal_data_sync` (No migration required; App lock, privacy mode, and widget preferences are stored device-locally in `SharedPreferences`).
 - **Room DB Version**: `v12` (Directly reads cached summaries and watchlist items from existing Room tables).
+
+## 7. CI & Verification
+
+- **GitHub Actions CI Run**: `31776152277`
+- **Backend Job**: **PASS** (42s, 136 pytests passed)
+- **Android Job**: **PASS** (5m45s, unit tests & lint passed)
+- **Android Instrumentation Job**: **PASS** (5m33s, 25 tests on emulator-5554 Android 15, 0 skipped, 0 failed)
+- **App Lock & Timeout Smoke**: **PASS**
+- **Privacy Masking (`••••••`) Smoke**: **PASS**
+- **Home Screen Widgets & Updates Smoke**: **PASS**
+
