@@ -16,6 +16,7 @@ class TransactionSide(StrEnum):
 
 class LotType(StrEnum):
     ROUND_LOT = "ROUND_LOT"
+    BOARD_LOT = "BOARD_LOT"
     ODD_LOT = "ODD_LOT"
 
 
