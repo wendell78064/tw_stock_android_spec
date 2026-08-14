@@ -130,6 +130,8 @@ object AppModule {
     @Provides @Singleton fun screenerApi(retrofit: Retrofit): ScreenerApi = retrofit.create(ScreenerApi::class.java)
     @Provides @Singleton fun comparisonApi(retrofit: Retrofit): tw.market.ledger.network.ComparisonApi = retrofit.create(tw.market.ledger.network.ComparisonApi::class.java)
     @Provides @Singleton fun importExportApi(retrofit: Retrofit): tw.market.ledger.network.ImportExportApi = retrofit.create(tw.market.ledger.network.ImportExportApi::class.java)
+    @Provides @Singleton fun aiApi(retrofit: Retrofit): tw.market.ledger.network.AIApi = retrofit.create(tw.market.ledger.network.AIApi::class.java)
+    @Provides @Singleton fun pushApi(retrofit: Retrofit): tw.market.ledger.network.PushApi = retrofit.create(tw.market.ledger.network.PushApi::class.java)
 
     @Provides @Singleton
     fun realtimeQuoteClient(): tw.market.ledger.network.RealtimeQuoteClient =

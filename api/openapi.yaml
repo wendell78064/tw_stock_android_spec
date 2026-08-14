@@ -21,6 +21,8 @@ tags:
   - name: Exports
   - name: Imports
   - name: Reports
+  - name: AI
+  - name: Push
 paths:
   /auth/register:
     post:
@@ -1340,6 +1342,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WatchlistApplyResultEnvelope"
+  /ai/analyze:
+    post:
+      operationId: runAIAnalysis
+      tags: [AI]
+      summary: Run structured AI-grounded market analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AIAnalyzeRequest"
+      responses:
+        "200":
+          description: Structured AI analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StructuredAIAnalysisResult"
+        "403":
+          description: Personal AI consent required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /ai/consent:
+    get:
+      operationId: getAIConsent
+      tags: [AI]
+      summary: Retrieve personal portfolio AI consent status
+      responses:
+        "200":
+          description: AI consent status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIConsentResponse"
+    post:
+      operationId: setAIConsent
+      tags: [AI]
+      summary: Update personal portfolio AI consent status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetAIConsentRequest"
+      responses:
+        "200":
+          description: Updated AI consent status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIConsentResponse"
+  /push/register:
+    post:
+      operationId: registerPushToken
+      tags: [Push]
+      summary: Register or update device push notification token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPushTokenRequest"
+      responses:
+        "200":
+          description: Push token registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushTokenActionResponse"
+  /push/unregister:
+    post:
+      operationId: unregisterPushToken
+      tags: [Push]
+      summary: Unregister device push notification token on logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnregisterPushTokenRequest"
+      responses:
+        "200":
+          description: Push token unregistered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushTokenActionResponse"
 components:
   securitySchemes:
     bearerAuth:
@@ -2451,6 +2542,64 @@ components:
       required: [data]
       properties:
         data: { $ref: "#/components/schemas/WatchlistApplyResult" }
+    AIAnalyzeRequest:
+      type: object
+      required: [analysis_type]
+      properties:
+        analysis_type:
+          type: string
+          enum: [MARKET_SUMMARY, SECURITY_SUMMARY, PORTFOLIO_SUMMARY, INDUSTRY_SUMMARY, COMPARISON_SUMMARY, SCREENER_SUMMARY]
+        target_id: { type: string, format: uuid, nullable: true }
+        comparison_ids: { type: array, items: { type: string, format: uuid }, nullable: true }
+        screener_expression: { type: object, additionalProperties: true, nullable: true }
+    AnalysisStatement:
+      type: object
+      required: [type, text]
+      properties:
+        type: { type: string, enum: [FACT, INFERENCE, CAVEAT] }
+        text: { type: string }
+        category: { type: string, nullable: true }
+    StructuredAIAnalysisResult:
+      type: object
+      required: [summary, statements, risks, data_caveats, generated_at, provider, model, prompt_version, grounding_as_of]
+      properties:
+        summary: { type: string }
+        statements: { type: array, items: { $ref: "#/components/schemas/AnalysisStatement" } }
+        risks: { type: array, items: { type: string } }
+        data_caveats: { type: array, items: { type: string } }
+        generated_at: { type: string, format: date-time }
+        provider: { type: string }
+        model: { type: string }
+        prompt_version: { type: string }
+        grounding_as_of: { type: string, format: date-time }
+        cache_hit: { type: boolean, default: false }
+    AIConsentResponse:
+      type: object
+      required: [allow_portfolio_analysis]
+      properties:
+        allow_portfolio_analysis: { type: boolean }
+    SetAIConsentRequest:
+      type: object
+      required: [allow_portfolio_analysis]
+      properties:
+        allow_portfolio_analysis: { type: boolean }
+    RegisterPushTokenRequest:
+      type: object
+      required: [device_public_id, push_token]
+      properties:
+        device_public_id: { type: string }
+        push_token: { type: string }
+        platform: { type: string, default: "ANDROID" }
+    UnregisterPushTokenRequest:
+      type: object
+      required: [device_public_id]
+      properties:
+        device_public_id: { type: string }
+    PushTokenActionResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
 
   responses:
     NotFound:

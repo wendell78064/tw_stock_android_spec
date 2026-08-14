@@ -10,6 +10,7 @@ from app.adapters.fake_realtime_provider import (
     FakeRealtimeProvider,
     UnconfiguredRealtimeProvider,
 )
+from app.api.ai import router as ai_router
 from app.api.alerts import router as alerts_router
 from app.api.auth import router as auth_router
 from app.api.comparison import router as comparison_router
@@ -20,6 +21,7 @@ from app.api.imports import router as imports_router
 from app.api.industries import router as industries_router
 from app.api.market import router as market_router
 from app.api.portfolios import router as portfolios_router
+from app.api.push import router as push_router
 from app.api.realtime import router as realtime_router
 from app.api.reports import router as reports_router
 from app.api.screener import router as screener_router
@@ -119,6 +121,8 @@ app.include_router(themes_router, prefix="/v1")
 app.include_router(exports_router, prefix="/v1")
 app.include_router(imports_router, prefix="/v1")
 app.include_router(reports_router, prefix="/v1")
+app.include_router(ai_router, prefix="/v1")
+app.include_router(push_router, prefix="/v1")
 app.include_router(screener_router)
 app.include_router(comparison_router)
 app.include_router(realtime_router)
