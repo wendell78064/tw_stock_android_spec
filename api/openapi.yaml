@@ -18,6 +18,9 @@ tags:
   - name: Watchlists
   - name: Alerts
   - name: Screeners
+  - name: Exports
+  - name: Imports
+  - name: Reports
 paths:
   /auth/register:
     post:
@@ -1186,6 +1189,157 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ScreenerResultEnvelope" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /exports/portfolio/{portfolio_id}/transactions.csv:
+    get:
+      operationId: exportPortfolioTransactions
+      tags: [Exports]
+      summary: Export portfolio transactions as canonical CSV
+      parameters:
+        - { in: path, name: portfolio_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Portfolio transactions CSV stream
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /exports/portfolio/{portfolio_id}/holdings.csv:
+    get:
+      operationId: exportPortfolioHoldings
+      tags: [Exports]
+      summary: Export portfolio current holdings as CSV
+      parameters:
+        - { in: path, name: portfolio_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Portfolio holdings CSV stream
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /exports/portfolio/{portfolio_id}/summary.csv:
+    get:
+      operationId: exportPortfolioSummary
+      tags: [Exports]
+      summary: Export portfolio summary metrics as CSV
+      parameters:
+        - { in: path, name: portfolio_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Portfolio summary CSV stream
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /exports/watchlists.csv:
+    get:
+      operationId: exportWatchlists
+      tags: [Exports]
+      summary: Export all user watchlists and items as CSV
+      responses:
+        "200":
+          description: Watchlists CSV stream
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+  /reports/portfolio/{portfolio_id}.pdf:
+    get:
+      operationId: generatePortfolioReport
+      tags: [Reports]
+      summary: Generate portfolio report as PDF document
+      parameters:
+        - { in: path, name: portfolio_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Portfolio PDF report stream
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /imports/portfolio/preview:
+    post:
+      operationId: previewPortfolioImport
+      tags: [Imports]
+      summary: Dry-run preview and validate portfolio transactions CSV
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                portfolio_id: { type: string, format: uuid }
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CsvImportTextInput"
+      responses:
+        "200":
+          description: Preview validation summary and row errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioImportPreviewEnvelope"
+  /imports/portfolio/apply:
+    post:
+      operationId: applyPortfolioImport
+      tags: [Imports]
+      summary: Apply validated portfolio transactions import
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortfolioImportApplyInput"
+      responses:
+        "200":
+          description: Applied import result summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportApplyResultEnvelope"
+  /imports/watchlists/preview:
+    post:
+      operationId: previewWatchlistImport
+      tags: [Imports]
+      summary: Dry-run preview and validate watchlists CSV
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                merge_mode: { type: string, default: "MERGE" }
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CsvImportTextInput"
+      responses:
+        "200":
+          description: Watchlist preview summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistImportPreviewEnvelope"
+  /imports/watchlists/apply:
+    post:
+      operationId: applyWatchlistImport
+      tags: [Imports]
+      summary: Apply validated watchlists import
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchlistImportApplyInput"
+      responses:
+        "200":
+          description: Applied watchlist import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistApplyResultEnvelope"
 components:
   securitySchemes:
     bearerAuth:
@@ -2210,6 +2364,93 @@ components:
       properties:
         data: { type: array, items: { $ref: "#/components/schemas/SavedScreener" } }
         meta: { $ref: "#/components/schemas/Meta" }
+    CsvImportTextInput:
+      type: object
+      required: [csv_content]
+      properties:
+        csv_content: { type: string }
+        portfolio_id: { type: string, format: uuid }
+        merge_mode: { type: string, default: "MERGE" }
+    PortfolioImportApplyInput:
+      type: object
+      required: [preview_token, portfolio_id]
+      properties:
+        preview_token: { type: string }
+        portfolio_id: { type: string, format: uuid }
+    WatchlistImportApplyInput:
+      type: object
+      required: [preview_token]
+      properties:
+        preview_token: { type: string }
+        merge_mode: { type: string, default: "MERGE" }
+    ImportRowError:
+      type: object
+      required: [row, error_code, message]
+      properties:
+        row: { type: integer }
+        error_code: { type: string }
+        message: { type: string }
+    PortfolioImportPreview:
+      type: object
+      required: [token, total_rows, valid_rows, invalid_rows, warning_rows, duplicate_rows]
+      properties:
+        token: { type: string }
+        portfolio_id: { type: string, format: uuid }
+        total_rows: { type: integer }
+        valid_rows: { type: integer }
+        invalid_rows: { type: integer }
+        warning_rows: { type: integer }
+        duplicate_rows: { type: integer }
+        transactions: { type: array, items: { type: object, additionalProperties: true } }
+        errors: { type: array, items: { $ref: "#/components/schemas/ImportRowError" } }
+        warnings: { type: array, items: { $ref: "#/components/schemas/ImportRowError" } }
+    PortfolioImportPreviewEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/PortfolioImportPreview" }
+    WatchlistImportPreview:
+      type: object
+      required: [token, total_rows, valid_rows, invalid_rows, merge_mode]
+      properties:
+        token: { type: string }
+        merge_mode: { type: string, enum: [MERGE, REPLACE] }
+        total_rows: { type: integer }
+        valid_rows: { type: integer }
+        invalid_rows: { type: integer }
+        groups: { type: array, items: { type: object, additionalProperties: true } }
+        errors: { type: array, items: { $ref: "#/components/schemas/ImportRowError" } }
+    WatchlistImportPreviewEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/WatchlistImportPreview" }
+    ImportApplyResult:
+      type: object
+      required: [status, inserted_count, skipped_count, total_transactions]
+      properties:
+        status: { type: string }
+        inserted_count: { type: integer }
+        skipped_count: { type: integer }
+        total_transactions: { type: integer }
+    ImportApplyResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/ImportApplyResult" }
+    WatchlistApplyResult:
+      type: object
+      required: [status, merge_mode, groups_count, items_count]
+      properties:
+        status: { type: string }
+        merge_mode: { type: string }
+        groups_count: { type: integer }
+        items_count: { type: integer }
+    WatchlistApplyResultEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/WatchlistApplyResult" }
 
   responses:
     NotFound:

@@ -14,27 +14,28 @@ Phase 5 SOFTWARE COMPLETE
 
 Phase 6 / Slice 1 COMPLETE
 Phase 6 / Slice 2 COMPLETE
+Phase 6 / Slice 3 COMPLETE
 ```
 
-- Current: **Phase 6 / Slice 2 — COMPLETE**
-- Previous: **Phase 6 / Slice 1 COMPLETE**
+- Current: **Phase 6 / Slice 3 — Import / Export / Reports**
+- Previous: **Phase 6 / Slice 2 COMPLETE**
 - Database: `0014_personal_data_sync`
 - Room: version 12
 - Production Realtime Provider: `UNCONFIGURED`
 - FCM: `UNCONFIGURED`
 - Latest tag: `phase-6-slice-2-complete`
-- GitHub Actions CI: **PASS** ([Run 31768268218](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31768268218))
-- CI jobs: backend **PASS**, android **PASS**, android-instrumentation **PASS**
 
-## Phase 6 / Slice 2 Completed Features
+## Phase 6 / Slice 3 Completed Features
 
-- Portfolio & canonical transaction sync (excluding derived metrics)
-- Alert rule configuration sync & scope referential integrity
-- Saved screener AST sync & validation
-- User settings sync (with device-local forbidden key security gating)
-- Shared Outbox / Cursor / Tombstone / Version / Conflict pipeline
-- Account isolation & cross-device purge on logout
-- Room runtime migration v10 → v11, v11 → v12, and chained v10 → v12 (PASS)
+- Portfolio transactions, holdings, and summary CSV export (UTF-8 BOM, Decimal precision, Taipei timezone)
+- Watchlists CSV export
+- Formula injection escaping policy (`=`, `+`, `-`, `@`)
+- Portfolio report PDF generation
+- Two-phase import workflow (Dry-run preview with validation & Confirmed atomic apply)
+- Chronological accounting replay & oversell rejection
+- Duplicate detection & re-import idempotency
+- Cloud Sync integration (`SyncChangeModel` sequence and version increments)
+- Android SAF file picker integration & ViewModels
 
 ## Database
 
@@ -48,14 +49,15 @@ Phase 6 / Slice 2 COMPLETE
 
 ## Next
 
-Phase 6 / Slice 3 — Import / Export / Reports
+Phase 6 / Slice 4 — Biometrics / Widget / Product Polish
 
-Do not start Slice 3 without explicit request.
+Do not start Slice 4 without explicit request.
 
 ## Primary References
 
+- `docs/24_PHASE_6_IMPORT_EXPORT_REPORTS.md`
 - `docs/23_PHASE_6_PERSONAL_DATA_SYNC.md`
 - `docs/22_PHASE_6_ACCOUNT_CLOUD_SYNC_FOUNDATION.md`
-- `docs/18_PHASE_5_REALTIME_FOUNDATION.md`
 - `docs/04_DEVELOPMENT_ROADMAP.md`
 - `api/openapi.yaml`
+
