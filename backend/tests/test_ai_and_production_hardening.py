@@ -1,28 +1,20 @@
-from datetime import UTC, datetime
-from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
-from zoneinfo import ZoneInfo
 
 import pytest
+from sqlalchemy import select
 
 from app.core.errors import AppError
 from app.domain.ai import (
     AnalysisType,
-    GroundingFact,
-    GroundingPackage,
     StatementType,
 )
-from app.domain.push import PushNotificationPayload, PushProviderType
 from app.domain.realtime import LicenseStatus, ProviderCapabilities, SourceType
 from app.repositories.models import (
-    IndustryThemeModel,
     MarketModel,
     PortfolioModel,
-    PortfolioTransactionModel,
     SecurityModel,
     UserDeviceModel,
-    UserSettingsModel,
 )
 from app.services.ai_grounding import (
     AIAnalysisService,
@@ -37,11 +29,7 @@ from app.services.production_readiness import (
 from app.services.push_notifications import (
     FakePushProvider,
     PushNotificationService,
-    UnconfiguredPushProvider,
 )
-
-TAIPEI_TZ = ZoneInfo("Asia/Taipei")
-ZERO = Decimal("0")
 
 
 class FakeSession:

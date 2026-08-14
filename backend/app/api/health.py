@@ -3,11 +3,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import database_session, readiness_checker, redis_client
+from app.core.dependencies import database_session, redis_client
 from app.services.ai_grounding import FakeAIProvider
 from app.services.production_readiness import ProductionReadinessService
 from app.services.push_notifications import FakePushProvider
-from app.services.readiness import ReadinessChecker
 
 router = APIRouter()
 

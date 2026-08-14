@@ -2,7 +2,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import current_user, database_session, redis_client
@@ -10,7 +10,6 @@ from app.domain.ai import AnalysisType, StructuredAIAnalysisResult
 from app.services.ai_grounding import (
     AIAnalysisService,
     FakeAIProvider,
-    UnconfiguredAIProvider,
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])

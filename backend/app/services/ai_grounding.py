@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Protocol
 from uuid import UUID, uuid4
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +28,6 @@ from app.repositories.models import (
 from app.services.portfolio import PortfolioAccountingService
 
 PROMPT_VERSION = "twml-ai-grounding-v1"
-TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 ZERO = Decimal("0")
 
 

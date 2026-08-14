@@ -2,7 +2,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.realtime import LicenseStatus, ProviderCapabilities, SourceType
+from app.domain.realtime import LicenseStatus, ProviderCapabilities
 from app.services.ai_grounding import AIAnalysisProvider
 from app.services.push_notifications import PushNotificationProvider
 
