@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, File, Form, UploadFile
 from pydantic import BaseModel, Field
 
-from app.core.dependencies import current_user, database_session, get_redis_client
+from app.core.dependencies import current_user, database_session, redis_client
 from app.repositories.models import UserModel
 from app.services.import_export import ImportService
 
@@ -35,12 +35,12 @@ class CsvTextInput(BaseModel):
 async def preview_portfolio_import(
     user: Annotated[UserModel, Depends(current_user)],
     session: Annotated[object, Depends(database_session)],
-    redis_client: Annotated[object, Depends(get_redis_client)],
+    redis: Annotated[object, Depends(redis_client)],
     file: Annotated[UploadFile | None, File()] = None,
     body: Annotated[CsvTextInput | None, Body()] = None,
     portfolio_id: Annotated[UUID | None, Form()] = None,
 ):
-    service = ImportService(session, redis_client)
+    service = ImportService(session, redis)
     target_pid = portfolio_id
     if file:
         content_bytes = await file.read()
@@ -60,9 +60,9 @@ async def apply_portfolio_import(
     input_data: PortfolioApplyInput,
     user: Annotated[UserModel, Depends(current_user)],
     session: Annotated[object, Depends(database_session)],
-    redis_client: Annotated[object, Depends(get_redis_client)],
+    redis: Annotated[object, Depends(redis_client)],
 ):
-    service = ImportService(session, redis_client)
+    service = ImportService(session, redis)
     result = await service.apply_portfolio_import(
         user.id, input_data.preview_token, input_data.portfolio_id
     )
@@ -73,12 +73,12 @@ async def apply_portfolio_import(
 async def preview_watchlist_import(
     user: Annotated[UserModel, Depends(current_user)],
     session: Annotated[object, Depends(database_session)],
-    redis_client: Annotated[object, Depends(get_redis_client)],
+    redis: Annotated[object, Depends(redis_client)],
     file: Annotated[UploadFile | None, File()] = None,
     body: Annotated[CsvTextInput | None, Body()] = None,
     merge_mode: Annotated[str, Form()] = "MERGE",
 ):
-    service = ImportService(session, redis_client)
+    service = ImportService(session, redis)
     mode = merge_mode
     if file:
         content_bytes = await file.read()
@@ -98,9 +98,9 @@ async def apply_watchlist_import(
     input_data: WatchlistApplyInput,
     user: Annotated[UserModel, Depends(current_user)],
     session: Annotated[object, Depends(database_session)],
-    redis_client: Annotated[object, Depends(get_redis_client)],
+    redis: Annotated[object, Depends(redis_client)],
 ):
-    service = ImportService(session, redis_client)
+    service = ImportService(session, redis)
     result = await service.apply_watchlist_import(
         user.id, input_data.preview_token, input_data.merge_mode
     )

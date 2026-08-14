@@ -35,6 +35,9 @@ def redis_client(request: Request) -> Redis:
     return request.app.state.redis
 
 
+get_redis_client = redis_client
+
+
 def get_realtime_cache_service(request: Request):
     return request.app.state.realtime_cache_service
 
