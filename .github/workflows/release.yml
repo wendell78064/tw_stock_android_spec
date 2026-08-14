@@ -44,5 +44,5 @@ jobs:
           gh release create "$TAG_NAME" tw-market-ledger-debug.apk \
             --title "$TITLE" \
             --notes "Development build of TW Market Ledger. Signed with debug key for testing. External production feeds remain unconfigured." \
-            --prerelease \
-            --clobber
+            --prerelease || \
+          gh release upload "$TAG_NAME" tw-market-ledger-debug.apk --clobber
