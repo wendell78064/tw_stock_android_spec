@@ -17,6 +17,8 @@ from app.domain.ai import (
     StatementType,
     StructuredAIAnalysisResult,
 )
+from app.domain.portfolio import LotType, PortfolioTransaction, TransactionSide
+from app.domain.pricing import SecurityKey
 from app.repositories.models import (
     IndustryThemeModel,
     MarketModel,
@@ -285,9 +287,6 @@ class GroundingBuilder:
             PortfolioTransactionModel.portfolio_id == portfolio_id
         )
         transactions = (await self.session.scalars(tx_stmt)).all()
-
-        from app.domain.pricing import SecurityKey
-        from app.domain.portfolio import PortfolioTransaction, TransactionSide, LotType
 
         domain_txs = []
         for t in transactions:
