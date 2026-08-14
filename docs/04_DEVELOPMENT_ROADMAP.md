@@ -207,7 +207,7 @@ Phase 5 software completion does not mean production realtime readiness.
 - 盤中同規則不重複轟炸。
 - App 背景恢復後資料正確。
 
-## Phase 6：Productization / Ecosystem — **COMPLETE**
+## Phase 6：Productization / Ecosystem — **SOFTWARE COMPLETE**
 
 - Slice 1 — Account / Auth + Cloud Sync Foundation; Watchlist multi-device vertical slice — **COMPLETE**
 - Slice 2 — Portfolio / Alerts / Screener / Settings Sync — **COMPLETE**
@@ -215,18 +215,11 @@ Phase 5 software completion does not mean production realtime readiness.
 - Slice 4 — Biometrics / Widget / Product Polish — **COMPLETE**
 - Slice 5 — AI / Production Integration Hardening — **COMPLETE**
 
-- 多裝置同步。
-- 生物辨識。
-- 桌面小工具。
-- CSV 匯入／匯出。
-- PDF／CSV 報表。
-- 模擬投資組合。
-- 離線模式。
-- 最大痛點估算。
-- AI 市場與持股摘要。
-- 訂閱與額度管理。
-- 管理後台。
-- Data quality dashboard。
+## Overall Project Status — **FUNCTIONAL ROADMAP COMPLETE**
+
+- **Software Implementation**: COMPLETE (Phase 0 ~ Phase 6)
+- **Functional Roadmap**: COMPLETE
+- **External Production Integrations**: UNCONFIGURED (Commercial quote feed, FCM credentials, LLM keys)
 
 ## 建議第一個 Codex 任務
 
