@@ -17,13 +17,15 @@ Phase 6 / Slice 2 COMPLETE
 Phase 6 / Slice 3 COMPLETE
 ```
 
-- Current: **Phase 6 / Slice 3 — Import / Export / Reports**
+- Current: **Phase 6 / Slice 3 — COMPLETE**
 - Previous: **Phase 6 / Slice 2 COMPLETE**
 - Database: `0014_personal_data_sync`
 - Room: version 12
 - Production Realtime Provider: `UNCONFIGURED`
 - FCM: `UNCONFIGURED`
-- Latest tag: `phase-6-slice-2-complete`
+- Latest tag: `phase-6-slice-3-complete`
+- GitHub Actions CI: **PASS** ([Run 31774398279](https://github.com/wendell78064/tw_stock_android_spec/actions/runs/31774398279))
+- CI jobs: backend **PASS**, android **PASS**, android-instrumentation **PASS**
 
 ## Phase 6 / Slice 3 Completed Features
 
