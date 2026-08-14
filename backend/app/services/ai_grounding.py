@@ -20,12 +20,13 @@ from app.domain.ai import (
 from app.domain.portfolio import LotType, PortfolioTransaction, TransactionSide
 from app.domain.pricing import SecurityKey
 from app.repositories.models import (
-    IndustryThemeModel,
+    IndustryModel,
     MarketModel,
     PortfolioModel,
     PortfolioTransactionModel,
     SecurityModel,
-    UserSettingsModel,
+    ThemeModel,
+    UserSettingModel,
 )
 from app.services.portfolio import PortfolioAccountingService
 
@@ -342,7 +343,9 @@ class GroundingBuilder:
         self, industry_id: UUID, request_id: str
     ) -> GroundingPackage:
         now_utc = datetime.now(UTC)
-        theme = await self.session.get(IndustryThemeModel, industry_id)
+        theme = await self.session.get(IndustryModel, industry_id)
+        if not theme:
+            theme = await self.session.get(ThemeModel, industry_id)
         name = theme.name if theme else "產業題材"
         facts = [
             GroundingFact("INDUSTRY", "NAME", name, "FINAL"),
@@ -432,31 +435,37 @@ class AIAnalysisService:
         return f"ai_cache:{grounding.analysis_type}:{user_scope}:{fingerprint}"
 
     async def check_portfolio_consent(self, user_id: UUID) -> bool:
-        stmt = select(UserSettingsModel).where(
-            UserSettingsModel.user_id == user_id,
-            UserSettingsModel.key == "allow_ai_portfolio_analysis",
+        stmt = select(UserSettingModel).where(
+            UserSettingModel.user_id == user_id,
+            UserSettingModel.key == "allow_ai_portfolio_analysis",
+            UserSettingModel.deleted_at.is_(None),
         )
         setting = (await self.session.scalars(stmt)).first()
         if not setting:
             return False
-        return str(setting.value).lower() in ("true", "1", "yes")
+        val = setting.value
+        if isinstance(val, dict):
+            return bool(val.get("allow") or val.get("value") in ("true", True, 1, "1"))
+        return str(val).lower() in ("true", "1", "yes")
 
     async def set_portfolio_consent(self, user_id: UUID, allow: bool) -> None:
-        stmt = select(UserSettingsModel).where(
-            UserSettingsModel.user_id == user_id,
-            UserSettingsModel.key == "allow_ai_portfolio_analysis",
+        stmt = select(UserSettingModel).where(
+            UserSettingModel.user_id == user_id,
+            UserSettingModel.key == "allow_ai_portfolio_analysis",
+            UserSettingModel.deleted_at.is_(None),
         )
         setting = (await self.session.scalars(stmt)).first()
         now_utc = datetime.now(UTC)
         if setting:
-            setting.value = "true" if allow else "false"
+            setting.value = {"allow": allow}
             setting.updated_at = now_utc
+            setting.version += 1
         else:
-            new_setting = UserSettingsModel(
+            new_setting = UserSettingModel(
                 id=uuid4(),
                 user_id=user_id,
                 key="allow_ai_portfolio_analysis",
-                value="true" if allow else "false",
+                value={"allow": allow},
                 created_at=now_utc,
                 updated_at=now_utc,
                 version=1,
