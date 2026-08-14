@@ -43,8 +43,16 @@ data class SyncChange(val cursor: Long, val entityType: String, val entityId: St
     val operation: String, val version: Long, val value: Map<String, Any?>?)
 data class SyncChangesResponse(val changes: List<SyncChange>, val nextCursor: Long,
     val hasMore: Boolean, val serverTime: String)
-data class SyncBootstrapResponse(val watchlists: List<Map<String, Any?>>, val items: List<Map<String, Any?>>,
-    val cursor: Long)
+data class SyncBootstrapResponse(
+    val watchlists: List<Map<String, Any?>> = emptyList(),
+    val items: List<Map<String, Any?>> = emptyList(),
+    @Json(name = "portfolios") val portfolios: List<Map<String, Any?>> = emptyList(),
+    @Json(name = "portfolio_transactions") val portfolioTransactions: List<Map<String, Any?>> = emptyList(),
+    @Json(name = "alert_rules") val alertRules: List<Map<String, Any?>> = emptyList(),
+    @Json(name = "saved_screeners") val savedScreeners: List<Map<String, Any?>> = emptyList(),
+    @Json(name = "user_settings") val userSettings: List<Map<String, Any?>> = emptyList(),
+    val cursor: Long
+)
 
 interface SyncApi {
     @POST("sync/push") suspend fun push(@Body body: SyncPushRequest): Envelope<SyncPushResponse>

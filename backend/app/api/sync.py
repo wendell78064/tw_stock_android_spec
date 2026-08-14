@@ -11,7 +11,15 @@ router = APIRouter(prefix="/sync", tags=["Sync"])
 
 class SyncOperationInput(BaseModel):
     operation_id: UUID
-    entity_type: Literal["WATCHLIST", "WATCHLIST_ITEM"]
+    entity_type: Literal[
+        "WATCHLIST",
+        "WATCHLIST_ITEM",
+        "PORTFOLIO",
+        "PORTFOLIO_TRANSACTION",
+        "ALERT_RULE",
+        "SAVED_SCREENER",
+        "USER_SETTING",
+    ]
     entity_id: UUID
     operation: Literal["UPSERT", "DELETE"]
     base_version: int = Field(ge=0)

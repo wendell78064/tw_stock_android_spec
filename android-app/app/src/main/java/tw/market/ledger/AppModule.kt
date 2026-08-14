@@ -34,6 +34,7 @@ import tw.market.ledger.database.TaxonomyDao
 import tw.market.ledger.network.IndustryApi
 import tw.market.ledger.database.MIGRATION_9_10
 import tw.market.ledger.database.MIGRATION_10_11
+import tw.market.ledger.database.MIGRATION_11_12
 import tw.market.ledger.database.CloudSyncDao
 import tw.market.ledger.database.ScreenerDao
 import tw.market.ledger.network.ScreenerApi
@@ -78,8 +79,9 @@ object AppModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): TWMarketDatabase =
         Room.databaseBuilder(context, TWMarketDatabase::class.java, "tw-market-ledger.db")
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
             .build()
+
 
     @Provides fun securityDao(database: TWMarketDatabase): SecurityDao = database.securityDao()
     @Provides fun chartDao(database: TWMarketDatabase): ChartDao = database.chartDao()

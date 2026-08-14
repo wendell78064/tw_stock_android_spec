@@ -239,8 +239,10 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         AlertEventEntity::class, IndustryEntity::class, ThemeEntity::class, TaxonomyMemberEntity::class,
         TaxonomyStrengthEntity::class, TaxonomyLeaderEntity::class,
         SavedScreenerEntity::class, ScreenerResultEntity::class, CloudWatchlistEntity::class,
-        CloudWatchlistItemEntity::class, SyncOutboxEntity::class, SyncCursorEntity::class],
-    version = 11,
+        CloudWatchlistItemEntity::class, CloudPortfolioEntity::class, CloudPortfolioTransactionEntity::class,
+        CloudAlertRuleEntity::class, CloudSavedScreenerEntity::class, CloudUserSettingEntity::class,
+        SyncOutboxEntity::class, SyncCursorEntity::class],
+    version = 12,
     exportSchema = false,
 )
 abstract class TWMarketDatabase : RoomDatabase() {
