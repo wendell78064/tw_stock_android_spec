@@ -235,9 +235,19 @@ class CloudSyncService:
                 updated_at=now,
             )
         if entity_type == "ALERT_RULE":
-            sec_id = UUID(payload["security_id"]) if payload.get("security_id") else None
-            pf_id = UUID(payload["portfolio_id"]) if payload.get("portfolio_id") else None
-            wl_id = UUID(payload["watchlist_id"]) if payload.get("watchlist_id") else None
+            scope_type = payload.get("scope_type", "SECURITY")
+            sec_id_raw = payload.get("security_id") or (
+                payload.get("scope_id") if scope_type == "SECURITY" else None
+            )
+            pf_id_raw = payload.get("portfolio_id") or (
+                payload.get("scope_id") if scope_type == "PORTFOLIO" else None
+            )
+            wl_id_raw = payload.get("watchlist_id") or (
+                payload.get("scope_id") if scope_type == "WATCHLIST" else None
+            )
+            sec_id = UUID(str(sec_id_raw)) if sec_id_raw else None
+            pf_id = UUID(str(pf_id_raw)) if pf_id_raw else None
+            wl_id = UUID(str(wl_id_raw)) if wl_id_raw else None
             if pf_id:
                 pf = await self.session.get(PortfolioModel, pf_id)
                 if pf is None or pf.user_id != user_id or pf.deleted_at:
@@ -251,7 +261,7 @@ class CloudSyncService:
                 user_id=user_id,
                 name=payload.get("name", "Alert Rule"),
                 rule_type=payload.get("rule_type", "PRICE_THRESHOLD"),
-                scope_type=payload.get("scope_type", "SECURITY"),
+                scope_type=scope_type,
                 security_id=sec_id,
                 portfolio_id=pf_id,
                 watchlist_id=wl_id,
@@ -289,13 +299,13 @@ class CloudSyncService:
             if not key or key in FORBIDDEN_SETTING_KEYS:
                 return None
             val = payload.get("value")
-            if not isinstance(val, dict):
+            if val is None:
                 return None
             return UserSettingModel(
                 id=entity_id,
                 user_id=user_id,
                 key=key,
-                value=val,
+                value=val if isinstance(val, dict) else {"value": val},
                 version=version,
                 created_at=now,
                 updated_at=now,
@@ -345,13 +355,18 @@ class CloudSyncService:
                 if k in payload:
                     setattr(row, k, payload[k])
         elif entity_type == "USER_SETTING":
-            if "key" in payload and payload["key"] in FORBIDDEN_SETTING_KEYS:
+            if "key" in payload and (
+                not payload["key"] or payload["key"] in FORBIDDEN_SETTING_KEYS
+            ):
                 return False
-            if "value" in payload and not isinstance(payload["value"], dict):
-                return False
-            for k in ("key", "value"):
-                if k in payload:
-                    setattr(row, k, payload[k])
+            if "key" in payload:
+                row.key = payload["key"]
+            if "value" in payload:
+                val = payload["value"]
+                if val is None:
+                    return False
+                row.value = val if isinstance(val, dict) else {"value": val}
+            return True
         return True
 
     def _get_model(self, entity_type):

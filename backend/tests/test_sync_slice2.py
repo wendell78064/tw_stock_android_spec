@@ -22,11 +22,21 @@ class FakeSession:
         self.sequence = 0
 
     async def scalar(self, statement):
-        return self.scalar_results.pop(0) if self.scalar_results else None
+        if self.scalar_results:
+            return self.scalar_results.pop(0)
+        return self.sequence
 
     async def scalars(self, statement):
         entity = statement.column_descriptions[0].get("entity")
-        values = [value for (kind, _), value in self.objects.items() if kind is entity]
+        user_id = None
+        for crit in getattr(statement, "_where_criteria", ()):
+            if getattr(getattr(crit, "left", None), "name", None) == "user_id":
+                user_id = getattr(getattr(crit, "right", None), "value", None)
+        values = [
+            value
+            for (kind, _), value in self.objects.items()
+            if kind is entity and (user_id is None or getattr(value, "user_id", None) == user_id)
+        ]
         if entity is SyncOperationModel:
             values += [value for value in self.added if hasattr(value, "operation_id")]
         return SimpleNamespace(all=lambda: values)
