@@ -159,7 +159,7 @@ class ExportService:
         return output.getvalue().encode("utf-8")
 
     async def export_portfolio_holdings_csv(self, user_id: UUID, portfolio_id: UUID) -> bytes:
-        portfolio = await self._require_user_portfolio(user_id, portfolio_id)
+        await self._require_user_portfolio(user_id, portfolio_id)
         from app.domain.portfolio import PortfolioTransaction
         from app.domain.pricing import SecurityKey
         from app.services.portfolio import PortfolioAccountingService
@@ -687,7 +687,11 @@ class ImportService:
         seen_fingerprints = set()
 
         if len(rows) - 1 > MAX_IMPORT_ROWS:
-            raise AppError("IMPORT_ROW_LIMIT_EXCEEDED", f"單次匯入不可超過 {MAX_IMPORT_ROWS} 列", 422)
+            raise AppError(
+                "IMPORT_ROW_LIMIT_EXCEEDED",
+                f"單次匯入不可超過 {MAX_IMPORT_ROWS} 列",
+                422,
+            )
 
         # Preload all securities in memory for fast bulk lookup
         sec_rows = (await self.session.scalars(select(SecurityModel))).all()
@@ -700,10 +704,16 @@ class ImportService:
             if not row or all(not cell.strip() for cell in row):
                 continue
             try:
-                raw_tx_id = row[col_map["transaction_id"]] if "transaction_id" in col_map else None
-                tx_id = UUID(raw_tx_id.strip()) if raw_tx_id and raw_tx_id.strip() else uuid4()
+                raw_tx_id = (
+                    row[col_map["transaction_id"]] if "transaction_id" in col_map else None
+                )
+                tx_id = (
+                    UUID(raw_tx_id.strip()) if raw_tx_id and raw_tx_id.strip() else uuid4()
+                )
 
-                market = row[col_map["market"]].strip().upper() if "market" in col_map else None
+                market = (
+                    row[col_map["market"]].strip().upper() if "market" in col_map else None
+                )
                 code = row[col_map["code"]].strip().upper()
                 side_raw = row[col_map["side"]].strip().upper()
                 if side_raw not in ("BUY", "SELL"):
@@ -732,7 +742,8 @@ class ImportService:
                         ImportRowError(
                             row_idx,
                             "INVALID_DATETIME",
-                            f"日期時間格式必須為 YYYY-MM-DD 與 HH:mm:ss (實際: {date_str} {time_str})",
+                            f"日期時間格式必須為 YYYY-MM-DD 與 HH:mm:ss "
+                            f"(實際: {date_str} {time_str})",
                         )
                     )
                     continue
@@ -765,7 +776,9 @@ class ImportService:
                             raise ValueError()
                     except (InvalidOperation, ValueError):
                         errors.append(
-                            ImportRowError(row_idx, "INVALID_FEE", "手續費必須為大於等於 0 之數值")
+                            ImportRowError(
+                                row_idx, "INVALID_FEE", "手續費必須為大於等於 0 之數值"
+                            )
                         )
                         continue
 
@@ -776,7 +789,11 @@ class ImportService:
                 )
                 if lot_type_raw not in ("BOARD_LOT", "ODD_LOT"):
                     errors.append(
-                        ImportRowError(row_idx, "INVALID_LOT_TYPE", "交易盤別必須為 BOARD_LOT 或 ODD_LOT")
+                        ImportRowError(
+                            row_idx,
+                            "INVALID_LOT_TYPE",
+                            "交易盤別必須為 BOARD_LOT 或 ODD_LOT",
+                        )
                     )
                     continue
                 lot_type = LotType(lot_type_raw)
@@ -792,7 +809,9 @@ class ImportService:
                     elif len(candidates) > 1:
                         errors.append(
                             ImportRowError(
-                                row_idx, "AMBIGUOUS_SECURITY", f"股票代號 {code} 存在於多個市場，請明確指定 market"
+                                row_idx,
+                                "AMBIGUOUS_SECURITY",
+                                f"股票代號 {code} 存在於多個市場，請明確指定 market",
                             )
                         )
                         continue
@@ -808,11 +827,21 @@ class ImportService:
                     continue
 
                 # Duplicate fingerprint
-                fp = (matched_sec.id, side.value, executed_at.isoformat(), shares, str(price))
+                fp = (
+                    matched_sec.id,
+                    side.value,
+                    executed_at.isoformat(),
+                    shares,
+                    str(price),
+                )
                 if fp in seen_fingerprints:
                     duplicate_count += 1
                     warnings.append(
-                        ImportRowError(row_idx, "POSSIBLE_DUPLICATE", "此筆交易與匯入檔內其他列可能重複")
+                        ImportRowError(
+                            row_idx,
+                            "POSSIBLE_DUPLICATE",
+                            "此筆交易與匯入檔內其他列可能重複",
+                        )
                     )
                 seen_fingerprints.add(fp)
 
@@ -1036,7 +1065,6 @@ class ImportService:
         col_map = {col: idx for idx, col in enumerate(header)}
         groups_dict: dict[str, dict] = {}
         errors = []
-        warnings = []
 
         sec_rows = (await self.session.scalars(select(SecurityModel))).all()
         sec_by_pair = {(s.market, s.code): s for s in sec_rows}
@@ -1046,7 +1074,9 @@ class ImportService:
                 continue
             g_name = row[col_map["group_name"]].strip()
             if not g_name:
-                errors.append(ImportRowError(row_idx, "INVALID_GROUP_NAME", "自選群組名稱不可為空"))
+                errors.append(
+                    ImportRowError(row_idx, "INVALID_GROUP_NAME", "自選群組名稱不可為空")
+                )
                 continue
 
             market = row[col_map["market"]].strip().upper()
@@ -1054,7 +1084,11 @@ class ImportService:
             sec = sec_by_pair.get((market, code))
             if sec is None:
                 errors.append(
-                    ImportRowError(row_idx, "SECURITY_NOT_FOUND", f"找不到指定股票 ({market}:{code})")
+                    ImportRowError(
+                        row_idx,
+                        "SECURITY_NOT_FOUND",
+                        f"找不到指定股票 ({market}:{code})",
+                    )
                 )
                 continue
 

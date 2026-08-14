@@ -36,9 +36,9 @@ async def preview_portfolio_import(
     user: Annotated[UserModel, Depends(current_user)],
     session: Annotated[object, Depends(database_session)],
     redis_client: Annotated[object, Depends(get_redis_client)],
-    file: UploadFile | None = File(None),
-    body: CsvTextInput | None = Body(None),
-    portfolio_id: UUID | None = Form(None),
+    file: Annotated[UploadFile | None, File()] = None,
+    body: Annotated[CsvTextInput | None, Body()] = None,
+    portfolio_id: Annotated[UUID | None, Form()] = None,
 ):
     service = ImportService(session, redis_client)
     target_pid = portfolio_id
@@ -74,9 +74,9 @@ async def preview_watchlist_import(
     user: Annotated[UserModel, Depends(current_user)],
     session: Annotated[object, Depends(database_session)],
     redis_client: Annotated[object, Depends(get_redis_client)],
-    file: UploadFile | None = File(None),
-    body: CsvTextInput | None = Body(None),
-    merge_mode: str = Form("MERGE"),
+    file: Annotated[UploadFile | None, File()] = None,
+    body: Annotated[CsvTextInput | None, Body()] = None,
+    merge_mode: Annotated[str, Form()] = "MERGE",
 ):
     service = ImportService(session, redis_client)
     mode = merge_mode
