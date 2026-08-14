@@ -1,10 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.core.security import create_access_token
+from app.core.settings import get_settings
 from app.main import app
 from app.repositories.models import (
     AuthSessionModel,
@@ -12,6 +13,22 @@ from app.repositories.models import (
     UserDeviceModel,
     UserModel,
 )
+
+
+def _create_access_token(user_id, session_id) -> str:
+    now = datetime.now(UTC)
+    secret = get_settings().effective_auth_secret()
+    return jwt.encode(
+        {
+            "sub": str(user_id),
+            "sid": str(session_id),
+            "jti": str(uuid4()),
+            "iat": now,
+            "exp": now + timedelta(minutes=15),
+        },
+        secret,
+        algorithm="HS256",
+    )
 
 
 @pytest.mark.asyncio
@@ -60,7 +77,7 @@ async def test_slice2_full_personal_data_sync(db_session):
     db_session.add_all([security, user_a, user_b, device_a, device_b, session_a])
     await db_session.commit()
 
-    token_a = create_access_token(user_a.id, session_a.id)
+    token_a = _create_access_token(user_a.id, session_a.id)
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -288,7 +305,7 @@ async def test_slice2_full_personal_data_sync(db_session):
         db_session.add(session_b)
         await db_session.commit()
 
-        token_b = create_access_token(user_b.id, session_b.id)
+        token_b = _create_access_token(user_b.id, session_b.id)
         headers_b = {"Authorization": f"Bearer {token_b}"}
 
         boot_b = await client.get("/v1/sync/bootstrap", headers=headers_b)
