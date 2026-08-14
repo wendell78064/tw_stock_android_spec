@@ -62,6 +62,7 @@ interface PortfolioDao {
     @Query("DELETE FROM portfolio_holding_cache WHERE portfolioId=:portfolioId") suspend fun clearHoldings(portfolioId: String)
     @Query("DELETE FROM portfolio_transaction_cache WHERE portfolioId=:portfolioId") suspend fun clearTransactions(portfolioId: String)
     @Query("SELECT * FROM portfolio_summary_cache WHERE portfolioId=:portfolioId") suspend fun summary(portfolioId: String): PortfolioSummaryEntity?
+    @Query("SELECT * FROM portfolio_summary_cache LIMIT 1") suspend fun firstSummary(): PortfolioSummaryEntity?
     @Query("SELECT * FROM portfolio_holding_cache WHERE portfolioId=:portfolioId") suspend fun holdings(portfolioId: String): List<PortfolioHoldingEntity>
     @Query("SELECT * FROM portfolio_transaction_cache WHERE portfolioId=:portfolioId ORDER BY executedAt,id") suspend fun transactions(portfolioId: String): List<PortfolioTransactionEntity>
 }

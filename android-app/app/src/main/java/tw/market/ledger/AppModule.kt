@@ -138,4 +138,10 @@ object AppModule {
     @Provides @Singleton
     fun realtimeSubscriptionManager(client: tw.market.ledger.network.RealtimeQuoteClient): tw.market.ledger.network.RealtimeSubscriptionManager =
         tw.market.ledger.network.RealtimeSubscriptionManager(client)
+
+    @Provides
+    fun biometricAuthenticator(authenticator: AndroidBiometricAuthenticator): BiometricAuthenticator = authenticator
+
+    @Provides
+    fun appPreferences(prefs: AndroidAppPreferences): AppPreferences = prefs
 }

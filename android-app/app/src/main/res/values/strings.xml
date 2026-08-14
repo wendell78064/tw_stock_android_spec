@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TW Market Ledger</string>
+    <string name="widget_summary_description">即時檢視台股投資組合總市值與未實現損益摘要</string>
+    <string name="widget_watchlist_description">快速查看自選股最新快取行情與漲跌</string>
+</resources>
