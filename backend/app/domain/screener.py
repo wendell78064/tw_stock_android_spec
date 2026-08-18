@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -9,7 +9,7 @@ from app.domain.market_data import DataStatus
 from app.domain.security import MarketCode
 
 
-class ScreenerOperator(str, Enum):
+class ScreenerOperator(StrEnum):
     GT = "GT"
     GTE = "GTE"
     LT = "LT"
@@ -23,7 +23,7 @@ class ScreenerOperator(str, Enum):
     IS_UNAVAILABLE = "IS_UNAVAILABLE"
 
 
-class FilterCategory(str, Enum):
+class FilterCategory(StrEnum):
     PRICE_RETURN = "PRICE_RETURN"
     TECHNICAL = "TECHNICAL"
     INSTITUTIONAL = "INSTITUTIONAL"
@@ -32,7 +32,7 @@ class FilterCategory(str, Enum):
     INDUSTRY_STRENGTH = "INDUSTRY_STRENGTH"
 
 
-class FieldType(str, Enum):
+class FieldType(StrEnum):
     NUMERIC = "NUMERIC"
     TEXT = "TEXT"
     BOOLEAN = "BOOLEAN"

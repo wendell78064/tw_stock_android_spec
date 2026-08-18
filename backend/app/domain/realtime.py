@@ -1,36 +1,36 @@
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel
 
 
-class LicenseStatus(str, Enum):
+class LicenseStatus(StrEnum):
     AUTHORIZED = "AUTHORIZED"
     UNVERIFIED = "UNVERIFIED"
     NOT_AUTHORIZED = "NOT_AUTHORIZED"
     UNCONFIGURED = "UNCONFIGURED"
 
 
-class DataStatus(str, Enum):
+class DataStatus(StrEnum):
     LIVE = "LIVE"
     STALE = "STALE"
     DELAYED = "DELAYED"
     UNAVAILABLE = "UNAVAILABLE"
 
 
-class TradingSession(str, Enum):
+class TradingSession(StrEnum):
     REGULAR = "REGULAR"
     AFTER_HOURS = "AFTER_HOURS"
     UNKNOWN = "UNKNOWN"
 
 
-class RealtimeEventKind(str, Enum):
+class RealtimeEventKind(StrEnum):
     SNAPSHOT = "SNAPSHOT"
     UPDATE = "UPDATE"
 
 
-class IntradayInterval(str, Enum):
+class IntradayInterval(StrEnum):
     ONE_MINUTE = "1m"
     FIVE_MINUTES = "5m"
 

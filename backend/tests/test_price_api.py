@@ -52,7 +52,7 @@ def price_client():
         provider.get_daily_prices(
             security=SecurityKey(MarketCode.TWSE, "1234"),
             start_date=date(2025, 1, 1),
-            end_date=date(2026, 8, 7),
+            end_date=date.today(),
         )
     )
     securities = InMemorySecurityRepository()
