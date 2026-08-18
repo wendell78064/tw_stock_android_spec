@@ -4,11 +4,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
+# Safely extract specific non-secret operational variables from .env without sourcing arbitrary shell code
 if [ -f .env ]; then
-  # shellcheck disable=SC1091
-  set -a
-  source .env
-  set +a
+  TWML_DATA_ROOT="${TWML_DATA_ROOT:-$(grep -E '^TWML_DATA_ROOT=' .env 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '"'\''')}"
+  POSTGRES_USER="${POSTGRES_USER:-$(grep -E '^POSTGRES_USER=' .env 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '"'\''')}"
+  POSTGRES_DB="${POSTGRES_DB:-$(grep -E '^POSTGRES_DB=' .env 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '"'\''')}"
 fi
 
 export PATH="${PATH}:/usr/local/bin:/var/packages/ContainerManager/target/usr/bin:/volume1/@appstore/ContainerManager/usr/bin"
@@ -25,16 +25,16 @@ echo "========================================================================"
 
 # 1. Volume Disk Usage Check & Alert
 echo -e "\n--- [1] Volume Storage Usage ---"
-VOLUME_LINE=$(df -h /volume1 | awk 'NR==2')
+VOLUME_LINE=$(df -h /volume1 2>/dev/null | awk 'NR==2' || df -h . | awk 'NR==2')
 echo "${VOLUME_LINE}"
 USAGE_PCT=$(echo "${VOLUME_LINE}" | awk '{print $5}' | tr -d '%')
 
-if [ "${USAGE_PCT}" -ge 85 ]; then
+if [ -n "${USAGE_PCT}" ] && [ "${USAGE_PCT}" -ge 85 ] 2>/dev/null; then
   echo ">>> [CRITICAL] Storage usage is at ${USAGE_PCT}% (>= 85%)! Immediate cleanup required! <<<"
-elif [ "${USAGE_PCT}" -ge 75 ]; then
+elif [ -n "${USAGE_PCT}" ] && [ "${USAGE_PCT}" -ge 75 ] 2>/dev/null; then
   echo ">>> [WARNING] Storage usage is at ${USAGE_PCT}% (>= 75%). Monitor disk growth closely. <<<"
 else
-  echo "Storage usage status: NORMAL (${USAGE_PCT}% used)"
+  echo "Storage usage status: NORMAL (${USAGE_PCT:-0}% used)"
 fi
 
 # 2. Directory Usage Breakdown
@@ -50,13 +50,13 @@ echo -e "\n--- [3] Docker Resource Utilization ---"
 docker system df 2>/dev/null || echo "Docker daemon not accessible"
 
 # 4. PostgreSQL Database & Table Sizes
-echo -e "\n--- [4] PostgreSQL Database & Growth Table Sizes ---"
-if docker ps --format '{{.Names}}' | grep -qw "${POSTGRES_CONTAINER}"; then
+echo -e "\n--- [4] PostgreSQL Database & Table Sizes ---"
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -qw "${POSTGRES_CONTAINER}"; then
   docker exec "${POSTGRES_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -c "
     SELECT pg_size_pretty(pg_database_size('${PG_DB}')) AS total_database_size;
   " 2>/dev/null || true
 
-  echo "Top Non-canonical / High-Growth Tables:"
+  echo "Top Database Tables by Size:"
   docker exec "${POSTGRES_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -c "
     SELECT
       relname AS table_name,
@@ -81,7 +81,8 @@ fi
 # 6. Optional Table Retention Compaction
 if [ "${1:-}" = "--purge-retention" ]; then
   echo -e "\n--- [6] Executing Table Retention Policy Purge ---"
-  if docker ps --format '{{.Names}}' | grep -qw "${POSTGRES_CONTAINER}"; then
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qw "${POSTGRES_CONTAINER}"; then
+    echo "Deleting expired records from non-canonical operational tables..."
     docker exec "${POSTGRES_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -c "
       -- Sync Changes retention (~90 days)
       DELETE FROM sync_changes WHERE changed_at < NOW() - INTERVAL '90 days';
@@ -91,10 +92,10 @@ if [ "${1:-}" = "--purge-retention" ]; then
       DELETE FROM ingestion_runs WHERE started_at < NOW() - INTERVAL '180 days';
       -- Alert Events history retention (~365 days / 1 year)
       DELETE FROM alert_events WHERE triggered_at < NOW() - INTERVAL '365 days';
-      -- Vacuum analyze to reclaim space
-      VACUUM ANALYZE;
     "
-    echo "Purge and VACUUM ANALYZE completed."
+    echo "Running VACUUM ANALYZE to reclaim space (standalone transaction)..."
+    docker exec "${POSTGRES_CONTAINER}" psql -U "${PG_USER}" -d "${PG_DB}" -c "VACUUM ANALYZE;"
+    echo "Purge and VACUUM ANALYZE completed successfully."
   fi
 else
   echo -e "\n--- [6] Retention Policy ---"

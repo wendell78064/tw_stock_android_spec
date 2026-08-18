@@ -4,11 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
+# Safely extract specific non-secret operational variables from .env without sourcing arbitrary shell code
 if [ -f .env ]; then
-  # shellcheck disable=SC1091
-  set -a
-  source .env
-  set +a
+  POSTGRES_USER="${POSTGRES_USER:-$(grep -E '^POSTGRES_USER=' .env 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '"'\''')}"
+  POSTGRES_DB="${POSTGRES_DB:-$(grep -E '^POSTGRES_DB=' .env 2>/dev/null | head -n1 | cut -d'=' -f2- | tr -d '"'\''')}"
 fi
 
 export PATH="${PATH}:/usr/local/bin:/var/packages/ContainerManager/target/usr/bin:/volume1/@appstore/ContainerManager/usr/bin"
