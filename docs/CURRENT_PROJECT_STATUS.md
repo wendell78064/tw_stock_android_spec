@@ -68,8 +68,35 @@ UNCONFIGURED
 
 ---
 
+---
+
+## Production Deployment / NAS Operations
+
+- **Target Host**: Synology DS220+ (Intel Celeron J4025, 2 cores, 6 GB RAM, DSM Container Manager)
+- **Deployment Package**: `deploy/synology/` (`docker-compose.yml`, `.env.example`, `deploy.sh`, `backup.sh`, `restore.sh`, `maintenance.sh`, `README.md`)
+- **Persistent Data Paths**: `/volume1/docker/tw-market-ledger/{postgres,redis,backups,config,temp}`
+- **Security & Network Boundary**:
+  - Isolated bridge network `twml-network`
+  - Internal routing for `cloudflared` (`http://backend:8000` / `http://twml-backend:8000`)
+  - No raw exposure of host ports (PostgreSQL 5432 and Redis 6379 strictly private)
+- **Storage Guard & Maintenance Policy**:
+  - Bounded log rotation: `max-size: 20m`, `max-file: 5`
+  - Redis memory limit: `256mb` (`volatile-lru` eviction)
+  - Backup GFS retention: Daily 7, Weekly 4, Monthly 12 under `/volume1/docker/tw-market-ledger/backups/`
+  - Table retention pruning: `sync_changes` (~90d), `sync_operations` (~90d), `ingestion_runs` (~180d), `alert_events` (~365d)
+  - Threshold alert monitoring: Warning $\ge 75\%$, Critical $\ge 85\%$ volume utilization
+- **Production-Readiness Gate Status**:
+  - Database: `0014_personal_data_sync`
+  - AI Provider: `UNCONFIGURED` (expected external gate)
+  - Production Realtime Provider: `UNCONFIGURED` (expected external gate)
+  - FCM: `UNCONFIGURED` (expected external gate)
+- **Next Step**: Configure Cloudflare Tunnel ingress routing (`stock-api.orca-wave.com` -> `http://backend:8000`) and verify end-to-end external SSL connectivity.
+
+---
+
 ## Primary References
 
+- `deploy/synology/README.md`
 - `docs/26_PHASE_6_AI_PRODUCTION_INTEGRATION_HARDENING.md`
 - `docs/25_PHASE_6_BIOMETRICS_WIDGET_PRODUCT_POLISH.md`
 - `docs/24_PHASE_6_IMPORT_EXPORT_REPORTS.md`
@@ -77,3 +104,4 @@ UNCONFIGURED
 - `docs/22_PHASE_6_ACCOUNT_CLOUD_SYNC_FOUNDATION.md`
 - `docs/04_DEVELOPMENT_ROADMAP.md`
 - `api/openapi.yaml`
+
