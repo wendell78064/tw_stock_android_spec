@@ -1,18 +1,21 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag_name:
         type: string
-        description: "Tag name for the release"
+        description: "Tag name for the release (e.g. v0.1.0)"
         required: false
-        default: "dev-build"
+        default: ""
       release_title:
         type: string
-        description: "Release Title"
+        description: "Release Title (optional, defaults to tag name)"
         required: false
-        default: "TW Market Ledger — Development Build"
+        default: ""
 
 jobs:
   build-and-release:
@@ -24,25 +27,126 @@ jobs:
         working-directory: android-app
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
+
       - uses: android-actions/setup-android@v3
-      - name: Build Debug APK
-        run: ./gradlew --no-daemon openApiValidate openApiGenerate :app:assembleDebug
-      - name: Prepare APK Asset
+
+      - name: Resolve Version and Tag
+        id: version_check
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk tw-market-ledger-debug.apk
+          # Extract versionName from app/build.gradle.kts
+          APP_VERSION=$(grep 'versionName = ' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "App versionName detected: ${APP_VERSION}"
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            if [ -n "${{ inputs.tag_name }}" ]; then
+              TAG="${{ inputs.tag_name }}"
+            else
+              TAG="v${APP_VERSION}"
+            fi
+          fi
+
+          EXPECTED_TAG="v${APP_VERSION}"
+          if [ "${TAG}" != "${EXPECTED_TAG}" ]; then
+            echo "::error::Tag mismatch! Expected '${EXPECTED_TAG}' for versionName '${APP_VERSION}', but got '${TAG}'."
+            exit 1
+          fi
+
+          TITLE="${{ inputs.release_title }}"
+          if [ -z "${TITLE}" ]; then
+            TITLE="TW Market Ledger ${TAG}"
+          fi
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+
+      - name: Decode Android Keystore
+        id: keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "${KEYSTORE_BASE64}" ]; then
+            echo "::error::Secret ANDROID_KEYSTORE_BASE64 is empty or not configured!"
+            exit 1
+          fi
+          KEYSTORE_PATH="/tmp/release-keystore-$$.jks"
+          echo "${KEYSTORE_BASE64}" | base64 -d > "${KEYSTORE_PATH}"
+          chmod 600 "${KEYSTORE_PATH}"
+          echo "keystore_path=${KEYSTORE_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Signed Release APK
+        env:
+          KEYSTORE_FILE: ${{ steps.keystore.outputs.keystore_path }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew --no-daemon openApiValidate openApiGenerate :app:assembleRelease
+
+      - name: Verify Signed APK with apksigner
+        id: verify_apk
+        env:
+          EXPECTED_FINGERPRINT: "12:F6:72:BE:0C:FF:44:68:D0:D8:A1:D3:54:73:DB:B5:D6:45:B5:C6:48:66:D9:6B:DB:5A:3E:9F:CF:DC:C6:92"
+          TAG: ${{ steps.version_check.outputs.tag }}
+        run: |
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "${APK_PATH}" ]; then
+            echo "::error::Expected signed APK '${APK_PATH}' not found! (Unsigned artifact was produced instead)."
+            exit 1
+          fi
+
+          echo "==> Verifying signature of ${APK_PATH} with apksigner..."
+          apksigner verify --verbose --print-certs "${APK_PATH}" > /tmp/apksigner_output.txt
+          cat /tmp/apksigner_output.txt
+
+          if ! grep -qi "Verifies" /tmp/apksigner_output.txt; then
+            echo "::error::apksigner verification failed! APK is not properly signed."
+            exit 1
+          fi
+
+          echo "==> Verifying Signer SHA-256 Digest..."
+          EXPECTED_COMPACT=$(echo "${EXPECTED_FINGERPRINT}" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          ACTUAL_DIGESTS=$(grep -i "Signer #1 certificate SHA-256 digest" /tmp/apksigner_output.txt | awk '{print $NF}' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+
+          echo "Expected digest (compact): ${EXPECTED_COMPACT}"
+          echo "Actual digest   (compact): ${ACTUAL_DIGESTS}"
+
+          if [ "${ACTUAL_DIGESTS}" != "${EXPECTED_COMPACT}" ]; then
+            echo "::error::Signer SHA-256 certificate fingerprint mismatch!"
+            exit 1
+          fi
+
+          echo "==> Fingerprint verified successfully."
+
+          RELEASE_ASSET_NAME="tw-market-ledger-${TAG}.apk"
+          cp "${APK_PATH}" "${RELEASE_ASSET_NAME}"
+          echo "asset_path=${RELEASE_ASSET_NAME}" >> "$GITHUB_OUTPUT"
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ inputs.tag_name }}
-          TITLE: ${{ inputs.release_title }}
+          TAG_NAME: ${{ steps.version_check.outputs.tag }}
+          TITLE: ${{ steps.version_check.outputs.title }}
+          ASSET_PATH: ${{ steps.verify_apk.outputs.asset_path }}
         run: |
-          gh release create "$TAG_NAME" tw-market-ledger-debug.apk \
-            --title "$TITLE" \
-            --notes "Development build of TW Market Ledger. Signed with debug key for testing. External production feeds remain unconfigured." \
-            --prerelease || \
-          gh release upload "$TAG_NAME" tw-market-ledger-debug.apk --clobber
+          gh release create "${TAG_NAME}" "${ASSET_PATH}" \
+            --title "${TITLE}" \
+            --notes "Production release of TW Market Ledger ${TAG_NAME}. Digitally signed and configured for production API (${TITLE})." || \
+          gh release upload "${TAG_NAME}" "${ASSET_PATH}" --clobber
+
+      - name: Cleanup Keystore Material
+        if: always()
+        run: |
+          if [ -n "${{ steps.keystore.outputs.keystore_path }}" ] && [ -f "${{ steps.keystore.outputs.keystore_path }}" ]; then
+            shred -u "${{ steps.keystore.outputs.keystore_path }}" 2>/dev/null || rm -f "${{ steps.keystore.outputs.keystore_path }}"
+            echo "Temporary keystore securely wiped."
+          fi
+          rm -f /tmp/apksigner_output.txt

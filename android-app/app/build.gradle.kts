@@ -19,6 +19,32 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val keystoreFile = System.getenv("KEYSTORE_FILE") ?: (project.findProperty("KEYSTORE_FILE") as? String)
+    val keystorePassword = System.getenv("KEYSTORE_PASSWORD") ?: (project.findProperty("KEYSTORE_PASSWORD") as? String)
+    val keyAlias = System.getenv("KEY_ALIAS") ?: (project.findProperty("KEY_ALIAS") as? String)
+    val keyPassword = System.getenv("KEY_PASSWORD") ?: (project.findProperty("KEY_PASSWORD") as? String)
+
+    val hasAnySigningInput = !keystoreFile.isNullOrBlank() || !keystorePassword.isNullOrBlank() || !keyAlias.isNullOrBlank() || !keyPassword.isNullOrBlank()
+    val isSigningFullyConfigured = !keystoreFile.isNullOrBlank() && !keystorePassword.isNullOrBlank() && !keyAlias.isNullOrBlank() && !keyPassword.isNullOrBlank() && file(keystoreFile).exists()
+
+    if (hasAnySigningInput && !isSigningFullyConfigured) {
+        throw GradleException(
+            "Release signing was partially configured but required inputs are missing or keystore file does not exist. " +
+            "Ensure KEYSTORE_FILE, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD are provided and the keystore exists."
+        )
+    }
+
+    signingConfigs {
+        if (isSigningFullyConfigured) {
+            create("release") {
+                storeFile = file(keystoreFile!!)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/v1/\"")
@@ -26,6 +52,9 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = false
+            if (isSigningFullyConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             buildConfigField("String", "API_BASE_URL", "\"https://stock-api.orca-wave.com/v1/\"")
             buildConfigField("String", "WS_BASE_URL", "\"wss://stock-api.orca-wave.com/v1/ws/quotes\"")
         }
