@@ -90,8 +90,33 @@ jobs:
             exit 1
           fi
 
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "${SDK_ROOT}" ] || [ ! -d "${SDK_ROOT}" ]; then
+            echo "::error::Android SDK root could not be determined (ANDROID_HOME/ANDROID_SDK_ROOT is unset or missing)."
+            exit 1
+          fi
+
+          APKSIGNER="$(
+            find "${SDK_ROOT}/build-tools" \
+              -mindepth 2 -maxdepth 2 \
+              -type f -name apksigner 2>/dev/null \
+              | sort -V \
+              | tail -n 1
+          )"
+
+          if [ -z "${APKSIGNER}" ] || [ ! -x "${APKSIGNER}" ]; then
+            # Fallback to PATH if find didn't locate it
+            if command -v apksigner >/dev/null 2>&1; then
+              APKSIGNER="$(command -v apksigner)"
+            else
+              echo "::error::apksigner binary not found or not executable under ${SDK_ROOT}/build-tools!"
+              exit 1
+            fi
+          fi
+
+          echo "==> Using apksigner at: ${APKSIGNER}"
           echo "==> Verifying signature of ${APK_PATH} with apksigner..."
-          apksigner verify --verbose --print-certs "${APK_PATH}" > /tmp/apksigner_output.txt
+          "${APKSIGNER}" verify --verbose --print-certs "${APK_PATH}" > /tmp/apksigner_output.txt
           cat /tmp/apksigner_output.txt
 
           if ! grep -qi "Verifies" /tmp/apksigner_output.txt; then
