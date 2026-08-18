@@ -83,9 +83,12 @@ docker exec -t twml-backend python -c "import urllib.request; print(urllib.reque
 
 ### Automated Backups
 Schedule `deploy/synology/backup.sh` via DSM Task Scheduler (Task Scheduler -> User-defined script -> daily run as root or docker user).
-- **Daily retention**: 7 days
-- **Weekly retention**: 4 weeks
-- **Monthly retention**: 12 months
+- **Atomic Creation & Verification**: Uses temporary file + `gzip -t` verification before atomic move; file mode `600`.
+- **Ownership & Mode Alignment**: Automatically aligns permissions with parent `backups/` directory (mode `2770`, deploy user ownership).
+- **Count-Bounded GFS Retention**:
+  - **Daily retention**: Newest 7 backups (`Daily <= 7`)
+  - **Weekly retention**: Newest 4 backups (`Weekly <= 4`)
+  - **Monthly retention**: Newest 12 backups (`Monthly <= 12`)
 
 ### Safe Restore
 ```bash
