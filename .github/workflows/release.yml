@@ -119,20 +119,34 @@ jobs:
           "${APKSIGNER}" verify --verbose --print-certs "${APK_PATH}" > /tmp/apksigner_output.txt
           cat /tmp/apksigner_output.txt
 
-          if ! grep -qi "Verifies" /tmp/apksigner_output.txt; then
-            echo "::error::apksigner verification failed! APK is not properly signed."
+          echo "==> Verifying Signer SHA-256 Digest..."
+          EXPECTED_COMPACT=$(echo "${EXPECTED_FINGERPRINT}" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+
+          # Robust extraction across apksigner output versions (V2 Signer, V3 Signer, Signer #1)
+          ACTUAL_DIGESTS=$(grep -Ei "certificate SHA-256 digest:" /tmp/apksigner_output.txt \
+            | sed -E 's/.*certificate SHA-256 digest:[[:space:]]*//I' \
+            | tr -d ':' \
+            | tr '[:upper:]' '[:lower:]' \
+            | sort -u || true)
+
+          echo "Expected digest (compact): ${EXPECTED_COMPACT}"
+          echo "Actual digest(s) (compact):"
+          echo "${ACTUAL_DIGESTS}"
+
+          DIGEST_COUNT=$(echo "${ACTUAL_DIGESTS}" | grep -c -v '^$' || echo "0")
+
+          if [ "${DIGEST_COUNT}" -eq 0 ]; then
+            echo "::error::No signer certificate SHA-256 digest found in apksigner output!"
             exit 1
           fi
 
-          echo "==> Verifying Signer SHA-256 Digest..."
-          EXPECTED_COMPACT=$(echo "${EXPECTED_FINGERPRINT}" | tr -d ':' | tr '[:upper:]' '[:lower:]')
-          ACTUAL_DIGESTS=$(grep -i "Signer #1 certificate SHA-256 digest" /tmp/apksigner_output.txt | awk '{print $NF}' | tr -d ':' | tr '[:upper:]' '[:lower:]')
-
-          echo "Expected digest (compact): ${EXPECTED_COMPACT}"
-          echo "Actual digest   (compact): ${ACTUAL_DIGESTS}"
+          if [ "${DIGEST_COUNT}" -gt 1 ]; then
+            echo "::error::Multiple conflicting signer certificate SHA-256 digests found!"
+            exit 1
+          fi
 
           if [ "${ACTUAL_DIGESTS}" != "${EXPECTED_COMPACT}" ]; then
-            echo "::error::Signer SHA-256 certificate fingerprint mismatch!"
+            echo "::error::Signer SHA-256 certificate fingerprint mismatch! Expected '${EXPECTED_COMPACT}', but got '${ACTUAL_DIGESTS}'."
             exit 1
           fi
 
