@@ -5,17 +5,6 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      tag_name:
-        type: string
-        description: "Tag name for the release (e.g. v0.1.0)"
-        required: false
-        default: ""
-      release_title:
-        type: string
-        description: "Release Title (optional, defaults to tag name)"
-        required: false
-        default: ""
 
 jobs:
   build-and-release:
@@ -36,37 +25,35 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Resolve Version and Tag
+      - name: Resolve Version and Execution Mode
         id: version_check
         run: |
           # Extract versionName from app/build.gradle.kts
           APP_VERSION=$(grep 'versionName = ' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
           echo "App versionName detected: ${APP_VERSION}"
 
+          EXPECTED_TAG="v${APP_VERSION}"
+
           if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
             TAG="${GITHUB_REF_NAME}"
-          else
-            if [ -n "${{ inputs.tag_name }}" ]; then
-              TAG="${{ inputs.tag_name }}"
-            else
-              TAG="v${APP_VERSION}"
+            if [ "${TAG}" != "${EXPECTED_TAG}" ]; then
+              echo "::error::Tag mismatch! Pushed tag '${TAG}' does not match app versionName 'v${APP_VERSION}'."
+              exit 1
             fi
+            IS_RELEASE="true"
+            echo "Mode: Production Tag Release (${TAG})"
+          else
+            TAG="${EXPECTED_TAG}"
+            IS_RELEASE="false"
+            echo "Mode: Manual Verification Build (No release will be published)"
           fi
 
-          EXPECTED_TAG="v${APP_VERSION}"
-          if [ "${TAG}" != "${EXPECTED_TAG}" ]; then
-            echo "::error::Tag mismatch! Expected '${EXPECTED_TAG}' for versionName '${APP_VERSION}', but got '${TAG}'."
-            exit 1
-          fi
-
-          TITLE="${{ inputs.release_title }}"
-          if [ -z "${TITLE}" ]; then
-            TITLE="TW Market Ledger ${TAG}"
-          fi
+          TITLE="TW Market Ledger ${TAG}"
 
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+          echo "is_release=${IS_RELEASE}" >> "$GITHUB_OUTPUT"
 
       - name: Decode Android Keystore
         id: keystore
@@ -130,17 +117,28 @@ jobs:
           cp "${APK_PATH}" "${RELEASE_ASSET_NAME}"
           echo "asset_path=${RELEASE_ASSET_NAME}" >> "$GITHUB_OUTPUT"
 
+      - name: Upload Signed Verification Artifact
+        if: steps.version_check.outputs.is_release == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tw-market-ledger-signed-verification-${{ steps.version_check.outputs.tag }}
+          path: android-app/${{ steps.verify_apk.outputs.asset_path }}
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Publish GitHub Release
+        if: steps.version_check.outputs.is_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ steps.version_check.outputs.tag }}
           TITLE: ${{ steps.version_check.outputs.title }}
           ASSET_PATH: ${{ steps.verify_apk.outputs.asset_path }}
         run: |
+          echo "==> Publishing official GitHub release for verified existing tag '${TAG_NAME}'..."
           gh release create "${TAG_NAME}" "${ASSET_PATH}" \
+            --verify-tag \
             --title "${TITLE}" \
-            --notes "Production release of TW Market Ledger ${TAG_NAME}. Digitally signed and configured for production API (${TITLE})." || \
-          gh release upload "${TAG_NAME}" "${ASSET_PATH}" --clobber
+            --notes "Production release of TW Market Ledger ${TAG_NAME}. Digitally signed and configured for production API (${TITLE})."
 
       - name: Cleanup Keystore Material
         if: always()
