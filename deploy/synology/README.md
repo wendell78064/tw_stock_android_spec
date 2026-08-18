@@ -102,13 +102,68 @@ Run `deploy/synology/maintenance.sh` periodically to inspect volume usage, Postg
 - Critical alert triggered at $\ge 85\%$ disk usage.
 - To execute non-canonical table pruning: `./maintenance.sh --purge-retention`.
 
-## 6. Cloudflare Tunnel Integration
+## 6. Cloudflare Tunnel & Public Ingress Operations
 
-To route `stock-api.orca-wave.com` to TWML backend:
-1. Connect the existing `cloudflared` container to `twml-network`:
+### Architecture & Routing
+- **Public Hostname**: `stock-api.orca-wave.com`
+- **Cloudflare Tunnel Name**: `wendell-ds220`
+- **Production Origin Service**: `http://twml-backend:8000`
+
+### Standalone `cloudflared` Container & Network Attachment
+The `cloudflared` daemon is **not** managed by the TWML Docker Compose stack; it runs as an existing standalone Synology Container Manager container.
+
+To route public traffic securely to the isolated TWML stack without opening inbound ports on the router:
+1. Connect `cloudflared` to the isolated stack network:
    ```bash
    docker network connect twml-network cloudflared
    ```
-2. Configure Cloudflare Tunnel ingress rule:
-   - Hostname: `stock-api.orca-wave.com`
-   - Service: `http://backend:8000` (or `http://twml-backend:8000`)
+2. `cloudflared` must be attached to both networks:
+   - `bridge` (for public Cloudflare edge outbound connectivity)
+   - `twml-network` (for internal communication with `twml-backend`)
+
+### Attachment Persistence Behavior
+- **Container restarts**: Normal restart of `cloudflared` preserves the `twml-network` attachment.
+- **Docker / Container Manager daemon restarts**: Preserves the network attachment.
+- **NAS reboots**: Preserves the network attachment.
+- **Container recreation**: If the `cloudflared` container is deleted and recreated, the `docker network connect twml-network cloudflared` command **must be re-executed manually**.
+
+### Network Verification Command
+```bash
+docker inspect cloudflared \
+  --format '{{range $name, $conf := .NetworkSettings.Networks}}{{$name}} {{end}}'
+```
+**Expected Output**:
+```text
+bridge twml-network
+```
+
+### Cloudflare Tunnel Ingress Configuration
+In Cloudflare Zero Trust Dashboard (or `config.yml` for tunnel `wendell-ds220`):
+- **Hostname**: `stock-api.orca-wave.com`
+- **Service**: `http://twml-backend:8000`
+
+### Production External Health Endpoints
+- `https://stock-api.orca-wave.com/v1/health`
+- `https://stock-api.orca-wave.com/v1/ready`
+- `https://stock-api.orca-wave.com/v1/production-readiness`
+
+### Security Posture & Exposure Policy
+- **Zero Port Forwarding**: Never expose Synology DSM, PostgreSQL (`5432`), Redis (`6379`), or raw backend port (`8000`) publicly on the router/WAN.
+- All public client and Android app requests enter exclusively via HTTPS through Cloudflare Tunnel edge.
+
+---
+
+## 7. Production Runtime Verification Baseline
+
+As of Step 15 deployment verification on Synology DS220+:
+- **`/v1/health`**: HTTP `200 OK` (`{"status": "ok"}`)
+- **`/v1/ready`**: HTTP `200 OK` (`ready: true`, `postgres: ok`, `redis: ok`)
+- **`/v1/production-readiness`**: HTTP `200 OK` (`status: "HEALTHY"`, `ready: true`)
+- **External Gate Gating**:
+  - `ai_provider`: `UNCONFIGURED` (by design)
+  - `push_provider`: `UNCONFIGURED` (by design)
+  - `realtime_provider`: `UNCONFIGURED` (by design)
+- **Database Migrations**: PostgreSQL head is verified at `0014_personal_data_sync`.
+- **Redis Memory Policy**: `maxmemory 256mb`, `volatile-lru`.
+- **Storage Guard**: Daily backup verified with count-bounded GFS retention and mode `2770`/`600`.
+
