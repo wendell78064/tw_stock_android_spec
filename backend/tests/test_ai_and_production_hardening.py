@@ -401,7 +401,7 @@ async def test_unconfigured_ai_provider_fails_closed():
     session = FakeSession()
     service = AIAnalysisService(session, provider)
     with pytest.raises(AppError) as exc:
-        await service.analyze(analysis_type=AnalysisType.PORTFOLIO_SUMMARY)
+        await service.analyze(analysis_type=AnalysisType.MARKET_SUMMARY)
     assert exc.value.code == "AI_PROVIDER_UNCONFIGURED"
 
 
