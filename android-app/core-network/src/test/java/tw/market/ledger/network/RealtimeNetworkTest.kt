@@ -12,8 +12,10 @@ class RealtimeNetworkTest {
 
     @Test
     fun testRealtimeSubscriptionManagerRefCounting() {
-        val client = RealtimeQuoteClient(OkHttpClient())
+        val client = RealtimeQuoteClient(OkHttpClient(), "ws://localhost:8080/test/ws")
         val manager = RealtimeSubscriptionManager(client)
+
+        assertEquals("ws://localhost:8080/test/ws", client.serverUrl)
 
         // Initial state
         assertEquals(RealtimeConnectionState.DISCONNECTED, client.connectionState.value)

@@ -29,7 +29,7 @@ import kotlin.math.pow
 
 class RealtimeQuoteClient(
     private val okHttpClient: OkHttpClient,
-    private val serverUrl: String = "ws://10.0.2.2:8000/v1/ws/quotes"
+    val serverUrl: String
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()

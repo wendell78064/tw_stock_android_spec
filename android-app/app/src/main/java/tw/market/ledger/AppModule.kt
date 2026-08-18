@@ -135,7 +135,7 @@ object AppModule {
 
     @Provides @Singleton
     fun realtimeQuoteClient(): tw.market.ledger.network.RealtimeQuoteClient =
-        tw.market.ledger.network.RealtimeQuoteClient(okhttp3.OkHttpClient())
+        tw.market.ledger.network.RealtimeQuoteClient(okhttp3.OkHttpClient(), BuildConfig.WS_BASE_URL)
 
     @Provides @Singleton
     fun realtimeSubscriptionManager(client: tw.market.ledger.network.RealtimeQuoteClient): tw.market.ledger.network.RealtimeSubscriptionManager =

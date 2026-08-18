@@ -17,7 +17,18 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/v1/\"")
+    }
+
+    buildTypes {
+        getByName("debug") {
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/v1/\"")
+            buildConfigField("String", "WS_BASE_URL", "\"ws://10.0.2.2:8000/v1/ws/quotes\"")
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            buildConfigField("String", "API_BASE_URL", "\"https://stock-api.orca-wave.com/v1/\"")
+            buildConfigField("String", "WS_BASE_URL", "\"wss://stock-api.orca-wave.com/v1/ws/quotes\"")
+        }
     }
 
     buildFeatures {
