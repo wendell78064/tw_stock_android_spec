@@ -27,10 +27,10 @@ On Synology DS220+, all persistent TWML data is isolated under:
 ## 3. Resource Limits & Storage Guard
 
 ### DS220+ Resource Allocation
-- **Backend**: CPU limit: `1.50`, Memory limit: `1536M`, Memory reservation: `256M`
-- **PostgreSQL**: CPU limit: `1.00`, Memory limit: `1024M`, Memory reservation: `256M`
-- **Redis**: CPU limit: `0.50`, Memory limit: `384M`, Memory reservation: `64M`
-- **Total Peak Memory Budget**: ~2.9 GB (leaves >3 GB for DSM system and existing containers).
+- **Backend**: Memory limit: `1536M`, Memory reservation: `256M`
+- **PostgreSQL**: Memory limit: `1024M`, Memory reservation: `256M`
+- **Redis**: Memory limit: `384M`, Memory reservation: `64M`
+- **Total Peak Memory Budget**: ~2.9 GB (leaves >3 GB for DSM system and existing containers). Note: `cpus` limits are omitted for native Synology Docker kernel compatibility (no CFS quota dependency).
 
 ### Log Rotation & Realtime Logs
 - Bounded container log rotation: `max-size: 20m`, `max-file: 5` across all services.

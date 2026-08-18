@@ -146,8 +146,13 @@ class UnconfiguredRealtimeProvider(RealtimeMarketDataProvider):
         pass
 
     async def stream_quotes(self) -> AsyncGenerator[RealtimeQuote, None]:
-        if False:
-            yield  # type: ignore
+        try:
+            while True:
+                await asyncio.sleep(3600)
+                if False:
+                    yield
+        except asyncio.CancelledError:
+            return
 
     async def health(self) -> bool:
         return False

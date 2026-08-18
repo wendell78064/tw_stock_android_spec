@@ -50,7 +50,10 @@ class RealtimeProviderManager:
             f"Starting RealtimeProviderManager with provider '{capabilities.provider_name}' "
             f"(License: {capabilities.license_status})"
         )
-        self._ingestion_task = asyncio.create_task(self._ingestion_loop())
+        if capabilities.realtime_available or capabilities.configured:
+            self._ingestion_task = asyncio.create_task(self._ingestion_loop())
+        else:
+            logger.info("Realtime ingestion loop skipped (provider unavailable/unconfigured)")
 
     async def stop(self):
         self._running = False

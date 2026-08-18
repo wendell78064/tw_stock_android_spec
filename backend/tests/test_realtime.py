@@ -18,6 +18,7 @@ from app.domain.realtime import (
 from app.main import app
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
+from app.services.realtime_provider_manager import RealtimeProviderManager
 
 
 class FakeRedis:
@@ -209,3 +210,68 @@ def test_http_quote_snapshot_api_endpoints():
     assert len(batch_data) == 2
     assert batch_data[0]["code"] == "2330"
     assert batch_data[1] is None
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_provider_manager_start_and_no_busy_loop():
+    fake_redis = FakeRedis()
+    cache = RealtimeCacheService(fake_redis)
+    hub = RealtimeQuoteHub(fake_redis, cache)
+    provider = UnconfiguredRealtimeProvider()
+    manager = RealtimeProviderManager(provider, cache, hub)
+
+    # start() must return promptly without spawning an ingestion loop task
+    await manager.start()
+    assert manager._running is True
+    assert manager._ingestion_task is None
+    assert hub.provider_status == "UNAVAILABLE"
+
+    # capabilities must remain unconfigured
+    caps = await manager.get_capabilities()
+    assert caps.realtime_available is False
+    assert caps.configured is False
+    assert caps.license_status == LicenseStatus.UNCONFIGURED
+
+    await manager.stop()
+    assert manager._running is False
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_provider_stream_quotes_does_not_busy_loop():
+    provider = UnconfiguredRealtimeProvider()
+    stream = provider.stream_quotes()
+
+    # The stream should block waiting for data or cancellation, not immediately terminate or spin
+    task = asyncio.create_task(stream.__anext__())
+    done, pending = await asyncio.wait([task], timeout=0.05)
+    assert len(done) == 0
+    assert len(pending) == 1
+    task.cancel()
+    try:
+        await task
+    except (asyncio.CancelledError, StopAsyncIteration):
+        pass
+
+
+def test_production_startup_lifespan_and_health_with_unconfigured_realtime(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("AUTH_SECRET", "test-secret-at-least-32-chars-long-123456")
+    from app.core.settings import get_settings
+
+    get_settings.cache_clear()
+
+    # With APP_ENV=production, main uses UnconfiguredRealtimeProvider
+    with TestClient(app) as client:
+        health_resp = client.get("/v1/health")
+        assert health_resp.status_code == 200
+        assert health_resp.json() == {"status": "ok"}
+
+        readiness_resp = client.get("/v1/production-readiness")
+        assert readiness_resp.status_code == 200
+        readiness_data = readiness_resp.json()
+        assert "components" in readiness_data
+        assert "realtime_provider" in readiness_data["components"]
+        assert readiness_data["components"]["realtime_provider"]["status"] == "UNCONFIGURED"
+
+    get_settings.cache_clear()
+
