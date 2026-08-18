@@ -63,10 +63,7 @@ services:
       - twml-network
 
   backend:
-    build:
-      context: ../../backend
-      dockerfile: Dockerfile
-    image: tw-market-ledger-backend:latest
+    image: ${BACKEND_IMAGE:-ghcr.io/wendell78064/tw_stock_android_spec-backend:latest}
     container_name: twml-backend
     restart: unless-stopped
     environment:

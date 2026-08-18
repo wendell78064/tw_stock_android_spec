@@ -20,7 +20,6 @@ mkdir -p "${DATA_ROOT}/backups"
 mkdir -p "${DATA_ROOT}/config"
 mkdir -p "${DATA_ROOT}/temp"
 
-echo "==> Deploying TW Market Ledger services with Docker Compose..."
 if command -v docker-compose &>/dev/null; then
   COMPOSE_CMD="docker-compose"
 elif docker compose version &>/dev/null; then
@@ -30,7 +29,11 @@ else
   exit 1
 fi
 
-${COMPOSE_CMD} up -d --build
+echo "==> Pulling container images..."
+${COMPOSE_CMD} pull
+
+echo "==> Deploying TW Market Ledger services with Docker Compose..."
+${COMPOSE_CMD} up -d
 
 echo "==> Waiting for postgres service to become healthy..."
 ${COMPOSE_CMD} exec -T postgres sh -c 'until pg_isready -U "${POSTGRES_USER:-twstock}" -d "${POSTGRES_DB:-twstock}"; do sleep 1; done'

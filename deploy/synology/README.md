@@ -49,13 +49,24 @@ On Synology DS220+, all persistent TWML data is isolated under:
 
 ## 4. Deployment Instructions
 
-### Step 1: Prepare Environment File
+### Step 1: Container Registry (GHCR) Access
+Production images are built via GitHub Actions and published to GitHub Container Registry:
+`ghcr.io/wendell78064/tw_stock_android_spec-backend:<tag>`
+
+- **Option A (Public Package)**: If the package visibility is set to Public under GitHub Repository / Package Settings, no `docker login` is needed on the NAS.
+- **Option B (Private Package)**: Log in once on NAS using a Personal Access Token (`read:packages` scope):
+  ```bash
+  echo "<YOUR_GITHUB_PAT>" | docker login ghcr.io -u <YOUR_GITHUB_USERNAME> --password-stdin
+  ```
+
+### Step 2: Prepare Environment File
 ```bash
 cp .env.example .env
 # Edit .env and supply strong secrets for AUTH_SECRET, ADMIN_API_KEY, and POSTGRES_PASSWORD
+# Optionally pin BACKEND_IMAGE tag (e.g., BACKEND_IMAGE=ghcr.io/wendell78064/tw_stock_android_spec-backend:sha-82b02c2)
 ```
 
-### Step 2: Deploy Services
+### Step 3: Deploy Services
 ```bash
 chmod +x deploy.sh backup.sh restore.sh maintenance.sh
 ./deploy.sh
