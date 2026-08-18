@@ -260,7 +260,7 @@ def test_production_startup_lifespan_and_health_with_unconfigured_realtime(monke
 
     get_settings.cache_clear()
 
-    # With APP_ENV=production, main uses UnconfiguredRealtimeProvider
+    # With APP_ENV=production, main and endpoints use Unconfigured providers
     with TestClient(app) as client:
         health_resp = client.get("/v1/health")
         assert health_resp.status_code == 200
@@ -270,8 +270,9 @@ def test_production_startup_lifespan_and_health_with_unconfigured_realtime(monke
         assert readiness_resp.status_code == 200
         readiness_data = readiness_resp.json()
         assert "components" in readiness_data
-        assert "realtime_provider" in readiness_data["components"]
         assert readiness_data["components"]["realtime_provider"]["status"] == "UNCONFIGURED"
+        assert readiness_data["components"]["ai_provider"]["status"] == "UNCONFIGURED"
+        assert readiness_data["components"]["push_provider"]["status"] == "UNCONFIGURED"
 
     get_settings.cache_clear()
 

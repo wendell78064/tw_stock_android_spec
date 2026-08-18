@@ -163,6 +163,30 @@ async def screener_query_service(
     return ScreenerQueryService(session)
 
 
+def get_ai_provider(
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    from app.services.ai_grounding import FakeAIProvider, UnconfiguredAIProvider
+
+    if settings.app_env.lower() in {"development", "test", "ci"}:
+        return FakeAIProvider()
+    return UnconfiguredAIProvider()
+
+
+def get_push_provider(
+    settings: Annotated[Settings, Depends(get_settings)],
+):
+    from app.services.push_notifications import FakePushProvider, UnconfiguredPushProvider
+
+    if settings.app_env.lower() in {"development", "test", "ci"}:
+        return FakePushProvider()
+    return UnconfiguredPushProvider()
+
+
+ai_provider = get_ai_provider
+push_provider = get_push_provider
+
+
 def require_admin_key(
     x_admin_key: Annotated[str | None, Header(alias="X-Admin-Key")] = None,
     settings: Annotated[Settings, Depends(get_settings)] = None,

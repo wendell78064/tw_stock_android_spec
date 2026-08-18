@@ -370,3 +370,61 @@ async def test_production_readiness_health():
     assert report["components"]["ai_provider"]["status"] == "READY"
     assert report["components"]["push_provider"]["status"] == "READY"
     assert report["components"]["realtime_provider"]["status"] == "UNCONFIGURED"
+
+
+@pytest.mark.asyncio
+async def test_production_readiness_with_unconfigured_providers():
+    session = FakeSession()
+    ai_provider = UnconfiguredAIProvider()
+    from app.services.push_notifications import UnconfiguredPushProvider
+    push_provider = UnconfiguredPushProvider()
+
+    service = ProductionReadinessService(
+        session=session,
+        ai_provider=ai_provider,
+        push_provider=push_provider,
+    )
+
+    report = await service.check_health()
+    assert report["components"]["ai_provider"]["status"] == "UNCONFIGURED"
+    assert report["components"]["ai_provider"]["configured"] is False
+    assert report["components"]["push_provider"]["status"] == "UNCONFIGURED"
+    assert report["components"]["push_provider"]["configured"] is False
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_ai_provider_fails_closed():
+    provider = UnconfiguredAIProvider()
+    assert provider.configured is False
+    assert (await provider.health())["status"] == "UNCONFIGURED"
+
+    session = FakeSession()
+    service = AIAnalysisService(session, provider)
+    with pytest.raises(AppError) as exc:
+        await service.analyze(analysis_type=AnalysisType.PORTFOLIO_DIAGNOSTIC)
+    assert exc.value.code == "AI_PROVIDER_UNCONFIGURED"
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_push_provider_fails_closed():
+    from app.domain.push import PushNotificationPayload
+    from app.services.push_notifications import UnconfiguredPushProvider
+
+    provider = UnconfiguredPushProvider()
+    assert provider.configured is False
+    assert (await provider.health())["status"] == "UNCONFIGURED"
+
+    res = await provider.send(
+        "dummy-token",
+        PushNotificationPayload(
+            event_id="e1",
+            alert_type="PRICE_BREAKTHROUGH",
+            security_code="2330",
+            title="Test",
+            body="Body",
+        ),
+    )
+    assert res.success is False
+    assert res.provider == "UNCONFIGURED"
+    assert res.error == "PUSH_PROVIDER_UNCONFIGURED"
+

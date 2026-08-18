@@ -5,18 +5,14 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import current_user, database_session, redis_client
+from app.core.dependencies import ai_provider, current_user, database_session, redis_client
 from app.domain.ai import AnalysisType, StructuredAIAnalysisResult
 from app.services.ai_grounding import (
+    AIAnalysisProvider,
     AIAnalysisService,
-    FakeAIProvider,
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
-
-# In production without real API keys, UnconfiguredAIProvider is default.
-# For DEV/TEST environments, FakeAIProvider can be used.
-_default_ai_provider = FakeAIProvider()
 
 
 class AnalyzeRequest(BaseModel):
@@ -39,10 +35,11 @@ async def run_ai_analysis(
     req: AnalyzeRequest,
     session: Annotated[AsyncSession, Depends(database_session)],
     user: Annotated[Any, Depends(current_user)],
+    provider: Annotated[AIAnalysisProvider, Depends(ai_provider)],
     redis: Annotated[Any, Depends(redis_client)] = None,
 ) -> StructuredAIAnalysisResult:
     user_id = user.id if user else None
-    service = AIAnalysisService(session, _default_ai_provider, redis)
+    service = AIAnalysisService(session, provider, redis)
     return await service.analyze(
         analysis_type=req.analysis_type,
         user_id=user_id,
@@ -56,8 +53,9 @@ async def run_ai_analysis(
 async def get_ai_consent(
     session: Annotated[AsyncSession, Depends(database_session)],
     user: Annotated[Any, Depends(current_user)],
+    provider: Annotated[AIAnalysisProvider, Depends(ai_provider)],
 ) -> AIConsentResponse:
-    service = AIAnalysisService(session, _default_ai_provider)
+    service = AIAnalysisService(session, provider)
     allowed = await service.check_portfolio_consent(user.id)
     return AIConsentResponse(allow_portfolio_analysis=allowed)
 
@@ -67,7 +65,8 @@ async def set_ai_consent(
     req: SetAIConsentRequest,
     session: Annotated[AsyncSession, Depends(database_session)],
     user: Annotated[Any, Depends(current_user)],
+    provider: Annotated[AIAnalysisProvider, Depends(ai_provider)],
 ) -> AIConsentResponse:
-    service = AIAnalysisService(session, _default_ai_provider)
+    service = AIAnalysisService(session, provider)
     await service.set_portfolio_consent(user.id, req.allow_portfolio_analysis)
     return AIConsentResponse(allow_portfolio_analysis=req.allow_portfolio_analysis)

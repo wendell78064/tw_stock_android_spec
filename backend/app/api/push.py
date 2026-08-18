@@ -4,12 +4,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import current_user, database_session, redis_client
-from app.services.push_notifications import FakePushProvider, PushNotificationService
+from app.core.dependencies import current_user, database_session, push_provider, redis_client
+from app.services.push_notifications import PushNotificationProvider, PushNotificationService
 
 router = APIRouter(prefix="/push", tags=["push"])
-
-_default_push_provider = FakePushProvider()
 
 
 class RegisterPushTokenRequest(BaseModel):
@@ -31,9 +29,10 @@ async def register_push_token(
     req: RegisterPushTokenRequest,
     session: Annotated[AsyncSession, Depends(database_session)],
     user: Annotated[Any, Depends(current_user)],
+    provider: Annotated[PushNotificationProvider, Depends(push_provider)],
     redis: Annotated[Any, Depends(redis_client)] = None,
 ) -> PushTokenActionResponse:
-    service = PushNotificationService(session, _default_push_provider, redis)
+    service = PushNotificationService(session, provider, redis)
     await service.register_token(
         user_id=user.id,
         device_public_id=req.device_public_id,
@@ -48,9 +47,10 @@ async def unregister_push_token(
     req: UnregisterPushTokenRequest,
     session: Annotated[AsyncSession, Depends(database_session)],
     user: Annotated[Any, Depends(current_user)],
+    provider: Annotated[PushNotificationProvider, Depends(push_provider)],
     redis: Annotated[Any, Depends(redis_client)] = None,
 ) -> PushTokenActionResponse:
-    service = PushNotificationService(session, _default_push_provider, redis)
+    service = PushNotificationService(session, provider, redis)
     await service.unregister_token(
         user_id=user.id,
         device_public_id=req.device_public_id,
