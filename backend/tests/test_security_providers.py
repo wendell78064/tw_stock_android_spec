@@ -31,6 +31,17 @@ def test_twse_provider_maps_official_fields_and_filters_non_common_stock() -> No
         provider.map_row({"公司代號": "0050", "公司簡稱": "排除ETF"}, as_of=NOW, received_at=NOW)
         is None
     )
+    assert (
+        provider.map_row({"公司代號": "9103", "公司簡稱": "排除TDR"}, as_of=NOW, received_at=NOW)
+        is None
+    )
+    # Legitimate 9-series common stocks
+    rec_9904 = provider.map_row({"公司代號": "9904", "公司簡稱": "寶成"}, as_of=NOW, received_at=NOW)
+    assert rec_9904 is not None and rec_9904.code == "9904"
+    rec_9802 = provider.map_row({"公司代號": "9802", "公司簡稱": "鈺齊-KY"}, as_of=NOW, received_at=NOW)
+    assert rec_9802 is not None and rec_9802.code == "9802"
+    rec_9958 = provider.map_row({"公司代號": "9958", "公司簡稱": "世紀鋼"}, as_of=NOW, received_at=NOW)
+    assert rec_9958 is not None and rec_9958.code == "9958"
 
 
 def test_tpex_provider_maps_official_fields() -> None:

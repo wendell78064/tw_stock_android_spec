@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from app.domain.market_data import DataStatus
 from app.domain.security import Industry, MarketCode, SecurityRecord, SecurityStatus, SecurityType
 
-COMMON_STOCK_CODE = re.compile(r"^[1-8][0-9]{3}$")
+COMMON_STOCK_CODE = re.compile(r"^(?:[1-8][0-9]{3}|9[02-9][0-9]{2})$")
 
 
 def parse_roc_date(value: str | None) -> date | None:
