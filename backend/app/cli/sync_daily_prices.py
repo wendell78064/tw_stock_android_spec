@@ -52,31 +52,36 @@ async def run(args: argparse.Namespace) -> None:
     try:
         for current_date in target_dates:
             for provider in providers:
-                async with factory() as session:
-                    repository = SqlPriceRepository(session)
-                    run_result = await DailyPriceIngestionService(
-                        session, repository, calendar
-                    ).synchronize(
-                        provider,
-                        trade_date=current_date,
-                        security=security,
-                        start_date=start_d if args.provider == "fake" else None,
-                        end_date=end_d if args.provider == "fake" else None,
-                    )
-                    date_str = f" {current_date.isoformat()}" if current_date else ""
-                    print(
-                        f"{run_result.provider}{date_str} {run_result.status} "
-                        f"fetched={run_result.fetched_count} "
-                        f"inserted={run_result.inserted_count} "
-                        f"updated={run_result.updated_count} "
-                        f"rejected={run_result.rejected_count}"
-                    )
-                    if security:
-                        calculator = TechnicalCalculationService(repository)
-                        for basis in PriceBasis:
-                            count = await calculator.recalculate(security, basis)
-                            print(f"{security.market}:{security.code} {basis} technicals={count}")
-                        await session.commit()
+                try:
+                    async with factory() as session:
+                        repository = SqlPriceRepository(session)
+                        run_result = await DailyPriceIngestionService(
+                            session, repository, calendar
+                        ).synchronize(
+                            provider,
+                            trade_date=current_date,
+                            security=security,
+                            start_date=start_d if args.provider == "fake" else None,
+                            end_date=end_d if args.provider == "fake" else None,
+                        )
+                        date_str = f" {current_date.isoformat()}" if current_date else ""
+                        print(
+                            f"{run_result.provider}{date_str} {run_result.status} "
+                            f"fetched={run_result.fetched_count} "
+                            f"inserted={run_result.inserted_count} "
+                            f"updated={run_result.updated_count} "
+                            f"rejected={run_result.rejected_count}"
+                        )
+                        if security:
+                            calculator = TechnicalCalculationService(repository)
+                            for basis in PriceBasis:
+                                count = await calculator.recalculate(security, basis)
+                                print(f"{security.market}:{security.code} {basis} technicals={count}")
+                            await session.commit()
+                except Exception as error:
+                    p_name = getattr(provider, "source_code", type(provider).__name__)
+                    d_str = f" {current_date.isoformat()}" if current_date else ""
+                    print(f"{p_name}{d_str} FAILED error={error}")
     finally:
         await engine.dispose()
 

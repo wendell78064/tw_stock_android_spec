@@ -152,6 +152,8 @@ class TpexSecurityProvider:
                 and item.trade_date == target
                 and (security is None or item.security == security)
             ]
+        except httpx.HTTPError:
+            return []
         finally:
             if close:
                 await client.aclose()
