@@ -38,6 +38,19 @@ def validate_price(record: DailyPriceRecord) -> str | None:
     return None
 
 
+def is_expected_non_stock(code: str) -> bool:
+    # 1. Warrants / Structured certificates (length >= 6)
+    if len(code) >= 6:
+        return True
+    # 2. ETFs / ETNs (starts with 00, 01, 02, 03)
+    if code.startswith(("00", "01", "02", "03")):
+        return True
+    # 3. Preferred stocks / CBs (length 5)
+    if len(code) == 5:
+        return True
+    return False
+
+
 class DailyPriceIngestionService:
     def __init__(
         self,
@@ -80,20 +93,32 @@ class DailyPriceIngestionService:
             rejected = 0
             for record in records:
                 key = (record.security, record.trade_date)
+                if key in unique:
+                    rejected += 1
+                    continue
+                if validate_price(record):
+                    rejected += 1
+                    continue
                 if (
-                    key in unique
-                    or validate_price(record)
-                    or (
-                        self.calendar is not None
-                        and not self.calendar.is_trading_day(record.trade_date)
-                    )
+                    self.calendar is not None
+                    and not self.calendar.is_trading_day(record.trade_date)
                 ):
                     rejected += 1
                     continue
                 unique[key] = record
-            grouped: dict[SecurityKey, list[DailyPriceRecord]] = {}
+
+            # Filter out expected non-stock instruments (ETFs, warrants, preferred) before DB synchronization
+            accepted_records: list[DailyPriceRecord] = []
             for record in unique.values():
+                code = record.security.code
+                if security is None and is_expected_non_stock(code):
+                    continue
+                accepted_records.append(record)
+
+            grouped: dict[SecurityKey, list[DailyPriceRecord]] = {}
+            for record in accepted_records:
                 grouped.setdefault(record.security, []).append(record)
+
             inserted = updated = failed = 0
             for _, group in grouped.items():
                 try:
@@ -101,10 +126,12 @@ class DailyPriceIngestionService:
                     inserted += added
                     updated += changed
                 except LookupError:
+                    # Legitimate common stock code missing from Security Master -> TRUE REJECTION
                     failed += len(group)
+
             run.inserted_count, run.updated_count = inserted, updated
             run.rejected_count = rejected + failed
-            run.checksum = self._checksum(list(unique.values()))
+            run.checksum = self._checksum(accepted_records)
             run.status = "PARTIAL" if run.rejected_count else "SUCCEEDED"
             run.finished_at = datetime.now(UTC)
             await self.session.commit()

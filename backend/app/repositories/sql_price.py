@@ -41,35 +41,63 @@ class SqlPriceRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def _security_id(self, key: SecurityKey) -> UUID | None:
-        return await self.session.scalar(
-            select(SecurityModel.id)
+    async def _preload_security_ids(
+        self, keys: set[SecurityKey] | None = None
+    ) -> dict[SecurityKey, UUID]:
+        stmt = (
+            select(MarketModel.code, SecurityModel.code, SecurityModel.id)
             .join(MarketModel)
-            .where(MarketModel.code == key.market.value, SecurityModel.code == key.code)
+            .where(
+                SecurityModel.is_active.is_(True),
+                SecurityModel.security_type == SecurityType.COMMON_STOCK,
+            )
         )
+        if keys is not None:
+            market_codes = {k.market.value for k in keys}
+            codes = {k.code for k in keys}
+            stmt = stmt.where(MarketModel.code.in_(market_codes), SecurityModel.code.in_(codes))
+        rows = (await self.session.execute(stmt)).all()
+        return {SecurityKey(MarketCode(m), c): sid for m, c, sid in rows}
+
+    async def _security_id(self, key: SecurityKey) -> UUID | None:
+        mapping = await self._preload_security_ids({key})
+        return mapping.get(key)
 
     async def synchronize(self, records: list[DailyPriceRecord], run_id: UUID) -> tuple[int, int]:
+        if not records:
+            return 0, 0
         inserted = updated = 0
         seen: set[tuple[SecurityKey, date]] = set()
+        keys = {r.security for r in records}
+        security_id_map = await self._preload_security_ids(keys)
+
+        sec_ids = list(set(security_id_map.values()))
+        dates = list({r.trade_date for r in records})
+        existing_models = {}
+        if sec_ids and dates:
+            existing_stmt = select(DailyPriceModel).where(
+                DailyPriceModel.security_id.in_(sec_ids),
+                DailyPriceModel.trade_date.in_(dates),
+            )
+            for m in (await self.session.scalars(existing_stmt)).all():
+                existing_models[(m.security_id, m.trade_date)] = m
+
         for record in records:
             identity = (record.security, record.trade_date)
             if identity in seen:
                 raise ValueError(f"duplicate daily price: {record.security}:{record.trade_date}")
             seen.add(identity)
-            security_id = await self._security_id(record.security)
+            security_id = security_id_map.get(record.security)
             if security_id is None:
                 raise LookupError(
                     f"missing security: {record.security.market}:{record.security.code}"
                 )
-            model = await self.session.scalar(
-                select(DailyPriceModel).where(
-                    DailyPriceModel.security_id == security_id,
-                    DailyPriceModel.trade_date == record.trade_date,
-                )
-            )
+            model = existing_models.get((security_id, record.trade_date))
             values = self._record_values(record, run_id)
             if model is None:
-                self.session.add(DailyPriceModel(security_id=security_id, **values))
+                new_model = DailyPriceModel(security_id=security_id, **values)
+                self.session.add(new_model)
+                existing_models[(security_id, record.trade_date)] = new_model
                 inserted += 1
             elif any(
                 getattr(model, key) != value

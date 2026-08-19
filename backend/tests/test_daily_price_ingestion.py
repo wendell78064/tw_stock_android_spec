@@ -71,3 +71,65 @@ async def test_duplicate_and_invalid_ohlc_are_partial_not_batch_failure() -> Non
     )
     assert run.status == "PARTIAL" and run.inserted_count == 1 and run.rejected_count == 2
     assert validate_price(invalid) == "INVALID_OHLC"
+
+
+@pytest.mark.asyncio
+async def test_expected_non_stock_filtering_and_unknown_code_rejection() -> None:
+    base = FakeMarketDataProvider()
+    template = (
+        await base.get_daily_prices(
+            security=SecurityKey(MarketCode.TWSE, "1234"),
+            start_date=date(2026, 8, 7),
+            end_date=date(2026, 8, 7),
+        )
+    )[0]
+
+    # 1. TWSE common stock -> 1234
+    twse_stock = replace(template, security=SecurityKey(MarketCode.TWSE, "1234"))
+    # 2. TPEx common stock -> 5678
+    tpex_stock = replace(template, security=SecurityKey(MarketCode.TPEX, "5678"))
+    # 3. ETF -> 0050
+    etf = replace(template, security=SecurityKey(MarketCode.TWSE, "0050"))
+    # 4. Warrant -> 700019
+    warrant = replace(template, security=SecurityKey(MarketCode.TPEX, "700019"))
+    # 5. Preferred stock -> 1101B
+    preferred = replace(template, security=SecurityKey(MarketCode.TWSE, "1101B"))
+
+    class MixProvider(FakeMarketDataProvider):
+        async def get_daily_prices(self, *args, **kwargs):
+            return [twse_stock, tpex_stock, etf, warrant, preferred]
+
+    # When all common stocks exist in repository:
+    class MockStockRepo(MemoryRepository):
+        async def synchronize(self, records, run_id):
+            return await super().synchronize(records, run_id)
+
+    run = await DailyPriceIngestionService(FakeSession(), MockStockRepo()).synchronize(
+        MixProvider()
+    )
+    assert run.status == "SUCCEEDED"
+    assert run.fetched_count == 5
+    assert run.inserted_count == 2  # Only 1234 and 5678
+    assert run.rejected_count == 0  # ETFs, warrants, and preferred are filtered, not rejected!
+
+    # 6. Unknown common-stock-like code (e.g. 9999) missing from repository -> TRUE REJECTION
+    unknown_stock = replace(template, security=SecurityKey(MarketCode.TWSE, "9999"))
+
+    class UnknownStockProvider(FakeMarketDataProvider):
+        async def get_daily_prices(self, *args, **kwargs):
+            return [twse_stock, etf, unknown_stock]
+
+    class MissingStockRepo(MemoryRepository):
+        async def synchronize(self, records, run_id):
+            for r in records:
+                if r.security.code == "9999":
+                    raise LookupError(f"missing security: {r.security.market}:{r.security.code}")
+            return await super().synchronize(records, run_id)
+
+    run_unknown = await DailyPriceIngestionService(
+        FakeSession(), MissingStockRepo()
+    ).synchronize(UnknownStockProvider())
+    assert run_unknown.status == "PARTIAL"
+    assert run_unknown.fetched_count == 3
+    assert run_unknown.inserted_count == 1  # 1234
+    assert run_unknown.rejected_count == 1  # 9999 was counted as rejected because it is common-stock-like!
