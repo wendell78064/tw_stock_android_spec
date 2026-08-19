@@ -25,14 +25,19 @@ async def run(provider_name: str, start: date, end: date, only: set[str] | None 
             for dataset in DERIVATIVE_DATASETS:
                 if only and dataset not in only:
                     continue
-                async with factory() as session:
-                    result = await DerivativesIngestionService(
-                        session, SqlDerivativesRepository(session)
-                    ).synchronize_dataset(provider, dataset, current)
+                try:
+                    async with factory() as session:
+                        result = await DerivativesIngestionService(
+                            session, SqlDerivativesRepository(session)
+                        ).synchronize_dataset(provider, dataset, current)
+                        print(
+                            f"{current} {provider.source_code} {dataset} {result.status} "
+                            f"fetched={result.fetched_count} inserted={result.inserted_count} "
+                            f"updated={result.updated_count} rejected={result.rejected_count}"
+                        )
+                except Exception as error:
                     print(
-                        f"{current} {provider.source_code} {dataset} {result.status} "
-                        f"fetched={result.fetched_count} inserted={result.inserted_count} "
-                        f"updated={result.updated_count} rejected={result.rejected_count}"
+                        f"{current} {provider.source_code} {dataset} FAILED: {error}"
                     )
         current += timedelta(days=1)
     redis = Redis.from_url(settings.redis_url, decode_responses=True)

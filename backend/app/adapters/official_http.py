@@ -42,12 +42,24 @@ class OfficialJsonClient:
                     if response.status_code == 429 or response.status_code >= 500:
                         response.raise_for_status()
                     response.raise_for_status()
-                    payload = response.json()
+                    if not response.content or not response.text.strip():
+                        return []
+                    try:
+                        payload = response.json()
+                    except Exception as error:
+                        content_type = response.headers.get("content-type", "unknown")
+                        raise UpstreamSchemaError(
+                            f"official response at {url} (status={response.status_code}, content_type={content_type}) failed JSON decoding: {error}"
+                        ) from error
                     if not isinstance(payload, list):
-                        raise UpstreamSchemaError("official response must be a JSON array")
+                        raise UpstreamSchemaError(
+                            f"official response at {url} (status={response.status_code}) must be a JSON array"
+                        )
                     if payload and not required.issubset(payload[0]):
                         missing = sorted(required - payload[0].keys())
-                        raise UpstreamSchemaError(f"official response missing fields: {missing}")
+                        raise UpstreamSchemaError(
+                            f"official response at {url} missing fields: {missing}"
+                        )
                     return payload
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError):
                     if attempt + 1 == self.attempts:
@@ -71,10 +83,23 @@ class OfficialJsonClient:
                     async with self._lock:
                         response = await client.get(url, headers={"Accept": "application/json"})
                         await self.sleep(self.min_interval)
+                    if response.status_code == 429 or response.status_code >= 500:
+                        response.raise_for_status()
                     response.raise_for_status()
-                    payload = response.json()
+                    if not response.content or not response.text.strip():
+                        return {}
+                    try:
+                        payload = response.json()
+                    except Exception as error:
+                        content_type = response.headers.get("content-type", "unknown")
+                        raise UpstreamSchemaError(
+                            f"official response at {url} (status={response.status_code}, content_type={content_type}) failed JSON decoding: {error}"
+                        ) from error
                     if not isinstance(payload, dict) or not required.issubset(payload):
-                        raise UpstreamSchemaError("official response object schema mismatch")
+                        missing = sorted(required - set(payload.keys())) if isinstance(payload, dict) else "not an object"
+                        raise UpstreamSchemaError(
+                            f"official response at {url} (status={response.status_code}) object schema mismatch, missing: {missing}"
+                        )
                     return payload
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError):
                     if attempt + 1 == self.attempts:

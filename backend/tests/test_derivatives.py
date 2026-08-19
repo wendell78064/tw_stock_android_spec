@@ -238,3 +238,45 @@ async def test_official_taifex_mapping_and_schema_guard():
         )
     await client.aclose()
     await bad.aclose()
+
+
+@pytest.mark.asyncio
+async def test_official_json_client_robustness():
+    # 1. Empty body returns empty list / dict
+    empty_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, content=b"", headers={"content-type": "application/json"}))
+    )
+    http = OfficialJsonClient(empty_client, min_interval=0)
+    assert await http.get_list("https://official.test/list", {"Date"}) == []
+    assert await http.get_object("https://official.test/obj", {"Date"}) == {}
+    await empty_client.aclose()
+
+    # 2. Non-JSON (e.g. CSV with UTF-8 BOM or HTML) raises UpstreamSchemaError with status and content_type
+    csv_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, content="\ufeff日期,商品名稱\r\n20260817,臺股期貨".encode(), headers={"content-type": "application/octet-stream"}))
+    )
+    http = OfficialJsonClient(csv_client, min_interval=0)
+    with pytest.raises(UpstreamSchemaError) as exc_info:
+        await http.get_list("https://openapi.taifex.com.tw/v1/MarketData", {"Date"})
+    assert "status=200" in str(exc_info.value)
+    assert "content_type=application/octet-stream" in str(exc_info.value)
+    await csv_client.aclose()
+
+    # 3. HTML / WAF error response raises UpstreamSchemaError
+    html_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, text="<html><body>Error</body></html>", headers={"content-type": "text/html"}))
+    )
+    http = OfficialJsonClient(html_client, min_interval=0)
+    with pytest.raises(UpstreamSchemaError) as exc_info:
+        await http.get_list("https://openapi.taifex.com.tw/v1/Waf", {"Date"})
+    assert "text/html" in str(exc_info.value)
+    await html_client.aclose()
+
+    # 4. HTTP error raises HTTPStatusError
+    error_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda req: httpx.Response(500, text="Internal Error"))
+    )
+    http = OfficialJsonClient(error_client, min_interval=0, attempts=1)
+    with pytest.raises(httpx.HTTPStatusError):
+        await http.get_list("https://official.test/error", {"Date"})
+    await error_client.aclose()

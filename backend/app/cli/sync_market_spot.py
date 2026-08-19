@@ -24,14 +24,17 @@ async def run(provider_name: str, start: date, end: date) -> None:
     while current <= end:
         if current.weekday() < 5:
             for dataset in DATASETS:
-                async with factory() as session:
-                    result = await MarketSpotIngestionService(
-                        session, SqlMarketSpotRepository(session)
-                    ).synchronize_dataset(provider, dataset, current)
-                    print(
-                        f"{current} {dataset} {result.status} fetched={result.fetched_count} "
-                        f"inserted={result.inserted_count} updated={result.updated_count}"
-                    )
+                try:
+                    async with factory() as session:
+                        result = await MarketSpotIngestionService(
+                            session, SqlMarketSpotRepository(session)
+                        ).synchronize_dataset(provider, dataset, current)
+                        print(
+                            f"{current} {dataset} {result.status} fetched={result.fetched_count} "
+                            f"inserted={result.inserted_count} updated={result.updated_count}"
+                        )
+                except Exception as error:
+                    print(f"{current} {dataset} FAILED: {error}")
         current += timedelta(days=1)
     redis = Redis.from_url(get_settings().redis_url, decode_responses=True)
     try:
