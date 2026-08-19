@@ -338,7 +338,7 @@ fun SecurityChartScreen(
         }
         when (state) {
             SecurityChartUiState.Loading -> CircularProgressIndicator(Modifier.testTag("chart-loading"))
-            SecurityChartUiState.Empty -> Text("此期間沒有可用日 K 資料")
+            SecurityChartUiState.Empty -> Text(if (basis == PriceBasis.ADJUSTED) "官方來源未提供還原價資料，請切換至 RAW 檢視實際成交價" else "此期間沒有可用日 K 資料")
             is SecurityChartUiState.Error -> StateMessage("走勢載入失敗：${state.message}")
             is SecurityChartUiState.Offline -> StateMessage(state.message)
             is SecurityChartUiState.Content -> {

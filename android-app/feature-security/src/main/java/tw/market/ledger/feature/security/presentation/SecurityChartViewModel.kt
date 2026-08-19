@@ -46,7 +46,7 @@ class SecurityChartViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<SecurityChartUiState>(SecurityChartUiState.Loading)
     val uiState: StateFlow<SecurityChartUiState> = _uiState.asStateFlow()
     val range = MutableStateFlow(ChartRange.ONE_YEAR)
-    val basis = MutableStateFlow(PriceBasis.ADJUSTED)
+    val basis = MutableStateFlow(PriceBasis.RAW)
     val indicators = MutableStateFlow(setOf("MA20", "RSI14"))
     val preferences = MutableStateFlow(TechnicalIndicatorPreferences.Default)
     val settingsUiState = MutableStateFlow<IndicatorSettingsUiState>(IndicatorSettingsUiState.Loading)
