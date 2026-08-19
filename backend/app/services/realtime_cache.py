@@ -150,10 +150,14 @@ class RealtimeCacheService:
             rows.extend(IntradayCandle.model_validate_json(v.split("|", 1)[1]) for v in values)
         return sorted(rows, key=lambda c: c.bucket_start)[-limit:]
 
-    async def get_volume_baseline(self, quote: RealtimeQuote) -> tuple[int, Decimal | None] | None:
-        raw = await self.redis.get(
-            f"{KEY_PREFIX_BASELINE}{quote.market_id.upper()}:{quote.code.upper()}:{quote.session.value}"
+    async def get_volume_baseline(
+        self, quote: RealtimeQuote
+    ) -> tuple[int, Decimal | None] | None:
+        key = (
+            f"{KEY_PREFIX_BASELINE}{quote.market_id.upper()}:"
+            f"{quote.code.upper()}:{quote.session.value}"
         )
+        raw = await self.redis.get(key)
         if not raw:
             return None
         value = json.loads(raw)
@@ -166,11 +170,11 @@ class RealtimeCacheService:
             "volume": quote.total_volume,
             "turnover": str(quote.turnover_amount) if quote.turnover_amount is not None else None,
         }
-        await self.redis.set(
-            f"{KEY_PREFIX_BASELINE}{quote.market_id.upper()}:{quote.code.upper()}:{quote.session.value}",
-            json.dumps(value),
-            ex=86400,
+        key = (
+            f"{KEY_PREFIX_BASELINE}{quote.market_id.upper()}:"
+            f"{quote.code.upper()}:{quote.session.value}"
         )
+        await self.redis.set(key, json.dumps(value), ex=86400)
 
     async def save_market_snapshot(self, snapshot: RealtimeMarketSnapshot) -> None:
         payload = snapshot.model_dump_json()

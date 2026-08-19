@@ -55,7 +55,10 @@ async def run(
         async with factory() as session:
             securities = await list_target_securities(session, market_filter, code_filter)
         total_securities = len(securities)
-        print(f"Starting technical calculations for {total_securities} active common stocks (batch_size={batch_size})...")
+        print(
+            f"Starting technical calculations for {total_securities} "
+            f"active common stocks (batch_size={batch_size})..."
+        )
 
         for i in range(0, total_securities, batch_size):
             batch = securities[i : i + batch_size]
@@ -72,7 +75,13 @@ async def run(
                         failed += 1
                         print(f"Error calculating technicals for {sec.market}:{sec.code}: {err}")
                 await session.commit()
-            print(f"Processed batch {i // batch_size + 1}/{(total_securities + batch_size - 1) // batch_size} ({min(i + batch_size, total_securities)}/{total_securities})")
+            batch_num = i // batch_size + 1
+            total_batches = (total_securities + batch_size - 1) // batch_size
+            curr_progress = min(i + batch_size, total_securities)
+            print(
+                f"Processed batch {batch_num}/{total_batches} "
+                f"({curr_progress}/{total_securities})"
+            )
     finally:
         await engine.dispose()
 
@@ -90,11 +99,18 @@ async def run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Calculate Technical Indicators for Active Common Stocks")
+    parser = argparse.ArgumentParser(
+        description="Calculate Technical Indicators for Active Common Stocks"
+    )
     parser.add_argument("--date", type=date.fromisoformat, help="Target date YYYY-MM-DD")
     parser.add_argument("--market", choices=("TWSE", "TPEX"), help="Market filter")
     parser.add_argument("--code", help="4-digit stock code filter")
-    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE, help="Batch size (default: 100)")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=DEFAULT_BATCH_SIZE,
+        help="Batch size (default: 100)",
+    )
     args = parser.parse_args()
     asyncio.run(run(args.date, args.market, args.code, args.batch_size))
 

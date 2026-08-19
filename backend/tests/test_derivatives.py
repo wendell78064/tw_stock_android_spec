@@ -201,21 +201,38 @@ async def test_official_taifex_mapping_and_schema_guard():
     }
 
     inst_csv = (
-        "\ufeff日期,商品名稱,身份別,多方交易口數,多方交易契約金額(千元),空方交易口數,空方交易契約金額(千元),多空交易口數淨額,多空交易契約金額淨額(千元),多方未平倉口數,多方未平倉契約金額(千元),空方未平倉口數,空方未平倉契約金額(千元),多空未平倉口數淨額,多空未平倉契約金額淨額(千元)\r\n"
+        "\ufeff日期,商品名稱,身份別,多方交易口數,多方交易契約金額(千元),"
+        "空方交易口數,空方交易契約金額(千元),多空交易口數淨額,"
+        "多空交易契約金額淨額(千元),多方未平倉口數,多方未平倉契約金額(千元),"
+        "空方未平倉口數,空方未平倉契約金額(千元),多空未平倉口數淨額,"
+        "多空未平倉契約金額淨額(千元)\r\n"
         "20260807,臺股期貨,外資及陸資,10,100,12,120,-2,-20,32,320,95,950,-63,-630\r\n"
     )
 
     conc_csv = (
-        "\ufeff日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,前五大交易人買方數量,前五大交易人賣方數量,前十大交易人買方數量,前十大交易人賣方數量,全市場未沖銷部位數\r\n"
+        "\ufeff日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,"
+        "前五大交易人買方數量,前五大交易人賣方數量,前十大交易人買方數量,"
+        "前十大交易人賣方數量,全市場未沖銷部位數\r\n"
         "20260807,TX,臺股期貨,202608,0,34000,28000,37000,39000,57000\r\n"
         "20260807,TX,臺股期貨,202608,1,34000,28000,36000,39000,57000\r\n"
     )
 
+    inst_path = "/v1/MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate"
+    conc_path = "/v1/OpenInterestOfLargeTradersFutures"
+
     def handler(request):
-        if request.url.path == "/v1/MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate":
-            return httpx.Response(200, content=inst_csv.encode("utf-8-sig"), headers={"content-type": "application/octet-stream"})
-        if request.url.path == "/v1/OpenInterestOfLargeTradersFutures":
-            return httpx.Response(200, content=conc_csv.encode("utf-8-sig"), headers={"content-type": "application/octet-stream"})
+        if request.url.path == inst_path:
+            return httpx.Response(
+                200,
+                content=inst_csv.encode("utf-8-sig"),
+                headers={"content-type": "application/octet-stream"},
+            )
+        if request.url.path == conc_path:
+            return httpx.Response(
+                200,
+                content=conc_csv.encode("utf-8-sig"),
+                headers={"content-type": "application/octet-stream"},
+            )
         return httpx.Response(200, json=payloads.get(request.url.path, []))
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -256,7 +273,11 @@ async def test_official_taifex_mapping_and_schema_guard():
 async def test_official_json_client_robustness():
     # 1. Empty body returns empty list / dict
     empty_client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda req: httpx.Response(200, content=b"", headers={"content-type": "application/json"}))
+        transport=httpx.MockTransport(
+            lambda req: httpx.Response(
+                200, content=b"", headers={"content-type": "application/json"}
+            )
+        )
     )
     http = OfficialJsonClient(empty_client, min_interval=0)
     assert await http.get_list("https://official.test/list", {"Date"}) == []
@@ -264,10 +285,14 @@ async def test_official_json_client_robustness():
     assert await http.get_csv_list("https://official.test/csv", {"Date"}) == []
     await empty_client.aclose()
 
-    # 2. Non-JSON (e.g. CSV with UTF-8 BOM) raises UpstreamSchemaError in get_list but succeeds in get_csv_list
+    # 2. Non-JSON (e.g. CSV with UTF-8 BOM) raises UpstreamSchemaError in get_list
     csv_bytes = "\ufeff日期,商品名稱\r\n20260817,臺股期貨".encode("utf-8-sig")
     csv_client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda req: httpx.Response(200, content=csv_bytes, headers={"content-type": "application/octet-stream"}))
+        transport=httpx.MockTransport(
+            lambda req: httpx.Response(
+                200, content=csv_bytes, headers={"content-type": "application/octet-stream"}
+            )
+        )
     )
     http = OfficialJsonClient(csv_client, min_interval=0)
     with pytest.raises(UpstreamSchemaError) as exc_info:
@@ -276,7 +301,9 @@ async def test_official_json_client_robustness():
     assert "content_type=application/octet-stream" in str(exc_info.value)
 
     # get_csv_list parses it correctly
-    csv_data = await http.get_csv_list("https://openapi.taifex.com.tw/v1/MarketData", {"日期", "商品名稱"})
+    csv_data = await http.get_csv_list(
+        "https://openapi.taifex.com.tw/v1/MarketData", {"日期", "商品名稱"}
+    )
     assert len(csv_data) == 1
     assert csv_data[0]["日期"] == "20260817"
     assert csv_data[0]["商品名稱"] == "臺股期貨"
@@ -284,7 +311,11 @@ async def test_official_json_client_robustness():
 
     # 3. CSV missing required headers raises UpstreamSchemaError
     bad_csv = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda req: httpx.Response(200, content="\ufeffcolA,colB\r\n1,2".encode("utf-8-sig")))
+        transport=httpx.MockTransport(
+            lambda req: httpx.Response(
+                200, content="\ufeffcolA,colB\r\n1,2".encode("utf-8-sig")
+            )
+        )
     )
     http_bad = OfficialJsonClient(bad_csv, min_interval=0)
     with pytest.raises(UpstreamSchemaError) as exc_info:
@@ -294,7 +325,13 @@ async def test_official_json_client_robustness():
 
     # 4. HTML / WAF error response raises UpstreamSchemaError in get_list
     html_client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda req: httpx.Response(200, text="<html><body>Error</body></html>", headers={"content-type": "text/html"}))
+        transport=httpx.MockTransport(
+            lambda req: httpx.Response(
+                200,
+                text="<html><body>Error</body></html>",
+                headers={"content-type": "text/html"},
+            )
+        )
     )
     http = OfficialJsonClient(html_client, min_interval=0)
     with pytest.raises(UpstreamSchemaError) as exc_info:

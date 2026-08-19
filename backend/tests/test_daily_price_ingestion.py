@@ -132,4 +132,5 @@ async def test_expected_non_stock_filtering_and_unknown_code_rejection() -> None
     assert run_unknown.status == "PARTIAL"
     assert run_unknown.fetched_count == 3
     assert run_unknown.inserted_count == 1  # 1234
-    assert run_unknown.rejected_count == 1  # 9999 was counted as rejected because it is common-stock-like!
+    # 9999 was counted as rejected because it is common-stock-like
+    assert run_unknown.rejected_count == 1

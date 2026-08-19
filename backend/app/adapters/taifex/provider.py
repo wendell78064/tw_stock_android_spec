@@ -173,15 +173,30 @@ class OfficialTaifexProvider:
             integer(row.get("多方交易口數") or row.get("TradingVolume(Long)")),
             integer(row.get("空方交易口數") or row.get("TradingVolume(Short)")),
             integer(row.get("多空交易口數淨額") or row.get("TradingVolume(Net)")),
-            thousands(row.get("多方交易契約金額(千元)") or row.get("TradingValue(Long)(Thousands)")),
-            thousands(row.get("空方交易契約金額(千元)") or row.get("TradingValue(Short)(Thousands)")),
-            thousands(row.get("多空交易契約金額淨額(千元)") or row.get("TradingValue(Net)(Thousands)")),
+            thousands(
+                row.get("多方交易契約金額(千元)") or row.get("TradingValue(Long)(Thousands)")
+            ),
+            thousands(
+                row.get("空方交易契約金額(千元)") or row.get("TradingValue(Short)(Thousands)")
+            ),
+            thousands(
+                row.get("多空交易契約金額淨額(千元)") or row.get("TradingValue(Net)(Thousands)")
+            ),
             integer(row.get("多方未平倉口數") or row.get("OpenInterest(Long)")),
             integer(row.get("空方未平倉口數") or row.get("OpenInterest(Short)")),
             integer(row.get("多空未平倉口數淨額") or row.get("OpenInterest(Net)")),
-            thousands(row.get("多方未平倉契約金額(千元)") or row.get("ContractValueofOpenInterest(Long)(Thousands)")),
-            thousands(row.get("空方未平倉契約金額(千元)") or row.get("ContractValueofOpenInterest(Short)(Thousands)")),
-            thousands(row.get("多空未平倉契約金額淨額(千元)") or row.get("ContractValueofOpenInterest(Net)(Thousands)")),
+            thousands(
+                row.get("多方未平倉契約金額(千元)")
+                or row.get("ContractValueofOpenInterest(Long)(Thousands)")
+            ),
+            thousands(
+                row.get("空方未平倉契約金額(千元)")
+                or row.get("ContractValueofOpenInterest(Short)(Thousands)")
+            ),
+            thousands(
+                row.get("多空未平倉契約金額淨額(千元)")
+                or row.get("ContractValueofOpenInterest(Net)(Thousands)")
+            ),
             meta(target, received_at, "INSTITUTION_FUTURES"),
         )
 
@@ -223,7 +238,9 @@ class OfficialTaifexProvider:
             spec_traders = types.get("1")
             if not all_traders:
                 continue
-            market_oi = integer(all_traders.get("全市場未沖銷部位數") or all_traders.get("OIOfMarket"))
+            market_oi = integer(
+                all_traders.get("全市場未沖銷部位數") or all_traders.get("OIOfMarket")
+            )
             for top_n, num_str in [(5, "五"), (10, "十")]:
                 for side, suffix, en_suffix in [
                     (PositionSide.LONG, "買方數量", "Buy"),

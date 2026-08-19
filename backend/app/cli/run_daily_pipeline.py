@@ -48,7 +48,7 @@ async def execute_step_with_retry(step_fn, max_retries: int = 1, backoff_seconds
     while True:
         try:
             return await step_fn()
-        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as err:
+        except (httpx.HTTPError, TimeoutError, ConnectionError):
             attempt += 1
             if attempt > max_retries:
                 raise
@@ -82,7 +82,9 @@ class DailyPipelineRunner:
                 return await self._run_steps(redis)
             async with distributed_job_lock(redis, "daily-pipeline", ttl_seconds=3600) as acquired:
                 if not acquired:
-                    print("ALREADY_RUNNING: Another instance of daily pipeline is currently running.")
+                    print(
+                        "ALREADY_RUNNING: Another instance of daily pipeline is currently running."
+                    )
                     return [
                         StepResult(
                             name="JOB_LOCK",
@@ -152,7 +154,11 @@ class DailyPipelineRunner:
                 name="SECURITY_MASTER",
                 status="SUCCEEDED",
                 duration=time.monotonic() - start,
-                summary=f"fetched={total_fetched} inserted={total_inserted} updated={total_updated}",
+                summary=(
+                    f"fetched={total_fetched} "
+                    f"inserted={total_inserted} "
+                    f"updated={total_updated}"
+                ),
             )
         except Exception as error:
             return StepResult(
@@ -177,7 +183,9 @@ class DailyPipelineRunner:
                     repo = SqlPriceRepository(session)
                     service = DailyPriceIngestionService(session, repo, self.calendar)
                     run_result = await execute_step_with_retry(
-                        lambda p=provider: service.synchronize(p, trade_date=self.target_date)
+                        lambda srv=service, p=provider: srv.synchronize(
+                            p, trade_date=self.target_date
+                        )
                     )
                     total_fetched += run_result.fetched_count
                     total_inserted += run_result.inserted_count
@@ -194,7 +202,12 @@ class DailyPipelineRunner:
                     name="DAILY_PRICES",
                     status=status,
                     duration=time.monotonic() - start,
-                    summary=f"fetched={total_fetched} inserted={total_inserted} updated={total_updated} rejected={total_rejected}",
+                    summary=(
+                        f"fetched={total_fetched} "
+                        f"inserted={total_inserted} "
+                        f"updated={total_updated} "
+                        f"rejected={total_rejected}"
+                    ),
                 ),
                 has_data,
             )
@@ -228,7 +241,7 @@ class DailyPipelineRunner:
                             repo = SqlMarketSpotRepository(session)
                             service = MarketSpotIngestionService(session, repo)
                             await execute_step_with_retry(
-                                lambda p=provider, ds=dataset: service.synchronize_dataset(
+                                lambda srv=service, p=provider, ds=dataset: srv.synchronize_dataset(
                                     p, ds, self.target_date
                                 )
                             )
@@ -273,8 +286,8 @@ class DailyPipelineRunner:
                         repo = SqlDerivativesRepository(session)
                         service = DerivativesIngestionService(session, repo)
                         await execute_step_with_retry(
-                            lambda ds=dataset: service.synchronize_dataset(
-                                provider, ds, self.target_date
+                            lambda srv=service, prov=provider, ds=dataset: (
+                                srv.synchronize_dataset(prov, ds, self.target_date)
                             )
                         )
                         succeeded_datasets += 1
@@ -321,7 +334,12 @@ class DailyPipelineRunner:
                 name="TECHNICALS",
                 status=status,
                 duration=time.monotonic() - start,
-                summary=f"total={summary['total']} succeeded={summary['succeeded']} failed={summary['failed']} snapshots={summary['snapshots']}",
+                summary=(
+                    f"total={summary['total']} "
+                    f"succeeded={summary['succeeded']} "
+                    f"failed={summary['failed']} "
+                    f"snapshots={summary['snapshots']}"
+                ),
             )
         except Exception as error:
             return StepResult(
@@ -388,10 +406,25 @@ class DailyPipelineRunner:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TW Market Ledger Production Daily Pipeline")
-    parser.add_argument("--date", type=date.fromisoformat, help="Target date YYYY-MM-DD (default: today)")
-    parser.add_argument("--provider", choices=("official", "fake"), default="official", help="Provider source")
-    parser.add_argument("--skip-lock", action="store_true", help="Skip distributed Redis job lock check")
+    parser = argparse.ArgumentParser(
+        description="TW Market Ledger Production Daily Pipeline"
+    )
+    parser.add_argument(
+        "--date",
+        type=date.fromisoformat,
+        help="Target date YYYY-MM-DD (default: today)",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=("official", "fake"),
+        default="official",
+        help="Provider source",
+    )
+    parser.add_argument(
+        "--skip-lock",
+        action="store_true",
+        help="Skip distributed Redis job lock check",
+    )
     args = parser.parse_args()
     target_d = args.date or date.today()
     runner = DailyPipelineRunner(target_d, args.provider)

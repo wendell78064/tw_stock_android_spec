@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -16,9 +16,6 @@ from app.services.daily_price_ingestion import (
     DailyPriceIngestionService,
     TechnicalCalculationService,
 )
-
-
-from datetime import date, timedelta
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -76,7 +73,10 @@ async def run(args: argparse.Namespace) -> None:
                             calculator = TechnicalCalculationService(repository)
                             for basis in PriceBasis:
                                 count = await calculator.recalculate(security, basis)
-                                print(f"{security.market}:{security.code} {basis} technicals={count}")
+                                print(
+                                    f"{security.market}:{security.code} "
+                                    f"{basis} technicals={count}"
+                                )
                             await session.commit()
                 except Exception as error:
                     p_name = getattr(provider, "source_code", type(provider).__name__)

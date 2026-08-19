@@ -51,11 +51,14 @@ class OfficialJsonClient:
                     except Exception as error:
                         content_type = response.headers.get("content-type", "unknown")
                         raise UpstreamSchemaError(
-                            f"official response at {url} (status={response.status_code}, content_type={content_type}) failed JSON decoding: {error}"
+                            f"official response at {url} "
+                            f"(status={response.status_code}, content_type={content_type}) "
+                            f"failed JSON decoding: {error}"
                         ) from error
                     if not isinstance(payload, list):
                         raise UpstreamSchemaError(
-                            f"official response at {url} (status={response.status_code}) must be a JSON array"
+                            f"official response at {url} "
+                            f"(status={response.status_code}) must be a JSON array"
                         )
                     if payload and not required.issubset(payload[0]):
                         missing = sorted(required - payload[0].keys())
@@ -95,19 +98,27 @@ class OfficialJsonClient:
                     except Exception as error:
                         content_type = response.headers.get("content-type", "unknown")
                         raise UpstreamSchemaError(
-                            f"official response at {url} (status={response.status_code}, content_type={content_type}) failed JSON decoding: {error}"
+                            f"official response at {url} "
+                            f"(status={response.status_code}, content_type={content_type}) "
+                            f"failed JSON decoding: {error}"
                         ) from error
                     if not isinstance(payload, dict) or not required.issubset(payload):
-                        missing = sorted(required - set(payload.keys())) if isinstance(payload, dict) else "not an object"
+                        missing = (
+                            sorted(required - set(payload.keys()))
+                            if isinstance(payload, dict)
+                            else "not an object"
+                        )
                         raise UpstreamSchemaError(
-                            f"official response at {url} (status={response.status_code}) object schema mismatch, missing: {missing}"
+                            f"official response at {url} "
+                            f"(status={response.status_code}) "
+                            f"object schema mismatch, missing: {missing}"
                         )
                     return payload
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError):
                     if attempt + 1 == self.attempts:
                         raise
                     await self.sleep(0.25 * 2**attempt)
-            return {}
+            return []
         finally:
             if owned:
                 await client.aclose()
@@ -136,14 +147,20 @@ class OfficialJsonClient:
                         reader = csv.DictReader(io.StringIO(text))
                         if reader.fieldnames is None:
                             return []
-                        fieldnames_set = {f.strip().lstrip("\ufeff") for f in reader.fieldnames if f}
+                        fieldnames_set = {
+                            f.strip().lstrip("\ufeff") for f in reader.fieldnames if f
+                        }
                         if not required.issubset(fieldnames_set):
                             missing = sorted(required - fieldnames_set)
                             raise UpstreamSchemaError(
                                 f"official CSV response at {url} missing required fields: {missing}"
                             )
                         return [
-                            {k.strip().lstrip("\ufeff"): v.strip() if isinstance(v, str) else v for k, v in row.items() if k}
+                            {
+                                k.strip().lstrip("\ufeff"): v.strip() if isinstance(v, str) else v
+                                for k, v in row.items()
+                                if k
+                            }
                             for row in reader
                         ]
                     except UpstreamSchemaError:
@@ -151,7 +168,9 @@ class OfficialJsonClient:
                     except Exception as error:
                         content_type = response.headers.get("content-type", "unknown")
                         raise UpstreamSchemaError(
-                            f"official CSV response at {url} (status={response.status_code}, content_type={content_type}) failed parsing: {error}"
+                            f"official CSV response at {url} "
+                            f"(status={response.status_code}, content_type={content_type}) "
+                            f"failed parsing: {error}"
                         ) from error
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError):
                     if attempt + 1 == self.attempts:

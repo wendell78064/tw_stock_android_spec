@@ -1,6 +1,7 @@
-import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import uuid
+
 from redis.asyncio import Redis
 
 RELEASE_LOCK_LUA = """

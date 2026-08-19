@@ -110,7 +110,8 @@ class DailyPriceIngestionService:
                     continue
                 unique[key] = record
 
-            # Filter out expected non-stock instruments (ETFs, warrants, preferred) before DB synchronization
+            # Filter out expected non-stock instruments (ETFs, warrants, preferred)
+            # before DB synchronization
             accepted_records: list[DailyPriceRecord] = []
             for record in unique.values():
                 code = record.security.code
@@ -163,7 +164,8 @@ class DailyPriceIngestionService:
     def _checksum(records: list[DailyPriceRecord]) -> str:
         text = "|".join(
             sorted(
-                f"{r.security.market}:{r.security.code}:{r.trade_date}:{r.close}:{r.source_revision}"
+                f"{r.security.market}:{r.security.code}:{r.trade_date}:"
+                f"{r.close}:{r.source_revision}"
                 for r in records
             )
         )

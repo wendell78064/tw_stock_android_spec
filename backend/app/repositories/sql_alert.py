@@ -77,7 +77,14 @@ class SqlAlertRepository:
             rows = (
                 await self.session.execute(
                     text(
-                        """SELECT portfolio_id,security_id,sum(CASE WHEN side='BUY' THEN quantity_shares ELSE -quantity_shares END) qty FROM portfolio_transactions WHERE portfolio_id=ANY(:ids) GROUP BY portfolio_id,security_id HAVING sum(CASE WHEN side='BUY' THEN quantity_shares ELSE -quantity_shares END)>0"""
+                        """SELECT portfolio_id, security_id,
+                                  sum(CASE WHEN side='BUY' THEN quantity_shares
+                                           ELSE -quantity_shares END) qty
+                           FROM portfolio_transactions
+                           WHERE portfolio_id=ANY(:ids)
+                           GROUP BY portfolio_id, security_id
+                           HAVING sum(CASE WHEN side='BUY' THEN quantity_shares
+                                           ELSE -quantity_shares END) > 0"""
                     ),
                     {"ids": portfolio_ids},
                 )
@@ -89,7 +96,9 @@ class SqlAlertRepository:
             rows = (
                 await self.session.execute(
                     text(
-                        "SELECT watchlist_id,security_id FROM watchlist_items WHERE watchlist_id=ANY(:ids)"
+                        """SELECT watchlist_id, security_id
+                           FROM watchlist_items
+                           WHERE watchlist_id=ANY(:ids)"""
                     ),
                     {"ids": watchlist_ids},
                 )
@@ -111,7 +120,16 @@ class SqlAlertRepository:
         rows = (
             await self.session.execute(
                 text(
-                    """SELECT p.security_id,p.trade_date,p.open,p.high,p.low,p.close,p.data_status,t.ma5,t.ma10,t.ma20,t.ma60,t.ma120,t.ma240 FROM daily_prices p LEFT JOIN technical_snapshots t ON t.security_id=p.security_id AND t.trade_date=p.trade_date AND t.price_basis='RAW' WHERE p.security_id=ANY(:ids) AND p.trade_date<=:target ORDER BY p.security_id,p.trade_date DESC"""
+                    """SELECT p.security_id, p.trade_date, p.open, p.high, p.low, p.close,
+                              p.data_status, t.ma5, t.ma10, t.ma20, t.ma60, t.ma120, t.ma240
+                       FROM daily_prices p
+                       LEFT JOIN technical_snapshots t
+                         ON t.security_id=p.security_id
+                        AND t.trade_date=p.trade_date
+                        AND t.price_basis='RAW'
+                       WHERE p.security_id=ANY(:ids)
+                         AND p.trade_date<=:target
+                       ORDER BY p.security_id, p.trade_date DESC"""
                 ),
                 {"ids": list(security_ids), "target": target_date},
             )
