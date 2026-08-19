@@ -38,7 +38,9 @@ TAIFEX_ENDPOINTS = {
 PRODUCT_NAMES = {
     "臺股期貨": "TX",
     "小型臺指": "MTX",
+    "小型臺指期貨": "MTX",
     "微型臺指": "TMF",
+    "微型臺指期貨": "TMF",
     "電子期貨": "TE",
     "金融期貨": "TF",
 }
@@ -70,7 +72,7 @@ def thousands(value) -> Decimal | None:
 
 
 def parse_date(value: str) -> date:
-    return datetime.strptime(value, "%Y%m%d").date()
+    return datetime.strptime(value.replace("/", "").replace("-", ""), "%Y%m%d").date()
 
 
 def meta(target: date, received_at: datetime, dataset: str) -> SourceMetadata:
@@ -156,61 +158,85 @@ class OfficialTaifexProvider:
         ]
 
     def map_position(self, row: dict, received_at: datetime) -> InstitutionFuturesPosition | None:
-        product = PRODUCT_NAMES.get(str(row.get("ContractCode", "")).strip())
-        institution = INSTITUTIONS.get(str(row.get("Item", "")).strip())
+        raw_code = str(row.get("商品名稱") or row.get("ContractCode", "")).strip()
+        product = PRODUCT_NAMES.get(raw_code)
+        raw_inst = str(row.get("身份別") or row.get("Item", "")).strip()
+        institution = INSTITUTIONS.get(raw_inst)
         if not product or not institution:
             return None
-        target = parse_date(row["Date"])
+        raw_date = str(row.get("日期") or row.get("Date", "")).strip()
+        target = parse_date(raw_date)
         return InstitutionFuturesPosition(
             product,
             target,
             institution,
-            integer(row.get("TradingVolume(Long)")),
-            integer(row.get("TradingVolume(Short)")),
-            integer(row.get("TradingVolume(Net)")),
-            thousands(row.get("TradingValue(Long)(Thousands)")),
-            thousands(row.get("TradingValue(Short)(Thousands)")),
-            thousands(row.get("TradingValue(Net)(Thousands)")),
-            integer(row.get("OpenInterest(Long)")),
-            integer(row.get("OpenInterest(Short)")),
-            integer(row.get("OpenInterest(Net)")),
-            thousands(row.get("ContractValueofOpenInterest(Long)(Thousands)")),
-            thousands(row.get("ContractValueofOpenInterest(Short)(Thousands)")),
-            thousands(row.get("ContractValueofOpenInterest(Net)(Thousands)")),
+            integer(row.get("多方交易口數") or row.get("TradingVolume(Long)")),
+            integer(row.get("空方交易口數") or row.get("TradingVolume(Short)")),
+            integer(row.get("多空交易口數淨額") or row.get("TradingVolume(Net)")),
+            thousands(row.get("多方交易契約金額(千元)") or row.get("TradingValue(Long)(Thousands)")),
+            thousands(row.get("空方交易契約金額(千元)") or row.get("TradingValue(Short)(Thousands)")),
+            thousands(row.get("多空交易契約金額淨額(千元)") or row.get("TradingValue(Net)(Thousands)")),
+            integer(row.get("多方未平倉口數") or row.get("OpenInterest(Long)")),
+            integer(row.get("空方未平倉口數") or row.get("OpenInterest(Short)")),
+            integer(row.get("多空未平倉口數淨額") or row.get("OpenInterest(Net)")),
+            thousands(row.get("多方未平倉契約金額(千元)") or row.get("ContractValueofOpenInterest(Long)(Thousands)")),
+            thousands(row.get("空方未平倉契約金額(千元)") or row.get("ContractValueofOpenInterest(Short)(Thousands)")),
+            thousands(row.get("多空未平倉契約金額淨額(千元)") or row.get("ContractValueofOpenInterest(Net)(Thousands)")),
             meta(target, received_at, "INSTITUTION_FUTURES"),
         )
 
     async def get_futures_institutional_positions(
         self, trade_date: date
     ) -> list[InstitutionFuturesPosition]:
-        rows = await self.http.get_list(
-            TAIFEX_ENDPOINTS["institutional"], {"Date", "ContractCode", "Item"}
+        rows = await self.http.get_csv_list(
+            TAIFEX_ENDPOINTS["institutional"], {"日期", "商品名稱", "身份別"}
         )
         now = datetime.now(UTC)
         return [
             mapped
             for row in rows
-            if row.get("Date") == trade_date.strftime("%Y%m%d")
+            if (row.get("日期") or row.get("Date")) == trade_date.strftime("%Y%m%d")
             and (mapped := self.map_position(row, now))
         ]
 
     async def get_trader_concentration(self, trade_date: date) -> list[TraderConcentration]:
-        rows = await self.http.get_list(
+        rows = await self.http.get_csv_list(
             TAIFEX_ENDPOINTS["concentration"],
-            {"Date", "Contract", "Top5Buy", "Top5Sell", "OIOfMarket"},
+            {"日期", "契約", "到期月份(週別)"},
         )
         now = datetime.now(UTC)
-        result = []
+        target_str = trade_date.strftime("%Y%m%d")
+        by_scope = {}
         for row in rows:
-            product = row.get("Contract")
-            market_oi = integer(row.get("OIOfMarket"))
-            if row.get("Date") != trade_date.strftime("%Y%m%d") or product not in {
-                p[0] for p in PRODUCTS
-            }:
+            if (row.get("日期") or row.get("Date")) != target_str:
                 continue
-            for top_n in (5, 10):
-                for side, suffix in ((PositionSide.LONG, "Buy"), (PositionSide.SHORT, "Sell")):
-                    oi = integer(row.get(f"Top{top_n}{suffix}"))
+            contract = str(row.get("契約") or row.get("Contract", "")).strip()
+            if contract not in {p[0] for p in PRODUCTS}:
+                continue
+            scope = str(row.get("到期月份(週別)") or row.get("SettlementMonth", "ALL")).strip()
+            trader_type = str(row.get("交易人類別") or "").strip()
+            by_scope.setdefault((contract, scope), {})[trader_type] = row
+
+        result = []
+        for (product, scope), types in by_scope.items():
+            all_traders = types.get("0") or types.get("ALL") or types.get("")
+            spec_traders = types.get("1")
+            if not all_traders:
+                continue
+            market_oi = integer(all_traders.get("全市場未沖銷部位數") or all_traders.get("OIOfMarket"))
+            for top_n, num_str in [(5, "五"), (10, "十")]:
+                for side, suffix, en_suffix in [
+                    (PositionSide.LONG, "買方數量", "Buy"),
+                    (PositionSide.SHORT, "賣方數量", "Sell"),
+                ]:
+                    col_zh = f"前{num_str}大交易人{suffix}"
+                    col_en = f"Top{top_n}{en_suffix}"
+                    oi = integer(all_traders.get(col_zh) or all_traders.get(col_en))
+                    spec_oi = (
+                        integer(spec_traders.get(col_zh) or spec_traders.get(col_en))
+                        if spec_traders
+                        else None
+                    )
                     ratio = (
                         Decimal(oi) / Decimal(market_oi) * 100
                         if oi is not None and market_oi
@@ -220,13 +246,13 @@ class OfficialTaifexProvider:
                         TraderConcentration(
                             product,
                             trade_date,
-                            row.get("SettlementMonth", "ALL"),
+                            scope,
                             side,
                             top_n,
                             oi,
                             market_oi,
                             ratio,
-                            None,
+                            spec_oi,
                             meta(trade_date, now, "CONCENTRATION"),
                         )
                     )

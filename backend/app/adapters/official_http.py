@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import io
 from collections.abc import Callable
 from typing import Any
 
@@ -106,6 +108,56 @@ class OfficialJsonClient:
                         raise
                     await self.sleep(0.25 * 2**attempt)
             return {}
+        finally:
+            if owned:
+                await client.aclose()
+
+    async def get_csv_list(self, url: str, required: set[str]) -> list[dict[str, Any]]:
+        owned = self.client is None
+        client = self.client or httpx.AsyncClient(
+            timeout=self.timeout,
+            headers={"User-Agent": "TWMarketLedger/0.2 (+official-eod-adapter)"},
+            follow_redirects=True,
+        )
+        try:
+            for attempt in range(self.attempts):
+                try:
+                    async with self._lock:
+                        response = await client.get(url, headers={"Accept": "*/*"})
+                        await self.sleep(self.min_interval)
+                    if response.status_code == 429 or response.status_code >= 500:
+                        response.raise_for_status()
+                    response.raise_for_status()
+                    content = response.content
+                    if not content or not content.strip():
+                        return []
+                    try:
+                        text = content.decode("utf-8-sig").lstrip("\ufeff")
+                        reader = csv.DictReader(io.StringIO(text))
+                        if reader.fieldnames is None:
+                            return []
+                        fieldnames_set = {f.strip().lstrip("\ufeff") for f in reader.fieldnames if f}
+                        if not required.issubset(fieldnames_set):
+                            missing = sorted(required - fieldnames_set)
+                            raise UpstreamSchemaError(
+                                f"official CSV response at {url} missing required fields: {missing}"
+                            )
+                        return [
+                            {k.strip().lstrip("\ufeff"): v.strip() if isinstance(v, str) else v for k, v in row.items() if k}
+                            for row in reader
+                        ]
+                    except UpstreamSchemaError:
+                        raise
+                    except Exception as error:
+                        content_type = response.headers.get("content-type", "unknown")
+                        raise UpstreamSchemaError(
+                            f"official CSV response at {url} (status={response.status_code}, content_type={content_type}) failed parsing: {error}"
+                        ) from error
+                except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError):
+                    if attempt + 1 == self.attempts:
+                        raise
+                    await self.sleep(0.25 * 2**attempt)
+            return []
         finally:
             if owned:
                 await client.aclose()

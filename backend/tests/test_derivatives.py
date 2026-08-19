@@ -198,28 +198,24 @@ async def test_official_taifex_mapping_and_schema_guard():
                 "PutCallOIRatio%": "120.00",
             }
         ],
-        "/v1/MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate": [
-            {
-                "Date": "20260807",
-                "ContractCode": "臺股期貨",
-                "Item": "外資",
-                "TradingVolume(Long)": "10",
-                "TradingValue(Long)(Thousands)": "100",
-                "TradingVolume(Short)": "12",
-                "TradingValue(Short)(Thousands)": "120",
-                "TradingVolume(Net)": "-2",
-                "TradingValue(Net)(Thousands)": "-20",
-                "OpenInterest(Long)": "32",
-                "ContractValueofOpenInterest(Long)(Thousands)": "320",
-                "OpenInterest(Short)": "95",
-                "ContractValueofOpenInterest(Short)(Thousands)": "950",
-                "OpenInterest(Net)": "-63",
-                "ContractValueofOpenInterest(Net)(Thousands)": "-630",
-            }
-        ],
     }
 
+    inst_csv = (
+        "\ufeff日期,商品名稱,身份別,多方交易口數,多方交易契約金額(千元),空方交易口數,空方交易契約金額(千元),多空交易口數淨額,多空交易契約金額淨額(千元),多方未平倉口數,多方未平倉契約金額(千元),空方未平倉口數,空方未平倉契約金額(千元),多空未平倉口數淨額,多空未平倉契約金額淨額(千元)\r\n"
+        "20260807,臺股期貨,外資及陸資,10,100,12,120,-2,-20,32,320,95,950,-63,-630\r\n"
+    )
+
+    conc_csv = (
+        "\ufeff日期,契約,商品名稱(契約名稱),到期月份(週別),交易人類別,前五大交易人買方數量,前五大交易人賣方數量,前十大交易人買方數量,前十大交易人賣方數量,全市場未沖銷部位數\r\n"
+        "20260807,TX,臺股期貨,202608,0,34000,28000,37000,39000,57000\r\n"
+        "20260807,TX,臺股期貨,202608,1,34000,28000,36000,39000,57000\r\n"
+    )
+
     def handler(request):
+        if request.url.path == "/v1/MarketDataOfMajorInstitutionalTradersDetailsOfFuturesContractsBytheDate":
+            return httpx.Response(200, content=inst_csv.encode("utf-8-sig"), headers={"content-type": "application/octet-stream"})
+        if request.url.path == "/v1/OpenInterestOfLargeTradersFutures":
+            return httpx.Response(200, content=conc_csv.encode("utf-8-sig"), headers={"content-type": "application/octet-stream"})
         return httpx.Response(200, json=payloads.get(request.url.path, []))
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -228,7 +224,23 @@ async def test_official_taifex_mapping_and_schema_guard():
     assert (await provider.get_put_call_ratio(date(2026, 8, 7)))[0].oi_put_call_ratio == Decimal(
         "120.00"
     )
-    assert (await provider.get_futures_institutional_positions(date(2026, 8, 7)))[0].net_oi == -63
+    inst = await provider.get_futures_institutional_positions(date(2026, 8, 7))
+    assert len(inst) == 1
+    assert inst[0].product_code == "TX"
+    assert inst[0].net_oi == -63
+    assert inst[0].long_oi_amount == Decimal("320000")
+
+    conc = await provider.get_trader_concentration(date(2026, 8, 7))
+    assert len(conc) == 4  # top5 buy/sell, top10 buy/sell
+    top5_long = next(c for c in conc if c.top_n == 5 and c.side.value == "LONG")
+    assert top5_long.open_interest == 34000
+    assert top5_long.specific_institution_oi == 34000
+    assert top5_long.market_open_interest == 57000
+
+    # Non-matching date returns empty list (PARTIAL)
+    assert await provider.get_futures_institutional_positions(date(2026, 8, 8)) == []
+    assert await provider.get_trader_concentration(date(2026, 8, 8)) == []
+
     bad = httpx.AsyncClient(
         transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[{"bad": 1}]))
     )
@@ -249,20 +261,38 @@ async def test_official_json_client_robustness():
     http = OfficialJsonClient(empty_client, min_interval=0)
     assert await http.get_list("https://official.test/list", {"Date"}) == []
     assert await http.get_object("https://official.test/obj", {"Date"}) == {}
+    assert await http.get_csv_list("https://official.test/csv", {"Date"}) == []
     await empty_client.aclose()
 
-    # 2. Non-JSON (e.g. CSV with UTF-8 BOM or HTML) raises UpstreamSchemaError with status and content_type
+    # 2. Non-JSON (e.g. CSV with UTF-8 BOM) raises UpstreamSchemaError in get_list but succeeds in get_csv_list
+    csv_bytes = "\ufeff日期,商品名稱\r\n20260817,臺股期貨".encode("utf-8-sig")
     csv_client = httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda req: httpx.Response(200, content="\ufeff日期,商品名稱\r\n20260817,臺股期貨".encode(), headers={"content-type": "application/octet-stream"}))
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, content=csv_bytes, headers={"content-type": "application/octet-stream"}))
     )
     http = OfficialJsonClient(csv_client, min_interval=0)
     with pytest.raises(UpstreamSchemaError) as exc_info:
         await http.get_list("https://openapi.taifex.com.tw/v1/MarketData", {"Date"})
     assert "status=200" in str(exc_info.value)
     assert "content_type=application/octet-stream" in str(exc_info.value)
+
+    # get_csv_list parses it correctly
+    csv_data = await http.get_csv_list("https://openapi.taifex.com.tw/v1/MarketData", {"日期", "商品名稱"})
+    assert len(csv_data) == 1
+    assert csv_data[0]["日期"] == "20260817"
+    assert csv_data[0]["商品名稱"] == "臺股期貨"
     await csv_client.aclose()
 
-    # 3. HTML / WAF error response raises UpstreamSchemaError
+    # 3. CSV missing required headers raises UpstreamSchemaError
+    bad_csv = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, content="\ufeffcolA,colB\r\n1,2".encode("utf-8-sig")))
+    )
+    http_bad = OfficialJsonClient(bad_csv, min_interval=0)
+    with pytest.raises(UpstreamSchemaError) as exc_info:
+        await http_bad.get_csv_list("https://official.test/bad", {"日期"})
+    assert "missing required fields" in str(exc_info.value)
+    await bad_csv.aclose()
+
+    # 4. HTML / WAF error response raises UpstreamSchemaError in get_list
     html_client = httpx.AsyncClient(
         transport=httpx.MockTransport(lambda req: httpx.Response(200, text="<html><body>Error</body></html>", headers={"content-type": "text/html"}))
     )
@@ -272,7 +302,7 @@ async def test_official_json_client_robustness():
     assert "text/html" in str(exc_info.value)
     await html_client.aclose()
 
-    # 4. HTTP error raises HTTPStatusError
+    # 5. HTTP error raises HTTPStatusError
     error_client = httpx.AsyncClient(
         transport=httpx.MockTransport(lambda req: httpx.Response(500, text="Internal Error"))
     )
