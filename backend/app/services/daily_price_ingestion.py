@@ -42,10 +42,13 @@ def is_expected_non_stock(code: str) -> bool:
     # 1. Warrants / Structured certificates (length >= 6)
     if len(code) >= 6:
         return True
-    # 2. ETFs / ETNs (starts with 00, 01, 02, 03)
-    if code.startswith(("00", "01", "02", "03")):
+    # 2. ETFs / ETNs / REITs (starts with 00, 01, 02, 03, 08)
+    if code.startswith(("00", "01", "02", "03", "08")):
         return True
-    # 3. Preferred stocks / CBs (length 5)
+    # 3. TDRs (Taiwan Depositary Receipts, starts with 91)
+    if code.startswith("91"):
+        return True
+    # 4. Preferred stocks / CBs (length 5)
     if len(code) == 5:
         return True
     return False
