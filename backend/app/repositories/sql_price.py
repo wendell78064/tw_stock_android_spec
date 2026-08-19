@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.market_data import DataStatus
 from app.domain.pricing import DailyPriceRecord, PriceBasis, SecurityKey, TechnicalSnapshot
-from app.domain.security import SecurityType
+from app.domain.security import MarketCode, SecurityType
 from app.repositories.models import (
     DailyPriceModel,
     MarketModel,
