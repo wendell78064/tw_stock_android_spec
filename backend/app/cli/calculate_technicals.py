@@ -3,7 +3,7 @@ import asyncio
 from datetime import date
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.settings import get_settings
 from app.domain.pricing import PriceBasis, SecurityKey
@@ -16,7 +16,7 @@ DEFAULT_BATCH_SIZE = 100
 
 
 async def list_target_securities(
-    session,
+    session: AsyncSession,
     market_filter: str | None = None,
     code_filter: str | None = None,
 ) -> list[SecurityKey]:

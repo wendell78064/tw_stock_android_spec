@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import time
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from typing import Literal
 
 import httpx
@@ -21,12 +21,11 @@ from app.adapters.weekend_calendar import WeekendOnlyCalendar
 from app.cli import calculate_technicals
 from app.core.job_lock import distributed_job_lock
 from app.core.settings import get_settings
-from app.domain.pricing import PriceBasis
 from app.repositories.sql_derivatives import SqlDerivativesRepository
 from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.repositories.sql_price import SqlPriceRepository
 from app.repositories.sql_security import SqlSecurityRepository
-from app.services.daily_price_ingestion import DailyPriceIngestionService, TechnicalCalculationService
+from app.services.daily_price_ingestion import DailyPriceIngestionService
 from app.services.derivatives_ingestion import DERIVATIVE_DATASETS, DerivativesIngestionService
 from app.services.industry_strength_calculation import IndustryStrengthCalculationService
 from app.services.market_spot_ingestion import DATASETS, MarketSpotIngestionService

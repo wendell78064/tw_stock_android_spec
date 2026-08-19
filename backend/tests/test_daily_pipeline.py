@@ -1,11 +1,9 @@
-import asyncio
-import uuid
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from app.cli.run_daily_pipeline import DailyPipelineRunner, StepResult, execute_step_with_retry
+from app.cli.run_daily_pipeline import DailyPipelineRunner, execute_step_with_retry
 from app.core.job_lock import JobLock, distributed_job_lock
 
 
