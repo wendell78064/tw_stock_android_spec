@@ -152,4 +152,46 @@ def test_sync_daily_prices_cli_argparse() -> None:
             parser.error("--market is required when --code is specified")
 
 
+@pytest.mark.asyncio
+async def test_twse_daily_prices_handles_null_table_title() -> None:
+    """TWSE historical responses sometimes contain trailing tables with title=None.
+    Ensure get_daily_prices parses without raising TypeError.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    provider = TwseSecurityProvider()
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {
+        "stat": "OK",
+        "tables": [
+            {
+                "title": "110年12月10日 每日收盤行情(全部(不含權證、牛熊證、可展延牛熊證))",
+                "fields": [
+                    "證券代號", "證券名稱", "成交股數", "成交筆數", "成交金額",
+                    "開盤價", "最高價", "最低價", "收盤價", "漲跌(+/-)",
+                    "漲跌價差", "最後揭示買價", "最後揭示買量", "最後揭示賣價",
+                    "最後揭示賣量", "本益比",
+                ],
+                "data": [[
+                    "2330", "台積電", "100,000", "50", "60,000,000",
+                    "600", "605", "598", "605", "+", "5", "605",
+                    "10", "606", "10", "25.0",
+                ]],
+            },
+            {"title": None, "data": []},
+        ],
+    }
+    mock_resp.raise_for_status = MagicMock()
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    mock_client.aclose = AsyncMock()
+    provider.client = mock_client
+
+    records = await provider.get_daily_prices(trade_date=date(2021, 12, 10))
+    assert len(records) == 1
+    assert records[0].security.code == "2330"
+
+
+
+
 

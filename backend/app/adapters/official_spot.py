@@ -111,7 +111,7 @@ class OfficialTwseProvider:
         now = datetime.now(UTC)
         values = {}
         for table in payload.get("tables", []):
-            if "漲跌證券數合計" not in table.get("title", ""):
+            if "漲跌證券數合計" not in (table.get("title") or ""):
                 continue
             fields = table.get("fields", [])
             stock_index = fields.index("股票") if "股票" in fields else 1
@@ -253,7 +253,7 @@ class OfficialTwseProvider:
         now = datetime.now(UTC)
         rows = []
         for table in payload.get("tables", []):
-            if "融資融券彙總" not in table.get("title", ""):
+            if "融資融券彙總" not in (table.get("title") or ""):
                 continue
             for values in table.get("data", []):
                 code = values[0].strip()
@@ -296,7 +296,7 @@ class OfficialTwseProvider:
         now = datetime.now(UTC)
         values = {}
         for table in payload.get("tables", []):
-            if "信用交易統計" in table.get("title", ""):
+            if "信用交易統計" in (table.get("title") or ""):
                 values = {row[0]: row for row in table.get("data", [])}
         margin = values.get("融資(交易單位)")
         short = values.get("融券(交易單位)")

@@ -174,7 +174,7 @@ class TwseSecurityProvider:
                 (
                     table.get("data", [])
                     for table in tables
-                    if "每日收盤行情" in table.get("title", "")
+                    if "每日收盤行情" in (table.get("title") or "")
                 ),
                 [],
             )
@@ -182,7 +182,7 @@ class TwseSecurityProvider:
                 (
                     table.get("fields", [])
                     for table in tables
-                    if "每日收盤行情" in table.get("title", "")
+                    if "每日收盤行情" in (table.get("title") or "")
                 ),
                 [],
             )
