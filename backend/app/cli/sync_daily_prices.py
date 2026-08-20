@@ -24,11 +24,14 @@ async def run(args: argparse.Namespace) -> None:
     security = (
         SecurityKey(MarketCode(args.market), args.code) if args.code and args.market else None
     )
-    providers = (
-        [FakeMarketDataProvider()]
-        if args.provider == "fake"
-        else [TwseSecurityProvider(), TpexSecurityProvider()]
-    )
+    if args.provider == "fake":
+        providers = [FakeMarketDataProvider()]
+    elif args.market == "TWSE":
+        providers = [TwseSecurityProvider()]
+    elif args.market == "TPEX":
+        providers = [TpexSecurityProvider()]
+    else:
+        providers = [TwseSecurityProvider(), TpexSecurityProvider()]
     calendar = WeekendOnlyCalendar()
     start_d = date.fromisoformat(args.start) if args.start else None
     end_d = date.fromisoformat(args.end) if args.end else None

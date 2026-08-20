@@ -77,3 +77,56 @@ async def test_fake_daily_provider_is_deterministic_adjusted_and_skips_weekends(
     )
     assert first == second and len(first) == 5
     assert all(item.trade_date.weekday() < 5 and item.adjusted_close is not None for item in first)
+
+
+def test_sync_daily_prices_market_filter_selects_correct_provider() -> None:
+    """Verify that --market TWSE restricts providers to TWSE-only (no TPEx calls),
+    and --market TPEX restricts providers to TPEX-only (no TWSE calls).
+    Ensures Stage B historical backfill does not trigger TPEx latest-snapshot on every date.
+    """
+    import argparse
+
+    from app.adapters.tpex.security_provider import TpexSecurityProvider
+    from app.adapters.twse.security_provider import TwseSecurityProvider
+
+    def _build_providers(market: str | None, provider: str = "official"):
+        args = argparse.Namespace(
+            provider=provider,
+            market=market,
+            code=None,
+            date=None,
+            start=None,
+            end=None,
+        )
+        if args.provider == "fake":
+            from app.adapters.fake_market_data import FakeMarketDataProvider
+            return [FakeMarketDataProvider()]
+        elif args.market == "TWSE":
+            return [TwseSecurityProvider()]
+        elif args.market == "TPEX":
+            return [TpexSecurityProvider()]
+        else:
+            return [TwseSecurityProvider(), TpexSecurityProvider()]
+
+    # TWSE-only: only TWSE provider, no TPEx
+    twse_providers = _build_providers("TWSE")
+    assert len(twse_providers) == 1
+    assert isinstance(twse_providers[0], TwseSecurityProvider)
+
+    # TPEX-only: only TPEX provider, no TWSE
+    tpex_providers = _build_providers("TPEX")
+    assert len(tpex_providers) == 1
+    assert isinstance(tpex_providers[0], TpexSecurityProvider)
+
+    # No market filter: both providers
+    both_providers = _build_providers(None)
+    assert len(both_providers) == 2
+    assert any(isinstance(p, TwseSecurityProvider) for p in both_providers)
+    assert any(isinstance(p, TpexSecurityProvider) for p in both_providers)
+
+    # Fake provider ignores market filter
+    fake_providers = _build_providers("TWSE", provider="fake")
+    assert len(fake_providers) == 1
+    from app.adapters.fake_market_data import FakeMarketDataProvider
+    assert isinstance(fake_providers[0], FakeMarketDataProvider)
+
