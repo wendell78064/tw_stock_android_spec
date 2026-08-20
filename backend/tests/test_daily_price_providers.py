@@ -130,3 +130,29 @@ def test_sync_daily_prices_market_filter_selects_correct_provider() -> None:
     from app.adapters.fake_market_data import FakeMarketDataProvider
     assert isinstance(fake_providers[0], FakeMarketDataProvider)
 
+
+def test_sync_daily_prices_cli_argparse() -> None:
+    import argparse
+    import pytest
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--provider", choices=("fake", "official"), default="fake")
+    parser.add_argument("--date")
+    parser.add_argument("--code")
+    parser.add_argument("--market", choices=("TWSE", "TPEX"))
+    parser.add_argument("--start")
+    parser.add_argument("--end")
+
+    # --market without --code (allowed for market-level range sync)
+    args = parser.parse_args(["--provider", "official", "--market", "TWSE", "--start", "2024-08-01", "--end", "2024-08-05"])
+    assert args.market == "TWSE"
+    assert args.code is None
+
+    # --code without --market (disallowed)
+    args2 = parser.parse_args(["--provider", "official", "--code", "2330"])
+    assert args2.code == "2330" and args2.market is None
+    if args2.code and not args2.market:
+        with pytest.raises(SystemExit):
+            parser.error("--market is required when --code is specified")
+
+

@@ -98,8 +98,8 @@ def main() -> None:
     parser.add_argument("--start")
     parser.add_argument("--end")
     args = parser.parse_args()
-    if bool(args.code) != bool(args.market):
-        parser.error("--code and --market are required together")
+    if args.code and not args.market:
+        parser.error("--market is required when --code is specified")
     asyncio.run(run(args))
 
 
