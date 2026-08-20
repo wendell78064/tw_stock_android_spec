@@ -1,3 +1,4 @@
+import argparse
 from datetime import UTC, date, datetime
 
 import pytest
@@ -84,11 +85,6 @@ def test_sync_daily_prices_market_filter_selects_correct_provider() -> None:
     and --market TPEX restricts providers to TPEX-only (no TWSE calls).
     Ensures Stage B historical backfill does not trigger TPEx latest-snapshot on every date.
     """
-    import argparse
-
-    from app.adapters.tpex.security_provider import TpexSecurityProvider
-    from app.adapters.twse.security_provider import TwseSecurityProvider
-
     def _build_providers(market: str | None, provider: str = "official"):
         args = argparse.Namespace(
             provider=provider,
@@ -99,7 +95,6 @@ def test_sync_daily_prices_market_filter_selects_correct_provider() -> None:
             end=None,
         )
         if args.provider == "fake":
-            from app.adapters.fake_market_data import FakeMarketDataProvider
             return [FakeMarketDataProvider()]
         elif args.market == "TWSE":
             return [TwseSecurityProvider()]
@@ -127,14 +122,10 @@ def test_sync_daily_prices_market_filter_selects_correct_provider() -> None:
     # Fake provider ignores market filter
     fake_providers = _build_providers("TWSE", provider="fake")
     assert len(fake_providers) == 1
-    from app.adapters.fake_market_data import FakeMarketDataProvider
     assert isinstance(fake_providers[0], FakeMarketDataProvider)
 
 
 def test_sync_daily_prices_cli_argparse() -> None:
-    import argparse
-    import pytest
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--provider", choices=("fake", "official"), default="fake")
     parser.add_argument("--date")
@@ -144,7 +135,12 @@ def test_sync_daily_prices_cli_argparse() -> None:
     parser.add_argument("--end")
 
     # --market without --code (allowed for market-level range sync)
-    args = parser.parse_args(["--provider", "official", "--market", "TWSE", "--start", "2024-08-01", "--end", "2024-08-05"])
+    args = parser.parse_args([
+        "--provider", "official",
+        "--market", "TWSE",
+        "--start", "2024-08-01",
+        "--end", "2024-08-05",
+    ])
     assert args.market == "TWSE"
     assert args.code is None
 
@@ -154,5 +150,6 @@ def test_sync_daily_prices_cli_argparse() -> None:
     if args2.code and not args2.market:
         with pytest.raises(SystemExit):
             parser.error("--market is required when --code is specified")
+
 
 
