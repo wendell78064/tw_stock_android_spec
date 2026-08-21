@@ -1,6 +1,7 @@
 from functools import lru_cache
 from secrets import token_urlsafe
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,10 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 30
     sync_page_limit: int = 100
+    realtime_provider: str = "unconfigured"
+    shioaji_api_key: SecretStr | None = None
+    shioaji_secret_key: SecretStr | None = None
+    shioaji_simulation: bool = False
 
     def effective_auth_secret(self) -> str:
         if self.auth_secret:

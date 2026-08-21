@@ -2,6 +2,23 @@
 
 This package provides deployment scripts, production Docker compose manifests, backup/restore procedures, and storage guard maintenance for Synology DS220+ NAS (Intel Celeron J4025, 2 cores, 6 GB RAM, DSM Container Manager).
 
+## Optional Sinopac Shioaji realtime provider
+
+The backend remains healthy with the provider unconfigured. A human administrator must later
+create a Sinopac API key and secret with market-data-only capability, then store them only in the
+production environment:
+
+```dotenv
+REALTIME_PROVIDER=shioaji
+SHIOAJI_API_KEY=<secret>
+SHIOAJI_SECRET_KEY=<secret>
+SHIOAJI_SIMULATION=false
+```
+
+Never commit these values, place them in Android, persist them in the database, or emit them to
+logs. No CA activation, account access, or trading permission is used. Before broader
+subscriptions, perform one production smoke with a single stock's Tick and BidAsk streams.
+
 ## 1. Directory Structure
 
 On Synology DS220+, all persistent TWML data is isolated under:
@@ -166,4 +183,3 @@ As of Step 15 deployment verification on Synology DS220+:
 - **Database Migrations**: PostgreSQL head is verified at `0014_personal_data_sync`.
 - **Redis Memory Policy**: `maxmemory 256mb`, `volatile-lru`.
 - **Storage Guard**: Daily backup verified with count-bounded GFS retention and mode `2770`/`600`.
-

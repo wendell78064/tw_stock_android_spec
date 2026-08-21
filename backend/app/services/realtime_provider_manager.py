@@ -36,15 +36,21 @@ class RealtimeProviderManager:
         self._running = True
         capabilities = await self.provider.get_capabilities()
         self.hub.provider_status = (
-            "LIVE"
+            "CONNECTED"
             if capabilities.is_live_eligible and capabilities.source_type != "FAKE_SIMULATOR"
             else "SIMULATED"
             if capabilities.source_type == "FAKE_SIMULATOR"
-            else "UNAVAILABLE"
+            else "CONFIGURED / DISCONNECTED"
+            if capabilities.configured
+            else "UNCONFIGURED"
         )
         if self.alert_evaluator is not None:
             self.alert_evaluator.provider_status = (
-                "FAKE" if self.hub.provider_status == "SIMULATED" else self.hub.provider_status
+                "FAKE"
+                if self.hub.provider_status == "SIMULATED"
+                else "LIVE"
+                if self.hub.provider_status == "CONNECTED"
+                else self.hub.provider_status
             )
         logger.info(
             f"Starting RealtimeProviderManager with provider '{capabilities.provider_name}' "
@@ -71,6 +77,11 @@ class RealtimeProviderManager:
                 async for quote in self.provider.stream_quotes():
                     if not self._running:
                         break
+                    capabilities = await self.provider.get_capabilities()
+                    if capabilities.is_live_eligible:
+                        self.hub.provider_status = "CONNECTED"
+                        if self.alert_evaluator is not None:
+                            self.alert_evaluator.provider_status = "LIVE"
                     # Save to Redis and publish to hub
                     saved = await self.cache_service.save_and_publish_quote(quote)
                     if saved and self.aggregator is not None:
@@ -84,4 +95,7 @@ class RealtimeProviderManager:
             except Exception as e:
                 logger.error(f"Error in realtime ingestion loop: {e}")
                 self.reconnect_count += 1
+                self.hub.provider_status = "CONFIGURED / DISCONNECTED"
+                if self.alert_evaluator is not None:
+                    self.alert_evaluator.provider_status = "CONFIGURED / DISCONNECTED"
                 await asyncio.sleep(2.0)

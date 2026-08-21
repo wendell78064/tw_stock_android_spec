@@ -224,7 +224,7 @@ async def test_unconfigured_provider_manager_start_and_no_busy_loop():
     await manager.start()
     assert manager._running is True
     assert manager._ingestion_task is None
-    assert hub.provider_status == "UNAVAILABLE"
+    assert hub.provider_status == "UNCONFIGURED"
 
     # capabilities must remain unconfigured
     caps = await manager.get_capabilities()
@@ -275,4 +275,3 @@ def test_production_startup_lifespan_and_health_with_unconfigured_realtime(monke
         assert readiness_data["components"]["push_provider"]["status"] == "UNCONFIGURED"
 
     get_settings.cache_clear()
-

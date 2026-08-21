@@ -10,6 +10,7 @@ from app.adapters.fake_realtime_provider import (
     FakeRealtimeProvider,
     UnconfiguredRealtimeProvider,
 )
+from app.adapters.shioaji_realtime_provider import ShioajiRealtimeProvider
 from app.api.ai import router as ai_router
 from app.api.alerts import router as alerts_router
 from app.api.auth import router as auth_router
@@ -77,11 +78,16 @@ async def lifespan(app: FastAPI):
         await realtime_alert_service.refresh()
     except Exception as error:
         logger.warning("realtime_alerts_unavailable", error=str(error))
-    provider = (
-        FakeRealtimeProvider()
-        if settings.app_env.lower() in {"development", "test", "ci"}
-        else UnconfiguredRealtimeProvider()
-    )
+    if settings.realtime_provider.lower() == "shioaji":
+        provider = ShioajiRealtimeProvider(
+            settings.shioaji_api_key.get_secret_value() if settings.shioaji_api_key else None,
+            settings.shioaji_secret_key.get_secret_value() if settings.shioaji_secret_key else None,
+            settings.shioaji_simulation,
+        )
+    elif settings.app_env.lower() in {"development", "test", "ci"}:
+        provider = FakeRealtimeProvider()
+    else:
+        provider = UnconfiguredRealtimeProvider()
     manager = RealtimeProviderManager(
         provider, cache_service, hub, aggregator, taxonomy_aggregator, realtime_alert_service
     )

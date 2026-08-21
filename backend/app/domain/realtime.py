@@ -106,6 +106,10 @@ class RealtimeQuote(BaseModel):
     bid_size: int | None = None
     ask_price: Decimal | None = None
     ask_size: int | None = None
+    bid_prices: list[Decimal] | None = None
+    bid_volumes: list[int] | None = None
+    ask_prices: list[Decimal] | None = None
+    ask_volumes: list[int] | None = None
 
     change: Decimal | None = None
     change_percent: Decimal | None = None
