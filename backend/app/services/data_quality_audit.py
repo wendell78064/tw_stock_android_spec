@@ -23,6 +23,7 @@ from app.repositories.models import (
     FuturesContractModel,
     FuturesDailyPriceModel,
     FuturesProductModel,
+    IngestionRunModel,
     InstitutionFuturesPositionModel,
     MarketBreadthModel,
     MarketInstitutionalSpotModel,
@@ -38,6 +39,13 @@ from app.repositories.models import (
     VolatilityIndexModel,
 )
 
+# Named policy constant for daily price completeness threshold.
+# Active COMMON_STOCK coverage is considered complete when at least 98%
+# of eligible active securities have ingested price records.
+# The 2% tolerance accounts for newly listed / delisting transitions or
+# official exchange suspension edge cases where no tick is published.
+DEFAULT_COVERAGE_COMPLETION_THRESHOLD = 0.98
+
 
 class DataQualityAuditService:
     def __init__(self, session: AsyncSession, calendar: TradingCalendar | None = None):
@@ -45,8 +53,13 @@ class DataQualityAuditService:
         self.calendar = calendar or WeekendOnlyCalendar()
 
     async def audit_date(self, target_date: date) -> DailyDataAuditReport:
-        is_weekend = target_date.weekday() >= 5
         is_trading = self.calendar.is_trading_day(target_date)
+
+        # Source of truth: TradingCalendar determines day_type
+        if not is_trading:
+            day_type = "WEEKEND" if target_date.weekday() >= 5 else "HOLIDAY"
+        else:
+            day_type = "TRADING_DAY"
 
         # 1. Audit Security Master
         sec_audit = await self._audit_security_master()
@@ -58,15 +71,6 @@ class DataQualityAuditService:
         tpex_daily = await self._audit_daily_prices(
             "TPEX", target_date, sec_audit.tpex_common_stocks
         )
-
-        # Determine day_type:
-        # If both markets have 0 daily prices and it is a weekday, mark HOLIDAY
-        if is_weekend:
-            day_type = "WEEKEND"
-        elif twse_daily.rows_with_price == 0 and tpex_daily.rows_with_price == 0:
-            day_type = "HOLIDAY"
-        else:
-            day_type = "TRADING_DAY"
 
         # 3. Audit Market Spot
         spot_audit = await self._audit_market_spot(target_date)
@@ -97,7 +101,7 @@ class DataQualityAuditService:
 
         return DailyDataAuditReport(
             target_date=target_date,
-            is_trading_day=is_trading and (day_type == "TRADING_DAY"),
+            is_trading_day=is_trading,
             day_type=day_type,
             security_master=sec_audit,
             twse_daily=twse_daily,
@@ -220,17 +224,32 @@ class DataQualityAuditService:
         )
         duplicates = (await self.session.execute(dup_stmt)).scalar() or 0
 
+        # Check if ingestion_runs has a failed execution for this date and dataset
+        failed_run_stmt = (
+            select(func.count())
+            .select_from(IngestionRunModel)
+            .where(
+                IngestionRunModel.dataset.in_((f"{market}_DAILY", "DAILY_PRICES")),
+                IngestionRunModel.status.in_(("FAILED", "ERROR")),
+                func.date(IngestionRunModel.started_at) == target_date,
+            )
+        )
+        has_failed_run = ((await self.session.execute(failed_run_stmt)).scalar() or 0) > 0
+
         trading_rows = valid_close_rows
         no_trade_rows = total_rows - valid_close_rows
         missing_count = max(0, expected_stocks - total_rows)
         coverage_ratio = (total_rows / expected_stocks) if expected_stocks > 0 else 1.0
 
         if total_rows == 0:
-            status = AuditStatus.NO_DATA
-        elif coverage_ratio >= 0.98 and duplicates == 0:
-            status = AuditStatus.COMPLETE
+            if has_failed_run:
+                status = AuditStatus.FAILED
+            else:
+                status = AuditStatus.NO_DATA
         elif duplicates > 0:
             status = AuditStatus.FAILED
+        elif coverage_ratio >= DEFAULT_COVERAGE_COMPLETION_THRESHOLD:
+            status = AuditStatus.COMPLETE
         else:
             status = AuditStatus.PARTIAL
 
@@ -503,19 +522,24 @@ class DataQualityAuditService:
         if snapshots_count > 0:
             ma240_missing = max(0, min(snapshots_count, ma240_eligible) - ma240_with_val)
             stale_count = 0
-            status = AuditStatus.COMPLETE if duplicates == 0 else AuditStatus.FAILED
+            if duplicates > 0 or ma240_missing > 0:
+                status = AuditStatus.FAILED
+            elif snapshots_count >= active_stocks * DEFAULT_COVERAGE_COMPLETION_THRESHOLD:
+                status = AuditStatus.COMPLETE
+            else:
+                status = AuditStatus.PARTIAL
         else:
             ma240_missing = 0
-            stale_count = (
-                active_stocks
-                if (latest_snap_date and latest_snap_date < target_date)
-                else 0
-            )
-            status = (
-                AuditStatus.NO_DATA
-                if (target_date.weekday() >= 5 or snapshots_count == 0)
-                else AuditStatus.STALE
-            )
+            is_trading = self.calendar.is_trading_day(target_date)
+            if not is_trading:
+                stale_count = 0
+                status = AuditStatus.NO_DATA
+            elif latest_snap_date and latest_snap_date < target_date:
+                stale_count = active_stocks
+                status = AuditStatus.STALE
+            else:
+                stale_count = 0
+                status = AuditStatus.NO_DATA
 
         return TechnicalsAudit(
             active_stocks=active_stocks,
@@ -681,6 +705,8 @@ class DataQualityAuditService:
             return AuditStatus.COMPLETE
         if all(s == AuditStatus.NO_DATA for s in statuses):
             return AuditStatus.NO_DATA
+        if any(s == AuditStatus.STALE for s in statuses):
+            return AuditStatus.STALE
         return AuditStatus.PARTIAL
 
     async def audit_historical_gap(

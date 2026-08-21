@@ -19,6 +19,19 @@ from app.domain.audit import (
 from app.services.data_quality_audit import DataQualityAuditService
 
 
+class MockTradingCalendar:
+    def __init__(self, non_trading_dates: set[date] | None = None):
+        self.non_trading_dates = non_trading_dates or set()
+
+    def is_trading_day(self, value: date) -> bool:
+        if value in self.non_trading_dates:
+            return False
+        return value.weekday() < 5
+
+    def previous_trading_day(self, value: date) -> date:
+        return value
+
+
 def _create_mock_session_for_audit(
     *,
     total_sec: int = 1900,
@@ -32,6 +45,7 @@ def _create_mock_session_for_audit(
     tpex_prices: int = 800,
     tpex_closes: int = 790,
     tpex_dup: int = 0,
+    failed_runs: int = 0,
     breadth_rows: int = 2,
     margin_rows: int = 2,
     lending_rows: int = 1,
@@ -50,6 +64,7 @@ def _create_mock_session_for_audit(
     tech_ma240_val: int = 1600,
     tech_ma240_elig: int = 1600,
     tech_dup: int = 0,
+    latest_tech_date: date | None = date(2026, 8, 20),
     ind_snaps: int = 30,
 ) -> AsyncMock:
     session = AsyncMock()
@@ -76,7 +91,6 @@ def _create_mock_session_for_audit(
             mock_result.scalar.return_value = inactive_sec
             return mock_result
         if "from securities" in query_str and "join markets" in query_str:
-            # Check if this is security master count by market or daily price query
             if "daily_prices" not in query_str:
                 code_val = params.get("code_1") or params.get("code_2") or params.get("code")
                 if code_val == "TWSE" or "twse" in str(params).lower():
@@ -89,6 +103,11 @@ def _create_mock_session_for_audit(
 
         if "select count(*) as count_1 \nfrom securities" in query_str and "where" not in query_str:
             mock_result.scalar.return_value = total_sec
+            return mock_result
+
+        # Failed ingestion runs check
+        if "from ingestion_runs" in query_str:
+            mock_result.scalar.return_value = failed_runs
             return mock_result
 
         # Duplicate check on daily_prices
@@ -167,7 +186,10 @@ def _create_mock_session_for_audit(
             return mock_result
         if "technical_snapshots" in query_str and "join securities" in query_str:
             mock_result.first.return_value = (tech_snaps, tech_ma240_val)
-            mock_result.scalar.return_value = date(2026, 8, 20)
+            mock_result.scalar.return_value = latest_tech_date
+            return mock_result
+        if "select max(technical_snapshots.trade_date)" in query_str:
+            mock_result.scalar.return_value = latest_tech_date
             return mock_result
         if "price_count >= :price_count_1" in query_str or "price_count" in query_str:
             mock_result.scalar.return_value = tech_ma240_elig
@@ -206,10 +228,18 @@ async def test_audit_normal_complete_trading_day() -> None:
     assert report.duplicates.status is AuditStatus.COMPLETE
     assert report.overall_status is AuditStatus.COMPLETE
 
-    # Verify VIX is UNAVAILABLE as expected
+
+@pytest.mark.asyncio
+async def test_audit_volatility_index_unavailable_is_expected() -> None:
+    session = _create_mock_session_for_audit()
+    service = DataQualityAuditService(session)
+    report = await service.audit_date(date(2026, 8, 20))
+
     vix_audit = next(d for d in report.derivatives if d.dataset == "VOLATILITY_INDEX")
     assert vix_audit.status is AuditStatus.UNAVAILABLE
     assert vix_audit.note is not None
+    # Unavailable VIX must NOT cause overall audit to fail
+    assert report.overall_status is AuditStatus.COMPLETE
 
 
 @pytest.mark.asyncio
@@ -230,18 +260,65 @@ async def test_audit_weekend_day() -> None:
 
 
 @pytest.mark.asyncio
-async def test_audit_holiday_day() -> None:
-    # 2026-08-19 weekday with 0 rows across both markets
+async def test_audit_holiday_when_calendar_says_not_trading_day() -> None:
+    # Holiday on weekday (e.g. 2026-04-06 Monday Tomb Sweeping makeup holiday)
+    cal = MockTradingCalendar(non_trading_dates={date(2026, 4, 6)})
     session = _create_mock_session_for_audit(
         twse_prices=0, twse_closes=0, tpex_prices=0, tpex_closes=0
     )
-    service = DataQualityAuditService(session)
-    report = await service.audit_date(date(2026, 8, 19))
+    service = DataQualityAuditService(session, calendar=cal)
+    report = await service.audit_date(date(2026, 4, 6))
 
     assert report.day_type == "HOLIDAY"
     assert report.is_trading_day is False
     assert report.twse_daily.status is AuditStatus.NO_DATA
     assert report.overall_status is AuditStatus.COMPLETE
+
+
+@pytest.mark.asyncio
+async def test_audit_trading_day_upstream_not_published_is_no_data() -> None:
+    # Trading day before 15:30 CST: rows == 0, failed_runs == 0
+    # Must NOT be classified as HOLIDAY!
+    session = _create_mock_session_for_audit(
+        twse_prices=0, twse_closes=0, tpex_prices=0, tpex_closes=0, failed_runs=0
+    )
+    service = DataQualityAuditService(session)
+    report = await service.audit_date(date(2026, 8, 20))
+
+    assert report.day_type == "TRADING_DAY"
+    assert report.is_trading_day is True
+    assert report.twse_daily.status is AuditStatus.NO_DATA
+    assert report.tpex_daily.status is AuditStatus.NO_DATA
+
+
+@pytest.mark.asyncio
+async def test_audit_trading_day_ingestion_failure_is_failed() -> None:
+    # Trading day with ingestion failure in ingestion_runs: rows == 0, failed_runs > 0
+    session = _create_mock_session_for_audit(
+        twse_prices=0, twse_closes=0, failed_runs=1
+    )
+    service = DataQualityAuditService(session)
+    report = await service.audit_date(date(2026, 8, 20))
+
+    assert report.day_type == "TRADING_DAY"
+    assert report.is_trading_day is True
+    assert report.twse_daily.status is AuditStatus.FAILED
+    assert report.overall_status is AuditStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_audit_stale_technical_detected() -> None:
+    # Technical snapshots missing for target_date and latest date is in the past
+    session = _create_mock_session_for_audit(
+        tech_snaps=0,
+        latest_tech_date=date(2026, 8, 19),
+    )
+    service = DataQualityAuditService(session)
+    report = await service.audit_date(date(2026, 8, 20))
+
+    assert report.technicals.stale_count == 1800
+    assert report.technicals.status is AuditStatus.STALE
+    assert report.overall_status is AuditStatus.STALE
 
 
 @pytest.mark.asyncio
