@@ -80,6 +80,13 @@ class ComparisonSelectionManager {
     }
 }
 
+sealed interface ComparisonAiPromptState {
+    data object Idle : ComparisonAiPromptState
+    data object Loading : ComparisonAiPromptState
+    data class Success(val prompt: String, val charCount: Int, val dataStatus: DataStatus) : ComparisonAiPromptState
+    data class Error(val message: String) : ComparisonAiPromptState
+}
+
 @HiltViewModel
 class ComparisonViewModel @Inject constructor(
     private val api: ComparisonApi
@@ -87,8 +94,12 @@ class ComparisonViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ComparisonUiState())
     val uiState: StateFlow<ComparisonUiState> = _uiState.asStateFlow()
 
+    private val _aiPromptState = MutableStateFlow<ComparisonAiPromptState>(ComparisonAiPromptState.Idle)
+    val aiPromptState: StateFlow<ComparisonAiPromptState> = _aiPromptState.asStateFlow()
+
     fun setTargets(targets: List<SecurityTarget>) {
         _uiState.value = _uiState.value.copy(selectedTargets = targets)
+        _aiPromptState.value = ComparisonAiPromptState.Idle
         if (targets.size >= 2) {
             runComparison()
         }
@@ -98,6 +109,35 @@ class ComparisonViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(window = win)
         if (_uiState.value.selectedTargets.size >= 2) {
             runComparison()
+        }
+    }
+
+    fun generateComparisonAiPrompt() {
+        val targets = _uiState.value.selectedTargets
+        if (targets.size < 2) {
+            _aiPromptState.value = ComparisonAiPromptState.Error("請至少選擇 2 檔股票進行比較")
+            return
+        }
+        viewModelScope.launch {
+            _aiPromptState.value = ComparisonAiPromptState.Loading
+            try {
+                val input = tw.market.ledger.network.ComparisonAnalysisPromptInputDto(
+                    securities = targets.map { SecurityTargetInputDto(it.code, it.market.name) }
+                )
+                val res = api.getComparisonAnalysisPrompt(input)
+                if (res.isSuccessful && res.body() != null) {
+                    val body = res.body()!!.data
+                    _aiPromptState.value = ComparisonAiPromptState.Success(
+                        prompt = body.prompt,
+                        charCount = body.characterCount,
+                        dataStatus = DataStatus.valueOf(body.dataStatus)
+                    )
+                } else {
+                    _aiPromptState.value = ComparisonAiPromptState.Error("載入多股比較 Prompt 失敗")
+                }
+            } catch (e: Exception) {
+                _aiPromptState.value = ComparisonAiPromptState.Error(e.message ?: "連線異常")
+            }
         }
     }
 
@@ -160,6 +200,7 @@ class ComparisonViewModel @Inject constructor(
     }
 }
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComparisonScreen(
@@ -167,11 +208,27 @@ fun ComparisonScreen(
     onNavigateBack: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    val aiPromptState by viewModel.aiPromptState.collectAsState()
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    var copiedPrompt by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("個股比較 (${state.selectedTargets.size}/5)") }
+                title = { Text("個股比較 (${state.selectedTargets.size}/5)") },
+                actions = {
+                    if (state.selectedTargets.size >= 2) {
+                        Button(
+                            onClick = {
+                                copiedPrompt = false
+                                viewModel.generateComparisonAiPrompt()
+                            },
+                            modifier = Modifier.padding(end = 8.dp).testTag("btn_ai_comparison")
+                        ) {
+                            Text("AI 比較分析")
+                        }
+                    }
+                }
             )
         }
     ) { padding ->
@@ -188,7 +245,9 @@ fun ComparisonScreen(
                     modifier = Modifier.testTag("txt_min_selection_warning")
                 )
             } else if (state.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally).testTag("loading_indicator"))
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.CenterHorizontally).testTag("loading_indicator")
+                )
             } else {
                 // Window Switcher
                 Row(
@@ -205,12 +264,85 @@ fun ComparisonScreen(
                     }
                 }
 
+                // AI Prompt Preview Section
+                when (val promptState = aiPromptState) {
+                    ComparisonAiPromptState.Idle -> {}
+                    ComparisonAiPromptState.Loading -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("comparison_ai_loading_card")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                Text("正在生成多股比較 AI Prompt...")
+                            }
+                        }
+                    }
+                    is ComparisonAiPromptState.Error -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("comparison_ai_error_card"),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                        ) {
+                            Text(
+                                "生成失敗：${promptState.message}",
+                                modifier = Modifier.padding(12.dp),
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                    is ComparisonAiPromptState.Success -> {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("comparison_ai_prompt_card")
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "AI 橫向比較 Prompt (${promptState.charCount} 字)",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        modifier = Modifier.testTag("comparison_ai_prompt_header")
+                                    )
+                                    Button(
+                                        onClick = {
+                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(promptState.prompt))
+                                            copiedPrompt = true
+                                        },
+                                        modifier = Modifier.testTag("btn_copy_comparison_prompt")
+                                    ) {
+                                        Text(if (copiedPrompt) "已複製！" else "複製 Prompt")
+                                    }
+                                }
+                                if (copiedPrompt) {
+                                    Text(
+                                        "✓ 已成功複製到剪貼簿，可直接貼至 ChatGPT / Gemini 進行多股對比！",
+                                        color = Color(0xFF2E7D32),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.testTag("comparison_ai_prompt_copied_banner")
+                                    )
+                                }
+                                Text(
+                                    text = promptState.prompt.take(300) + if (promptState.prompt.length > 300) "..." else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.testTag("comparison_ai_prompt_content")
+                                )
+                            }
+                        }
+                    }
+                }
+
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     item {
                         Text("走勢基期比較 (Base=100)", style = MaterialTheme.typography.titleMedium)
                         NormalizedCanvasChart(series = state.normalizedSeries)
                         Spacer(modifier = Modifier.height(16.dp))
                     }
+
 
                     item {
                         Text("指標比較表", style = MaterialTheme.typography.titleMedium)

@@ -67,4 +67,25 @@ class ComparisonTests {
         assertEquals(1, state.signals.size)
         assertEquals("台積電 近期報酬表現優於 鴻海", state.signals[0].headline)
     }
+
+    @Test
+    fun testViewModelAiComparisonPromptFlow() = runTest {
+        val vm = ComparisonViewModel(fakeApi)
+        val t1 = SecurityTarget("2330", MarketCode.TWSE)
+        val t2 = SecurityTarget("2454", MarketCode.TWSE)
+        vm.setTargets(listOf(t1, t2))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ComparisonAiPromptState.Idle, vm.aiPromptState.value)
+
+        vm.generateComparisonAiPrompt()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val promptState = vm.aiPromptState.value
+        assertTrue(promptState is ComparisonAiPromptState.Success)
+        val success = promptState as ComparisonAiPromptState.Success
+        assertTrue(success.prompt.contains("2330 vs 2454"))
+        assertEquals(tw.market.ledger.model.DataStatus.FINAL, success.dataStatus)
+    }
 }
+

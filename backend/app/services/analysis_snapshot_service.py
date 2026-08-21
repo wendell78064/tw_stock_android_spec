@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.domain.analysis_snapshot import (
+    ComparisonAnalysisSnapshot,
+    ComparisonSecurityItem,
     CreditSnapshot,
     DataQualitySummary,
     DerivativesContextSnapshot,
@@ -496,3 +498,28 @@ class AnalysisSnapshotService:
             portfolio_position=pos_snap,
             data_quality=dq_summary,
         )
+
+    async def build_comparison_snapshot(
+        self, items: list[ComparisonSecurityItem], user_id: UUID | None = None
+    ) -> ComparisonAnalysisSnapshot:
+        if len(items) < 2:
+            raise ValueError("Comparison requires at least 2 securities")
+        if len(items) > 5:
+            raise ValueError("Comparison allows at most 5 securities")
+
+        snapshots: list[SecurityAnalysisSnapshot] = []
+        for item in items:
+            snap = await self.build_snapshot(item.code, item.market, user_id=user_id)
+            snapshots.append(snap)
+
+        now = datetime.now(UTC)
+        unified_mkt = snapshots[0].market_context if snapshots else None
+        unified_deriv = snapshots[0].derivatives_context if snapshots else None
+
+        return ComparisonAnalysisSnapshot(
+            generated_at=now,
+            snapshots=snapshots,
+            unified_market_context=unified_mkt,
+            unified_derivatives_context=unified_deriv,
+        )
+

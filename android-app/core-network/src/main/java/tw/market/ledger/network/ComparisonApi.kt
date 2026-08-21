@@ -84,7 +84,30 @@ data class ComparisonEnvelopeDto(
     val meta: MetaDto
 )
 
+data class ComparisonAnalysisPromptInputDto(
+    val securities: List<SecurityTargetInputDto>
+)
+
+data class ComparisonAnalysisPromptDto(
+    val securities: List<SecurityDto>,
+    @com.squareup.moshi.Json(name = "generated_at") val generatedAt: String,
+    val prompt: String,
+    @com.squareup.moshi.Json(name = "character_count") val characterCount: Int,
+    @com.squareup.moshi.Json(name = "data_status") val dataStatus: String,
+)
+
+data class ComparisonAnalysisPromptEnvelopeDto(
+    val data: ComparisonAnalysisPromptDto,
+    val meta: MetaDto,
+)
+
 interface ComparisonApi {
     @POST("comparisons/run")
     suspend fun runComparison(@Body input: RunComparisonInputDto): Response<ComparisonEnvelopeDto>
+
+    @POST("comparisons/analysis-prompt")
+    suspend fun getComparisonAnalysisPrompt(
+        @Body input: ComparisonAnalysisPromptInputDto
+    ): Response<ComparisonAnalysisPromptEnvelopeDto>
 }
+

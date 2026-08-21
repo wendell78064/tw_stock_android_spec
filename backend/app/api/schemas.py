@@ -627,3 +627,26 @@ class AnalysisPromptResponse(BaseModel):
 class AnalysisPromptEnvelope(BaseModel):
     data: AnalysisPromptResponse
     meta: MetaResponse
+
+
+class ComparisonAnalysisSecurityItem(BaseModel):
+    code: str
+    market: MarketCode
+
+
+class ComparisonAnalysisPromptInput(BaseModel):
+    securities: list[ComparisonAnalysisSecurityItem]
+
+
+class ComparisonAnalysisPromptResponse(BaseModel):
+    securities: list[SecurityResponse]
+    generated_at: datetime
+    prompt: str
+    character_count: int
+    data_status: DataStatus
+
+
+class ComparisonAnalysisPromptEnvelope(BaseModel):
+    data: ComparisonAnalysisPromptResponse
+    meta: MetaResponse
+

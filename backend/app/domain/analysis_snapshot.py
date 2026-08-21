@@ -171,3 +171,18 @@ class SecurityAnalysisSnapshot:
     derivatives_context: DerivativesContextSnapshot | None
     portfolio_position: PortfolioPositionSnapshot | None
     data_quality: DataQualitySummary
+
+
+@dataclass(frozen=True)
+class ComparisonSecurityItem:
+    code: str
+    market: MarketCode
+
+
+@dataclass(frozen=True)
+class ComparisonAnalysisSnapshot:
+    generated_at: datetime
+    snapshots: list[SecurityAnalysisSnapshot]
+    unified_market_context: MarketContextSnapshot | None
+    unified_derivatives_context: DerivativesContextSnapshot | None
+

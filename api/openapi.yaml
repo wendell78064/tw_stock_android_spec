@@ -575,7 +575,31 @@ paths:
                 $ref: "#/components/schemas/AnalysisPromptEnvelope"
         "404":
           $ref: "#/components/responses/NotFound"
+  /comparisons/analysis-prompt:
+    post:
+      operationId: getComparisonAnalysisPrompt
+      tags: [Comparisons]
+      summary: Generate AI analysis prompt for multiple securities comparison
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComparisonAnalysisPromptRequest"
+      responses:
+        "200":
+          description: AI multi-stock comparison analysis prompt package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComparisonAnalysisPromptEnvelope"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /industries:
+
     get:
       operationId: listIndustries
       tags: [Industries]
@@ -2030,7 +2054,49 @@ components:
       properties:
         data: { $ref: "#/components/schemas/AnalysisPromptResponse" }
         meta: { $ref: "#/components/schemas/Meta" }
+    ComparisonAnalysisSecurityItem:
+      type: object
+      required: [code, market]
+      properties:
+        code:
+          type: string
+        market:
+          $ref: "#/components/schemas/MarketCode"
+    ComparisonAnalysisPromptRequest:
+      type: object
+      required: [securities]
+      properties:
+        securities:
+          type: array
+          minItems: 2
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/ComparisonAnalysisSecurityItem"
+    ComparisonAnalysisPromptResponse:
+      type: object
+      required: [securities, generated_at, prompt, character_count, data_status]
+      properties:
+        securities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Security"
+        generated_at:
+          type: string
+          format: date-time
+        prompt:
+          type: string
+        character_count:
+          type: integer
+        data_status:
+          $ref: "#/components/schemas/DataStatus"
+    ComparisonAnalysisPromptEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/ComparisonAnalysisPromptResponse" }
+        meta: { $ref: "#/components/schemas/Meta" }
     FuturesOverviewEnvelope:
+
       type: object
       properties:
         data: { $ref: "#/components/schemas/FuturesSnapshot" }

@@ -57,15 +57,18 @@ def _build_dummy_security(
     )
 
 
-@pytest.fixture
-def dummy_snapshot() -> SecurityAnalysisSnapshot:
+def _build_dummy_snapshot(
+    code: str = "2330",
+    market: MarketCode = MarketCode.TWSE,
+    name: str = "台積電",
+) -> SecurityAnalysisSnapshot:
     now = datetime(2026, 8, 20, 15, 30, 0, tzinfo=UTC)
     sec = SecurityIdentitySnapshot(
-        code="2330",
-        name="台積電",
-        market=MarketCode.TWSE,
+        code=code,
+        name=name,
+        market=market,
         security_type="COMMON_STOCK",
-        primary_industry="半導體業",
+        primary_industry="半導體業" if code != "2317" else "其他電子業",
         themes=["AI伺服器", "先進製程"],
         listing_date=date(1994, 9, 5),
     )
@@ -173,7 +176,7 @@ def dummy_snapshot() -> SecurityAnalysisSnapshot:
     return SecurityAnalysisSnapshot(
         as_of=now,
         generated_at=now,
-        market=MarketCode.TWSE,
+        market=market,
         security=sec,
         price=price,
         returns=returns,
@@ -186,6 +189,12 @@ def dummy_snapshot() -> SecurityAnalysisSnapshot:
         portfolio_position=pos,
         data_quality=dq,
     )
+
+
+@pytest.fixture
+def dummy_snapshot() -> SecurityAnalysisSnapshot:
+    return _build_dummy_snapshot("2330", MarketCode.TWSE, "台積電")
+
 
 
 def test_individual_prompt_builder_structure_and_bounded_size(
@@ -361,4 +370,142 @@ async def test_analysis_snapshot_service_tpex_security() -> None:
     builder = IndividualAnalysisPromptBuilder()
     prompt = builder.build_prompt(snapshot)
     assert "證券櫃檯買賣中心 (上櫃 TPEX)" in prompt
+
+
+def test_comparison_analysis_prompt_builder_structure_and_bounded_size() -> None:
+    from app.domain.analysis_snapshot import (
+        ComparisonAnalysisSnapshot,
+        DerivativesContextSnapshot,
+        MarketContextSnapshot,
+    )
+    from app.services.comparison_prompt_builder import ComparisonAnalysisPromptBuilder
+
+    now = datetime.now(UTC)
+    s1 = _build_dummy_snapshot("2330", MarketCode.TWSE, "台積電")
+    s2 = _build_dummy_snapshot("2454", MarketCode.TWSE, "聯發科")
+    s3 = _build_dummy_snapshot("6488", MarketCode.TPEX, "環球晶")
+
+    mkt = MarketContextSnapshot(
+        trade_date=date(2026, 8, 20),
+        taiex_close=Decimal("22400.5"),
+        taiex_change_pct=Decimal("0.85"),
+        advances_count=650,
+        declines_count=280,
+        unchanged_count=70,
+        institutional_spot_net=Decimal("12500000000"),
+    )
+    deriv = DerivativesContextSnapshot(
+        trade_date=date(2026, 8, 20),
+        tx_close=Decimal("22420.0"),
+        foreign_futures_net_oi=-15200,
+        option_put_call_ratio=Decimal("108.5"),
+        vix_status="UNAVAILABLE",
+    )
+
+    comp_snap_2 = ComparisonAnalysisSnapshot(
+        generated_at=now,
+        snapshots=[s1, s2],
+        unified_market_context=mkt,
+        unified_derivatives_context=deriv,
+    )
+
+    builder = ComparisonAnalysisPromptBuilder()
+    prompt_2 = builder.build_prompt(comp_snap_2)
+
+    # Verify key sections
+    assert "【TW Market Ledger 智慧台股多個股比較分析 Prompt】" in prompt_2
+    assert "台積電(2330) vs 聯發科(2454)" in prompt_2
+    assert "一、比較標的基本資料" in prompt_2
+    assert "二、價格與區間報酬率橫向對比" in prompt_2
+    assert "三、技術指標綜合對比" in prompt_2
+    assert "四、三大法人籌碼動向對比" in prompt_2
+    assert "五、信用交易與借券對比" in prompt_2
+    assert "六、所屬產業強弱度對比" in prompt_2
+    assert "七、全市場與衍生品總體環境" in prompt_2
+    assert "八、我的投資組合持股現況對比" in prompt_2
+    assert "九、各標的資料品質狀態對比" in prompt_2
+    assert "10. 【綜合 Risk / Reward 與投資優先級評估】" in prompt_2
+    assert "【請於回覆中明確給出以下 5 項排名輸出（由優至劣）】" in prompt_2
+
+    # Verify size is bounded
+    assert 1000 <= len(prompt_2) <= 5000
+    assert 1000 <= len(prompt_2.encode("utf-8")) <= 12000
+
+    # 3 stocks
+    comp_snap_3 = ComparisonAnalysisSnapshot(
+        generated_at=now,
+        snapshots=[s1, s2, s3],
+        unified_market_context=mkt,
+        unified_derivatives_context=deriv,
+    )
+    prompt_3 = builder.build_prompt(comp_snap_3)
+    assert "環球晶 (6488)" in prompt_3
+    assert "上櫃 TPEX" in prompt_3
+    assert 1200 <= len(prompt_3) <= 6000
+
+    # 5 stocks
+    s4 = _build_dummy_snapshot("2308", MarketCode.TWSE, "台達電")
+    s5 = _build_dummy_snapshot("2317", MarketCode.TWSE, "鴻海")
+    comp_snap_5 = ComparisonAnalysisSnapshot(
+        generated_at=now,
+        snapshots=[s1, s2, s3, s4, s5],
+        unified_market_context=mkt,
+        unified_derivatives_context=deriv,
+    )
+    prompt_5 = builder.build_prompt(comp_snap_5)
+    assert "鴻海 (2317)" in prompt_5
+    assert len(prompt_5) <= 8000
+
+
+@pytest.mark.asyncio
+async def test_comparison_snapshot_service_validation() -> None:
+    from app.domain.analysis_snapshot import ComparisonSecurityItem
+
+    session = AsyncMock()
+    sec_repo = AsyncMock(spec=SecurityRepository)
+    price_repo = AsyncMock(spec=PriceRepository)
+    market_spot_repo = AsyncMock(spec=MarketSpotRepository)
+
+    service = AnalysisSnapshotService(session, sec_repo, price_repo, market_spot_repo)
+
+    # < 2 items
+    with pytest.raises(ValueError, match="at least 2 securities"):
+        await service.build_comparison_snapshot([
+            ComparisonSecurityItem(code="2330", market=MarketCode.TWSE)
+        ])
+
+    # > 5 items
+    with pytest.raises(ValueError, match="at most 5 securities"):
+        await service.build_comparison_snapshot([
+            ComparisonSecurityItem(code=f"233{i}", market=MarketCode.TWSE)
+            for i in range(6)
+        ])
+
+
+def test_comparison_analysis_prompt_api_validation() -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as client:
+        # < 2 items
+        r1 = client.post(
+            "/v1/comparisons/analysis-prompt",
+            json={"securities": [{"code": "2330", "market": "TWSE"}]},
+        )
+        assert r1.status_code == 422 or r1.status_code == 400
+
+        # > 5 items
+        r2 = client.post(
+            "/v1/comparisons/analysis-prompt",
+            json={
+                "securities": [
+                    {"code": f"233{i}", "market": "TWSE"}
+                    for i in range(6)
+                ]
+            },
+        )
+        assert r2.status_code == 422 or r2.status_code == 400
+
+
 

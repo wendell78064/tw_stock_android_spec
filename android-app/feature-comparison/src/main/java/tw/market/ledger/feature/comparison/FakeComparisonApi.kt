@@ -58,4 +58,36 @@ class FakeComparisonApi : ComparisonApi {
         )
         return Response.success(ComparisonEnvelopeDto(res, meta))
     }
+
+    override suspend fun getComparisonAnalysisPrompt(
+        input: tw.market.ledger.network.ComparisonAnalysisPromptInputDto
+    ): Response<tw.market.ledger.network.ComparisonAnalysisPromptEnvelopeDto> {
+        val meta = MetaDto("2026-08-11T00:00:00Z", "2026-08-11T00:00:00Z", "FINAL", "TEST")
+        val secDtos = input.securities.map {
+            tw.market.ledger.network.SecurityDto(
+                id = "sec-${it.code}",
+                code = it.code,
+                name = if (it.code == "2330") "台積電" else "聯發科",
+                market = it.market,
+                securityType = "COMMON_STOCK",
+                status = "ACTIVE",
+                primaryIndustry = "半導體業",
+                listingDate = "1994-09-05",
+                isActive = true,
+                asOf = "2026-08-11T00:00:00Z",
+                receivedAt = "2026-08-11T00:00:01Z",
+                dataStatus = "FINAL",
+            )
+        }
+        val promptText = "【TW Market Ledger 智慧台股多個股比較分析 Prompt】\n2330 vs 2454..."
+        val promptDto = tw.market.ledger.network.ComparisonAnalysisPromptDto(
+            securities = secDtos,
+            generatedAt = "2026-08-11T00:00:05Z",
+            prompt = promptText,
+            characterCount = promptText.length,
+            dataStatus = "FINAL",
+        )
+        return Response.success(tw.market.ledger.network.ComparisonAnalysisPromptEnvelopeDto(promptDto, meta))
+    }
 }
+
