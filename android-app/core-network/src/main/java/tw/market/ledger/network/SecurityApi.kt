@@ -37,6 +37,18 @@ data class SecurityDto(
 data class SecuritySearchEnvelopeDto(val data: List<SecurityDto>, val meta: MetaDto)
 data class SecurityEnvelopeDto(val data: SecurityDto, val meta: MetaDto)
 
+data class AnalysisPromptDto(
+    val security: SecurityDto,
+    @Json(name = "as_of") val asOf: String,
+    @Json(name = "generated_at") val generatedAt: String,
+    val prompt: String,
+    @Json(name = "character_count") val characterCount: Int,
+    @Json(name = "data_status") val dataStatus: String,
+    @Json(name = "portfolio_included") val portfolioIncluded: Boolean,
+)
+
+data class AnalysisPromptEnvelopeDto(val data: AnalysisPromptDto, val meta: MetaDto)
+
 interface SecurityApi {
     @GET("securities/search")
     suspend fun search(
@@ -51,5 +63,12 @@ interface SecurityApi {
         @Path("code") code: String,
         @Query("market") market: String,
     ): SecurityEnvelopeDto
+
+    @GET("securities/{code}/analysis-prompt")
+    suspend fun analysisPrompt(
+        @Path("code") code: String,
+        @Query("market") market: String,
+    ): AnalysisPromptEnvelopeDto
 }
+
 

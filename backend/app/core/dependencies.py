@@ -84,6 +84,18 @@ async def current_user(
     return await service.authenticate(credentials.credentials)
 
 
+async def current_user_optional(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    service: Annotated[AuthService, Depends(auth_service)],
+):
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        return await service.authenticate(credentials.credentials)
+    except Exception:
+        return None
+
+
 async def cloud_sync_service(
     session: Annotated[AsyncSession, Depends(database_session)],
     settings: Annotated[Settings, Depends(get_settings)],

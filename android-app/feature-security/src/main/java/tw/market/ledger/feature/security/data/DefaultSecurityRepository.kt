@@ -43,5 +43,11 @@ class DefaultSecurityRepository(
             DetailOutcome(cached, fromCache = true)
         }
     }
+
+    override suspend fun analysisPrompt(code: String, market: MarketCode): tw.market.ledger.model.AnalysisPrompt {
+        val envelope = api.analysisPrompt(code, market.name)
+        return envelope.data.toDomain()
+    }
 }
+
 

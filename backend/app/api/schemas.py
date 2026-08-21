@@ -614,4 +614,16 @@ class ComparisonEnvelope(BaseModel):
     meta: MetaResponse
 
 
+class AnalysisPromptResponse(BaseModel):
+    security: SecurityResponse
+    as_of: datetime
+    generated_at: datetime
+    prompt: str
+    character_count: int
+    data_status: DataStatus
+    portfolio_included: bool
 
+
+class AnalysisPromptEnvelope(BaseModel):
+    data: AnalysisPromptResponse
+    meta: MetaResponse

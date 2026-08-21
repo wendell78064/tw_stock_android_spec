@@ -558,6 +558,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreditEnvelope"
+  /securities/{code}/analysis-prompt:
+    get:
+      operationId: getSecurityAnalysisPrompt
+      tags: [Securities]
+      summary: Generate AI analysis prompt for an individual security
+      parameters:
+        - $ref: "#/components/parameters/SecurityCode"
+        - { in: query, name: market, required: true, schema: { $ref: "#/components/schemas/MarketCode" } }
+      responses:
+        "200":
+          description: AI analysis prompt package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisPromptEnvelope"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /industries:
     get:
       operationId: listIndustries
@@ -1995,6 +2012,23 @@ components:
       type: object
       properties:
         data: { $ref: "#/components/schemas/CreditSnapshot" }
+        meta: { $ref: "#/components/schemas/Meta" }
+    AnalysisPromptResponse:
+      type: object
+      required: [security, as_of, generated_at, prompt, character_count, data_status, portfolio_included]
+      properties:
+        security: { $ref: "#/components/schemas/Security" }
+        as_of: { type: string, format: date-time }
+        generated_at: { type: string, format: date-time }
+        prompt: { type: string }
+        character_count: { type: integer }
+        data_status: { $ref: "#/components/schemas/DataStatus" }
+        portfolio_included: { type: boolean }
+    AnalysisPromptEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/AnalysisPromptResponse" }
         meta: { $ref: "#/components/schemas/Meta" }
     FuturesOverviewEnvelope:
       type: object

@@ -44,7 +44,20 @@ private class FakeApi(private val fail: Boolean = false) : SecurityApi {
         return SecuritySearchEnvelopeDto(listOf(dto), meta)
     }
     override suspend fun detail(code: String, market: String): SecurityEnvelopeDto = SecurityEnvelopeDto(dto, meta)
+    override suspend fun analysisPrompt(code: String, market: String): tw.market.ledger.network.AnalysisPromptEnvelopeDto {
+        val promptDto = tw.market.ledger.network.AnalysisPromptDto(
+            security = dto,
+            asOf = "2026-08-06T00:00:00Z",
+            generatedAt = "2026-08-06T00:00:05Z",
+            prompt = "PROMPT",
+            characterCount = 6,
+            dataStatus = "FINAL",
+            portfolioIncluded = false,
+        )
+        return tw.market.ledger.network.AnalysisPromptEnvelopeDto(promptDto, meta)
+    }
 }
+
 
 private class FakeDao(val items: MutableList<SecurityEntity> = mutableListOf()) : SecurityDao {
     override suspend fun upsert(items: List<SecurityEntity>) { this.items.clear(); this.items.addAll(items) }

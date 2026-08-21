@@ -10,6 +10,7 @@ data class DetailOutcome(val security: Security, val fromCache: Boolean)
 interface SecurityRepository {
     suspend fun search(query: String, market: MarketCode? = null, limit: Int = 20): SearchOutcome
     suspend fun detail(code: String, market: MarketCode): DetailOutcome
+    suspend fun analysisPrompt(code: String, market: MarketCode): tw.market.ledger.model.AnalysisPrompt
 }
 
 class SearchSecuritiesUseCase(private val repository: SecurityRepository) {
@@ -21,4 +22,10 @@ class GetSecurityUseCase(private val repository: SecurityRepository) {
     suspend operator fun invoke(code: String, market: MarketCode): DetailOutcome =
         repository.detail(code, market)
 }
+
+class GetAnalysisPromptUseCase(private val repository: SecurityRepository) {
+    suspend operator fun invoke(code: String, market: MarketCode): tw.market.ledger.model.AnalysisPrompt =
+        repository.analysisPrompt(code, market)
+}
+
 

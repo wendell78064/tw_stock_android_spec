@@ -1,10 +1,13 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas import (
+    AnalysisPromptEnvelope,
+    AnalysisPromptResponse,
     CandleResponse,
     CandleSeriesEnvelope,
     MetaResponse,
@@ -16,7 +19,13 @@ from app.api.schemas import (
     TechnicalSeriesEnvelope,
     meta_for,
 )
-from app.core.dependencies import market_spot_repository, price_repository, security_repository
+from app.core.dependencies import (
+    current_user_optional,
+    database_session,
+    market_spot_repository,
+    price_repository,
+    security_repository,
+)
 from app.core.errors import AppError
 from app.domain.market_data import DataStatus
 from app.domain.market_spot import InstitutionType, MarketSpotRepository
@@ -326,3 +335,61 @@ async def get_security_credit(
     except ValueError as error:
         raise AppError("INVALID_WINDOW", str(error), 422) from error
     return {"data": data}
+
+
+@router.get(
+    "/{code}/analysis-prompt",
+    response_model=AnalysisPromptEnvelope,
+    operation_id="getSecurityAnalysisPrompt",
+)
+async def get_security_analysis_prompt(
+    code: str,
+    securities: Annotated[SecurityRepository, Depends(security_repository)],
+    prices: Annotated[PriceRepository, Depends(price_repository)],
+    market_spots: Annotated[MarketSpotRepository, Depends(market_spot_repository)],
+    session: Annotated[AsyncSession, Depends(database_session)],
+    market: MarketCode,
+    user: Annotated[Any, Depends(current_user_optional)] = None,
+) -> AnalysisPromptEnvelope:
+    from app.services.analysis_snapshot_service import AnalysisSnapshotService
+    from app.services.individual_prompt_builder import IndividualAnalysisPromptBuilder
+
+    sec = await _require_security(securities, code, market)
+    user_id = user.id if user else None
+
+    snapshot_service = AnalysisSnapshotService(session, securities, prices, market_spots)
+    snapshot = await snapshot_service.build_snapshot(code, market, user_id=user_id)
+
+    builder = IndividualAnalysisPromptBuilder()
+    prompt_text = builder.build_prompt(snapshot)
+
+    now = datetime.now(UTC)
+    data_status = (
+        DataStatus.COMPLETE
+        if snapshot.data_quality.overall_status.value == "COMPLETE"
+        else (
+            DataStatus.PARTIAL
+            if snapshot.data_quality.overall_status.value == "PARTIAL"
+            else DataStatus.UNAVAILABLE
+        )
+    )
+
+    response_data = AnalysisPromptResponse(
+        security=SecurityResponse.from_domain(sec),
+        as_of=snapshot.as_of,
+        generated_at=snapshot.generated_at,
+        prompt=prompt_text,
+        character_count=len(prompt_text),
+        data_status=data_status,
+        portfolio_included=snapshot.portfolio_position is not None,
+    )
+
+    meta = MetaResponse(
+        as_of=snapshot.as_of,
+        received_at=now,
+        data_status=data_status,
+        source="TW_MARKET_LEDGER_PROMPT_BUILDER",
+    )
+
+    return AnalysisPromptEnvelope(data=response_data, meta=meta)
+

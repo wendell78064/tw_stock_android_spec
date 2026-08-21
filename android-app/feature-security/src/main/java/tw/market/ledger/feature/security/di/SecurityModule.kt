@@ -34,6 +34,7 @@ object SecurityModule {
 
     @Provides fun searchUseCase(repository: SecurityRepository) = SearchSecuritiesUseCase(repository)
     @Provides fun detailUseCase(repository: SecurityRepository) = GetSecurityUseCase(repository)
+    @Provides fun analysisPromptUseCase(repository: SecurityRepository) = tw.market.ledger.feature.security.domain.GetAnalysisPromptUseCase(repository)
 
     @Provides @Singleton
     fun chartRepository(api: ChartApi, dao: ChartDao): ChartRepository = DefaultChartRepository(api, dao)

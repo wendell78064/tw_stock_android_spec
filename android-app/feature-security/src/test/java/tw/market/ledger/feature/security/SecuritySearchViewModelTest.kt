@@ -55,5 +55,16 @@ private class FakeRepository(private val empty: Boolean = false, private val err
         return SearchOutcome(SecuritySearchResult(items, "2026-08-06T00:00:00Z", DataStatus.FINAL), false)
     }
     override suspend fun detail(code: String, market: MarketCode) = DetailOutcome(security(), false)
+    override suspend fun analysisPrompt(code: String, market: MarketCode): tw.market.ledger.model.AnalysisPrompt =
+        tw.market.ledger.model.AnalysisPrompt(
+            security = security(),
+            asOf = "2026-08-06T00:00:00Z",
+            generatedAt = "2026-08-06T00:00:05Z",
+            prompt = "PROMPT",
+            characterCount = 6,
+            dataStatus = DataStatus.FINAL,
+            portfolioIncluded = false,
+        )
 }
+
 

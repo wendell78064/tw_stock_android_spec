@@ -133,28 +133,114 @@ fun SecurityDetailRoute(
     onAlert: (String?) -> Unit = {},
     viewModel: SecurityDetailViewModel = hiltViewModel(),
     spotViewModel: SecuritySpotViewModel = hiltViewModel(),
+    aiPromptViewModel: SecurityAiPromptViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var tab by remember { mutableIntStateOf(0) }
     LaunchedEffect(code, market) { viewModel.load(code, market) }
     LaunchedEffect(code, market) { spotViewModel.load(code, market) }
+    LaunchedEffect(code, market) { aiPromptViewModel.load(code, market) }
     val institutional by spotViewModel.institutional.collectAsStateWithLifecycle()
     val credit by spotViewModel.credit.collectAsStateWithLifecycle()
     val window by spotViewModel.window.collectAsStateWithLifecycle()
+    val aiPromptState by aiPromptViewModel.uiState.collectAsStateWithLifecycle()
     Column {
         Row {
-            TextButton(onClick = { tab = 0 }) { Text("走勢") }
-            TextButton(onClick = { tab = 1 }) { Text("籌碼") }
-            TextButton(onClick = { tab = 2 }) { Text("信用") }
-            TextButton(onClick = { tab = 3 }) { Text("基本資料") }
+            TextButton(onClick = { tab = 0 }, modifier = Modifier.testTag("tab-chart")) { Text("走勢") }
+            TextButton(onClick = { tab = 1 }, modifier = Modifier.testTag("tab-spot")) { Text("籌碼") }
+            TextButton(onClick = { tab = 2 }, modifier = Modifier.testTag("tab-credit")) { Text("信用") }
+            TextButton(onClick = { tab = 3 }, modifier = Modifier.testTag("tab-basic")) { Text("基本資料") }
+            TextButton(onClick = { tab = 4 }, modifier = Modifier.testTag("tab-ai-analysis")) { Text("AI 分析") }
             TextButton(onClick = { onAlert((state as? SecurityDetailUiState.Success)?.security?.id) }) { Text("提醒") }
         }
-        when (tab) { 0 -> SecurityChartRoute(code, market)
+        when (tab) {
+            0 -> SecurityChartRoute(code, market)
             1 -> SecurityInstitutionalScreen(institutional, window, spotViewModel::loadInstitutional)
             2 -> SecurityCreditScreen(credit)
-            else -> SecurityDetailScreen(state) }
+            3 -> SecurityDetailScreen(state)
+            4 -> SecurityAiPromptScreen(aiPromptState, onRetry = { aiPromptViewModel.load(code, market) })
+            else -> SecurityDetailScreen(state)
+        }
     }
 }
+
+@Composable
+fun SecurityAiPromptScreen(
+    state: SecurityAiPromptUiState,
+    onRetry: () -> Unit = {},
+) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .testTag("security-ai-prompt-screen"),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        when (state) {
+            SecurityAiPromptUiState.Idle -> Text("點擊載入 AI 分析 Prompt")
+            SecurityAiPromptUiState.Loading -> CircularProgressIndicator(Modifier.testTag("ai-prompt-loading"))
+            is SecurityAiPromptUiState.Error -> {
+                Text("載入 AI Prompt 失敗：${state.message}")
+                Button(onClick = onRetry) { Text("重試") }
+            }
+            is SecurityAiPromptUiState.Success -> {
+                val prompt = state.prompt
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "${prompt.security.code} ${prompt.security.name} AI 分析 Prompt",
+                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.testTag("security-ai-prompt-title")
+                        )
+                        Text(
+                            "基準：${prompt.asOf} · 狀態：${prompt.dataStatus} · 字數：${prompt.characterCount}",
+                            style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(prompt.prompt))
+                            copied = true
+                        },
+                        modifier = Modifier.testTag("security-ai-prompt-copy-btn")
+                    ) {
+                        Text(if (copied) "已複製！" else "複製 Prompt")
+                    }
+                }
+                if (copied) {
+                    Text(
+                        "✓ 已成功複製到剪貼簿，可直接貼至 ChatGPT / Gemini / Claude 進行深度分析！",
+                        color = Color(0xFF2E7D32),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("security-ai-prompt-copied-banner")
+                    )
+                }
+                HorizontalDivider()
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("security-ai-prompt-content")
+                ) {
+                    item {
+                        Text(
+                            text = prompt.prompt,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 @Composable fun SecurityInstitutionalScreen(state: SecuritySpotUiState, window: Int, onWindow: (Int) -> Unit) {
     Column(Modifier.fillMaxSize().padding(12.dp).testTag("security-institutional"), verticalArrangement = Arrangement.spacedBy(8.dp)) {

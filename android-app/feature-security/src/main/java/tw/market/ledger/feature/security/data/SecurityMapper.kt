@@ -61,3 +61,15 @@ fun SecurityEntity.toDomain(): Security = Security(
     SecurityStatus.valueOf(status), primaryIndustry, listingDate, isActive, asOf, receivedAt,
     DataStatus.valueOf(dataStatus),
 )
+
+fun tw.market.ledger.network.AnalysisPromptDto.toDomain(): tw.market.ledger.model.AnalysisPrompt =
+    tw.market.ledger.model.AnalysisPrompt(
+        security = security.toDomain(),
+        asOf = asOf,
+        generatedAt = generatedAt,
+        prompt = prompt,
+        characterCount = characterCount,
+        dataStatus = DataStatus.valueOf(dataStatus),
+        portfolioIncluded = portfolioIncluded,
+    )
+
