@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections import defaultdict
 from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
@@ -19,9 +20,14 @@ from app.domain.realtime import (
 )
 
 TAIPEI = ZoneInfo("Asia/Taipei")
+logger = logging.getLogger(__name__)
 
 
 class ShioajiProviderError(RuntimeError):
+    pass
+
+
+class ShioajiCallbackError(ShioajiProviderError):
     pass
 
 
@@ -95,6 +101,10 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._latest: dict[str, RealtimeQuote] = {}
         self._sequence = 0
+        self._callbacks_installed_client: Any = None
+        self._tick_callback = self._on_tick
+        self._bidask_callback = self._on_bidask
+        self._event_callback = self._on_event
 
     @staticmethod
     def _official_client(simulation: bool) -> Any:
@@ -124,7 +134,8 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
             return
         self._loop = asyncio.get_running_loop()
         try:
-            self._client = self._client_factory(self._simulation)
+            if self._client is None:
+                self._client = self._client_factory(self._simulation)
             await asyncio.to_thread(
                 self._client.login,
                 api_key=self._api_key,
@@ -141,11 +152,13 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
             raise ShioajiProviderError("Shioaji connection failed") from error
 
     def _install_callbacks(self) -> None:
-        quote = self._client.quote
-        quote.set_on_tick_stk_v1_callback(self._on_tick)
-        quote.set_on_bidask_stk_v1_callback(self._on_bidask)
-        if hasattr(quote, "set_event_callback"):
-            quote.set_event_callback(self._on_event)
+        if self._callbacks_installed_client is self._client:
+            return
+        self._client.set_on_tick_stk_v1_callback(self._tick_callback)
+        self._client.set_on_bidask_stk_v1_callback(self._bidask_callback)
+        if hasattr(self._client, "set_event_callback"):
+            self._client.set_event_callback(self._event_callback)
+        self._callbacks_installed_client = self._client
 
     def resolve_contract(self, security_key: str) -> Any:
         try:
@@ -362,20 +375,53 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
             self._loop.call_soon_threadsafe(self._queue.put_nowait, quote)
 
     def _on_tick(self, exchange: Any, event: Any) -> None:
+        market = str(exchange)
+        code = str(self._value(event, "code", "UNKNOWN"))
         try:
             quote = self.map_tick(exchange, event)
+            logger.debug(
+                "shioaji_callback event=tick market=%s code=%s entered=yes mapping_success=yes",
+                market,
+                code,
+            )
             self._enqueue_smoke(RealtimeQuoteType.TICK, quote)
             self._enqueue(quote)
         except Exception as error:
-            self._last_error = str(error)
+            self._record_callback_error(RealtimeQuoteType.TICK, market, code, error)
 
     def _on_bidask(self, exchange: Any, event: Any) -> None:
+        market = str(exchange)
+        code = str(self._value(event, "code", "UNKNOWN"))
         try:
             mapped = self.map_bidask_event(exchange, event)
+            logger.debug(
+                "shioaji_callback event=bidask market=%s code=%s entered=yes mapping_success=yes",
+                market,
+                code,
+            )
             self._enqueue_smoke(RealtimeQuoteType.BID_ASK, mapped)
             self._enqueue(self._enrich_quote_with_bidask(mapped))
         except Exception as error:
-            self._last_error = str(error)
+            self._record_callback_error(RealtimeQuoteType.BID_ASK, market, code, error)
+
+    def _record_callback_error(
+        self,
+        quote_type: RealtimeQuoteType,
+        market: str,
+        code: str,
+        error: Exception,
+    ) -> None:
+        self._last_error = f"{quote_type.value} callback mapping failed: {type(error).__name__}"
+        logger.warning(
+            "shioaji_callback event=%s market=%s code=%s entered=yes mapping_success=no",
+            quote_type.value,
+            market,
+            code,
+        )
+        self._enqueue_smoke(
+            quote_type,
+            ShioajiCallbackError(f"{quote_type.value} callback mapping failed"),
+        )
 
     def _enqueue_smoke(self, quote_type: RealtimeQuoteType, event: Any) -> None:
         if self._loop is None:
@@ -389,7 +435,10 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
         self._loop.call_soon_threadsafe(put)
 
     async def wait_for_event(self, quote_type: RealtimeQuoteType, timeout: float) -> Any:
-        return await asyncio.wait_for(self._smoke_queues[quote_type].get(), timeout=timeout)
+        result = await asyncio.wait_for(self._smoke_queues[quote_type].get(), timeout=timeout)
+        if isinstance(result, BaseException):
+            raise result
+        return result
 
     async def health(self) -> bool:
         return self._connected

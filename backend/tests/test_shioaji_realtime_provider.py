@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
@@ -7,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.adapters.shioaji_realtime_provider import (
+    ShioajiCallbackError,
     ShioajiProviderError,
     ShioajiRealtimeProvider,
     SubscriptionPriority,
@@ -17,21 +19,22 @@ from app.services.realtime_provider_manager import RealtimeProviderManager
 
 
 class FakeQuoteClient:
-    def __init__(self):
+    def __init__(self, api):
+        self.api = api
         self.subscriptions = []
         self.unsubscriptions = []
-
-    def set_on_tick_stk_v1_callback(self, callback):
-        self.tick_callback = callback
-
-    def set_on_bidask_stk_v1_callback(self, callback):
-        self.bidask_callback = callback
-
-    def set_event_callback(self, callback):
-        self.event_callback = callback
+        self.emit_on_subscribe = None
 
     def subscribe(self, contract, quote_type):
+        self.api.events.append(f"subscribe:{quote_type}")
         self.subscriptions.append((contract.code, quote_type))
+        if self.emit_on_subscribe is not None:
+            callback = (
+                self.api.tick_callback
+                if quote_type == "tick"
+                else self.api.bidask_callback
+            )
+            callback(contract.exchange, self.emit_on_subscribe)
 
     def unsubscribe(self, contract, quote_type):
         self.unsubscriptions.append((contract.code, quote_type))
@@ -39,7 +42,11 @@ class FakeQuoteClient:
 
 class FakeClient:
     def __init__(self):
-        self.quote = FakeQuoteClient()
+        self.events = []
+        self.tick_callback = None
+        self.bidask_callback = None
+        self.event_callback = None
+        self.quote = FakeQuoteClient(self)
         self.contracts = SimpleNamespace(
             get=lambda code: {
                 "2330": SimpleNamespace(code="2330", exchange="TSE"),
@@ -47,6 +54,18 @@ class FakeClient:
             }.get(code)
         )
         self.login_calls = []
+
+    def set_on_tick_stk_v1_callback(self, callback):
+        self.events.append("register:tick")
+        self.tick_callback = callback
+
+    def set_on_bidask_stk_v1_callback(self, callback):
+        self.events.append("register:bidask")
+        self.bidask_callback = callback
+
+    def set_event_callback(self, callback):
+        self.events.append("register:event")
+        self.event_callback = callback
 
     def login(self, **kwargs):
         self.login_calls.append(kwargs)
@@ -97,6 +116,29 @@ async def test_contract_resolution_supports_twse_tpex_and_rejects_mismatch():
         item.resolve_contract("TWSE:9999")
     with pytest.raises(ShioajiProviderError, match="not TSE"):
         item.resolve_contract("TWSE:6488")
+
+
+@pytest.mark.asyncio
+async def test_callbacks_register_on_canonical_api_before_subscribe_and_stay_reachable():
+    client = FakeClient()
+    factory_calls = []
+
+    def factory(_simulation):
+        factory_calls.append(client)
+        return client
+
+    item = ShioajiRealtimeProvider("key", "secret", client_factory=factory)
+    await item.connect()
+    await item.acquire_subscription("owner", "TWSE:2330", RealtimeQuoteType.TICK)
+    assert client.events[:4] == [
+        "register:tick",
+        "register:bidask",
+        "register:event",
+        "subscribe:tick",
+    ]
+    assert client.tick_callback is item._tick_callback
+    assert client.bidask_callback is item._bidask_callback
+    assert factory_calls == [client]
 
 
 def test_tick_and_bidask_mapping_preserve_decimal_timestamp_and_depth():
@@ -173,6 +215,60 @@ async def test_reconnect_restores_each_active_quote_type_once():
     item._connected = False
     await item.connect()
     assert sorted(client.quote.subscriptions) == [("2330", "bid_ask"), ("2330", "tick")]
+    assert client.events.count("register:tick") == 1
+    assert client.events.count("register:bidask") == 1
+
+
+@pytest.mark.asyncio
+async def test_worker_thread_tick_callback_reaches_async_waiter():
+    client = FakeClient()
+    item = make_provider(client)
+    await item.connect()
+    event = SimpleNamespace(code="2330", close="101.5", volume=2, total_volume=20)
+    worker = threading.Thread(target=client.tick_callback, args=("TSE", event))
+    worker.start()
+    result = await item.wait_for_event(RealtimeQuoteType.TICK, 0.5)
+    worker.join()
+    assert result.code == "2330"
+    assert result.last_price == Decimal("101.5")
+
+
+@pytest.mark.asyncio
+async def test_immediate_tick_and_bidask_callbacks_are_not_lost_after_subscribe():
+    client = FakeClient()
+    item = make_provider(client)
+    await item.connect()
+    client.quote.emit_on_subscribe = SimpleNamespace(
+        code="2330", close="102", volume=1, total_volume=10
+    )
+    await item.acquire_subscription("tick", "TWSE:2330", RealtimeQuoteType.TICK)
+    tick = await item.wait_for_event(RealtimeQuoteType.TICK, 0.1)
+    assert tick.last_price == Decimal("102")
+
+    client.quote.emit_on_subscribe = SimpleNamespace(
+        code="2330",
+        bid_price=["101.5"],
+        bid_volume=[2],
+        ask_price=["102.5"],
+        ask_volume=[3],
+    )
+    await item.acquire_subscription("bidask", "TWSE:2330", RealtimeQuoteType.BID_ASK)
+    bidask = await item.wait_for_event(RealtimeQuoteType.BID_ASK, 0.1)
+    assert bidask.bid_prices == [Decimal("101.5")]
+
+
+@pytest.mark.asyncio
+async def test_worker_thread_mapping_error_reaches_waiter_as_bounded_failure():
+    client = FakeClient()
+    item = make_provider(client)
+    await item.connect()
+    invalid = SimpleNamespace(code="2330", close=None)
+    worker = threading.Thread(target=client.tick_callback, args=("TSE", invalid))
+    worker.start()
+    with pytest.raises(ShioajiCallbackError, match="tick callback mapping failed"):
+        await item.wait_for_event(RealtimeQuoteType.TICK, 0.5)
+    worker.join()
+    assert item._last_error == "tick callback mapping failed: ValidationError"
 
 
 def test_bidask_domain_mapping_does_not_require_prior_tick():

@@ -51,18 +51,23 @@ async def smoke(
     key = f"{market}:{code}"
     owner = "production-smoke"
     subscribed = False
+    waiter: asyncio.Task[Any] | None = None
     try:
         await provider.connect()
         print("LOGIN=PASS")
         provider.resolve_contract(key)
         print("CONTRACT=PASS")
+        waiter = asyncio.create_task(provider.wait_for_event(quote_type, timeout))
+        await asyncio.sleep(0)
         await provider.acquire_subscription(owner, key, quote_type)
         subscribed = True
         print("SUBSCRIBE=PASS")
-        event = await provider.wait_for_event(quote_type, timeout)
+        event = await waiter
         _validate_event(event, quote_type, market, code)
         print("EVENT=PASS")
     finally:
+        if waiter is not None and not waiter.done():
+            waiter.cancel()
         if subscribed:
             await provider.release_subscription(owner, key, quote_type)
             print("UNSUBSCRIBE=PASS")
