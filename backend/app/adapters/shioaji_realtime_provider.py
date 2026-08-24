@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
+from threading import Lock
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -105,6 +106,11 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
         self._tick_callback = self._on_tick
         self._bidask_callback = self._on_bidask
         self._event_callback = self._on_event
+        self._smoke_waiters: set[RealtimeQuoteType] = set()
+        self._diagnostic_stages: dict[RealtimeQuoteType, set[str]] = {
+            kind: set() for kind in RealtimeQuoteType
+        }
+        self._diagnostic_lock = Lock()
 
     @staticmethod
     def _official_client(simulation: bool) -> Any:
@@ -380,10 +386,18 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
             self._loop.call_soon_threadsafe(self._queue.put_nowait, quote)
 
     def _on_tick(self, exchange: Any, event: Any) -> None:
-        market = str(exchange)
-        code = str(self._value(event, "code", "UNKNOWN"))
+        self._diagnostic_stage(
+            RealtimeQuoteType.TICK, "CALLBACK_NATIVE_ENTRY", exchange, event
+        )
+        market = "UNKNOWN"
+        code = "UNKNOWN"
         try:
+            market = str(exchange)
+            code = str(self._value(event, "code", "UNKNOWN"))
             quote = self.map_tick(exchange, event)
+            self._diagnostic_stage(
+                RealtimeQuoteType.TICK, "MAPPING_PASS", exchange, event
+            )
             logger.debug(
                 "shioaji_callback event=tick market=%s code=%s entered=yes mapping_success=yes",
                 market,
@@ -395,10 +409,18 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
             self._record_callback_error(RealtimeQuoteType.TICK, market, code, error)
 
     def _on_bidask(self, exchange: Any, event: Any) -> None:
-        market = str(exchange)
-        code = str(self._value(event, "code", "UNKNOWN"))
+        self._diagnostic_stage(
+            RealtimeQuoteType.BID_ASK, "CALLBACK_NATIVE_ENTRY", exchange, event
+        )
+        market = "UNKNOWN"
+        code = "UNKNOWN"
         try:
+            market = str(exchange)
+            code = str(self._value(event, "code", "UNKNOWN"))
             mapped = self.map_bidask_event(exchange, event)
+            self._diagnostic_stage(
+                RealtimeQuoteType.BID_ASK, "MAPPING_PASS", exchange, event
+            )
             logger.debug(
                 "shioaji_callback event=bidask market=%s code=%s entered=yes mapping_success=yes",
                 market,
@@ -417,6 +439,7 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
         error: Exception,
     ) -> None:
         self._last_error = f"{quote_type.value} callback mapping failed: {type(error).__name__}"
+        self._diagnostic_stage(quote_type, "MAPPING_FAIL", market, event=None, code=code)
         logger.warning(
             "shioaji_callback event=%s market=%s code=%s entered=yes mapping_success=no",
             quote_type.value,
@@ -428,22 +451,93 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
             ShioajiCallbackError(f"{quote_type.value} callback mapping failed"),
         )
 
+    def _diagnostic_stage(
+        self,
+        quote_type: RealtimeQuoteType,
+        stage: str,
+        exchange: Any = None,
+        event: Any = None,
+        *,
+        code: Any = None,
+    ) -> None:
+        """Emit each smoke-only callback stage at most once without payload data."""
+        try:
+            with self._diagnostic_lock:
+                if quote_type not in self._smoke_waiters:
+                    return
+                stages = self._diagnostic_stages[quote_type]
+                if stage in stages:
+                    return
+                stages.add(stage)
+            loop = self._loop
+            try:
+                market = str(exchange) if exchange is not None else "UNKNOWN"
+            except Exception:
+                market = "UNKNOWN"
+            if code is None:
+                try:
+                    code = self._value(event, "code", "UNKNOWN")
+                except Exception:
+                    code = "UNKNOWN"
+            logger.warning(
+                "shioaji_callback_diag event=%s stage=%s market=%s code=%s "
+                "loop_running=%s loop_closed=%s",
+                quote_type.value,
+                stage,
+                market,
+                str(code),
+                bool(loop and loop.is_running()),
+                bool(loop and loop.is_closed()),
+            )
+        except Exception:
+            # Diagnostics must never interfere with market-data delivery.
+            return
+
     def _enqueue_smoke(self, quote_type: RealtimeQuoteType, event: Any) -> None:
-        if self._loop is None:
+        self._diagnostic_stage(quote_type, "CALLBACK_SCHEDULE_ATTEMPT", event=event)
+        loop = self._loop
+        if loop is None:
             return
         queue = self._smoke_queues[quote_type]
 
         def put() -> None:
-            if queue.empty():
-                queue.put_nowait(event)
+            self._diagnostic_stage(quote_type, "CALLBACK_ASYNC_ENTRY", event=event)
+            try:
+                if queue.empty():
+                    queue.put_nowait(event)
+                    self._diagnostic_stage(quote_type, "OBSERVER_NOTIFY", event=event)
+            except Exception as error:
+                self._last_error = (
+                    f"{quote_type.value} callback observer failed: {type(error).__name__}"
+                )
+                self._diagnostic_stage(quote_type, "OBSERVER_NOTIFY_FAIL", event=event)
 
-        self._loop.call_soon_threadsafe(put)
+        try:
+            loop.call_soon_threadsafe(put)
+            self._diagnostic_stage(quote_type, "CALLBACK_SCHEDULED", event=event)
+        except Exception as error:
+            self._last_error = (
+                f"{quote_type.value} callback scheduling failed: {type(error).__name__}"
+            )
+            self._diagnostic_stage(quote_type, "CALLBACK_SCHEDULE_FAIL", event=event)
 
     async def wait_for_event(self, quote_type: RealtimeQuoteType, timeout: float) -> Any:
-        result = await asyncio.wait_for(self._smoke_queues[quote_type].get(), timeout=timeout)
-        if isinstance(result, BaseException):
-            raise result
-        return result
+        with self._diagnostic_lock:
+            self._diagnostic_stages[quote_type].clear()
+            self._smoke_waiters.add(quote_type)
+        try:
+            result = await asyncio.wait_for(
+                self._smoke_queues[quote_type].get(), timeout=timeout
+            )
+            self._diagnostic_stage(
+                quote_type, "SMOKE_WAITER_RECEIVE", event=result
+            )
+            if isinstance(result, BaseException):
+                raise result
+            return result
+        finally:
+            with self._diagnostic_lock:
+                self._smoke_waiters.discard(quote_type)
 
     async def health(self) -> bool:
         return self._connected

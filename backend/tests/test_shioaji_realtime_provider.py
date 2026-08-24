@@ -257,6 +257,120 @@ async def test_worker_thread_tick_callback_reaches_async_waiter():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("quote_type", "callback_name", "event"),
+    [
+        (
+            RealtimeQuoteType.TICK,
+            "tick_callback",
+            SimpleNamespace(code="2330", close="101.5", volume=2, total_volume=20),
+        ),
+        (
+            RealtimeQuoteType.BID_ASK,
+            "bidask_callback",
+            SimpleNamespace(
+                code="2330",
+                bid_price=["101.0"],
+                bid_volume=[2],
+                ask_price=["101.5"],
+                ask_volume=[3],
+            ),
+        ),
+    ],
+)
+async def test_actual_registered_worker_callback_reaches_same_loop_waiter_with_diagnostics(
+    quote_type, callback_name, event, caplog
+):
+    client = FakeClient()
+    item = make_provider(client)
+    await item.connect()
+    running_loop = asyncio.get_running_loop()
+    assert item._loop is running_loop
+    assert item._loop.is_running() and not item._loop.is_closed()
+
+    waiter = asyncio.create_task(item.wait_for_event(quote_type, 0.5))
+    await asyncio.sleep(0)
+    registered_callback = getattr(client, callback_name)
+    expected_callback = (
+        item._tick_callback
+        if quote_type is RealtimeQuoteType.TICK
+        else item._bidask_callback
+    )
+    assert registered_callback is expected_callback
+    assert registered_callback.__self__ is item
+
+    worker = threading.Thread(
+        target=registered_callback, args=(sj.Exchange.TSE, event)
+    )
+    worker.start()
+    result = await waiter
+    worker.join()
+
+    assert result.code == "2330"
+    messages = [record.getMessage() for record in caplog.records]
+    for stage in (
+        "CALLBACK_NATIVE_ENTRY",
+        "MAPPING_PASS",
+        "CALLBACK_SCHEDULE_ATTEMPT",
+        "CALLBACK_SCHEDULED",
+        "CALLBACK_ASYNC_ENTRY",
+        "OBSERVER_NOTIFY",
+        "SMOKE_WAITER_RECEIVE",
+    ):
+        assert sum(f"stage={stage}" in message for message in messages) == 1
+    assert all("loop_running=True loop_closed=False" in message for message in messages)
+
+
+@pytest.mark.asyncio
+async def test_registered_callback_surfaces_failure_before_mapping():
+    class InvalidTick:
+        @property
+        def code(self):
+            raise RuntimeError("unsafe payload detail")
+
+    client = FakeClient()
+    item = make_provider(client)
+    await item.connect()
+    waiter = asyncio.create_task(item.wait_for_event(RealtimeQuoteType.TICK, 0.5))
+    await asyncio.sleep(0)
+    worker = threading.Thread(
+        target=client.tick_callback, args=(sj.Exchange.TSE, InvalidTick())
+    )
+    worker.start()
+    with pytest.raises(ShioajiCallbackError, match="tick callback mapping failed"):
+        await waiter
+    worker.join()
+    assert item._last_error == "tick callback mapping failed: RuntimeError"
+
+
+@pytest.mark.asyncio
+async def test_scheduled_observer_failure_is_bounded(monkeypatch, caplog):
+    client = FakeClient()
+    item = make_provider(client)
+    await item.connect()
+    queue = item._smoke_queues[RealtimeQuoteType.TICK]
+
+    def fail_delivery(_event):
+        raise RuntimeError("unsafe payload detail")
+
+    monkeypatch.setattr(queue, "put_nowait", fail_delivery)
+    waiter = asyncio.create_task(item.wait_for_event(RealtimeQuoteType.TICK, 0.05))
+    await asyncio.sleep(0)
+    event = SimpleNamespace(code="2330", close="101.5", volume=2, total_volume=20)
+    worker = threading.Thread(
+        target=client.tick_callback, args=(sj.Exchange.TSE, event)
+    )
+    worker.start()
+    with pytest.raises(TimeoutError):
+        await waiter
+    worker.join()
+    assert item._last_error == "tick callback observer failed: RuntimeError"
+    messages = [record.getMessage() for record in caplog.records]
+    assert sum("stage=OBSERVER_NOTIFY_FAIL" in message for message in messages) == 1
+    assert all("unsafe payload detail" not in message for message in messages)
+
+
+@pytest.mark.asyncio
 async def test_bidask_callback_maps_canonical_tse_exchange():
     client = FakeClient()
     item = make_provider(client)
