@@ -329,6 +329,57 @@ def test_http_quote_snapshot_api_endpoints():
     assert batch_data[1] is None
 
 
+def test_http_and_websocket_resolve_same_application_realtime_hub(monkeypatch):
+    fake_redis = FakeRedis()
+    cache = RealtimeCacheService(fake_redis)
+    manager = AsyncMock()
+    manager.get_capabilities.return_value = ProviderCapabilities(
+        provider_name="TEST",
+        source_type="WEBSOCKET",
+        configured=True,
+        realtime_available=True,
+        license_status=LicenseStatus.AUTHORIZED,
+    )
+    manager.provider.health = AsyncMock(return_value=True)
+    manager.reconnect_count = 0
+    hub = RealtimeQuoteHub(fake_redis, cache, subscription_manager=manager)
+    hub.provider_status = "CONNECTED"
+
+    monkeypatch.setattr(app.state, "realtime_hub", hub, raising=False)
+    monkeypatch.setattr(app.state, "realtime_provider_manager", manager, raising=False)
+    client = TestClient(app)
+
+    with client.websocket_connect("/v1/ws/quotes") as websocket:
+        welcome = websocket.receive_json()
+        assert welcome["status"] == "CONNECTED"
+        assert len(hub.sessions) == 1
+
+        http_health = client.get("/v1/quotes/health")
+        assert http_health.status_code == 200
+        assert http_health.json()["active_ws_connections"] == 1
+
+        websocket.send_json(
+            {
+                "type": "subscribe",
+                "version": 1,
+                "securities": [
+                    {
+                        "market": "TWSE",
+                        "code": "2330",
+                        "quote_types": ["tick", "bid_ask"],
+                    }
+                ],
+                "channels": ["quote"],
+            }
+        )
+        subscribed = websocket.receive_json()
+        assert subscribed["message"] == "Subscribed to 1 securities"
+        assert manager.acquire_subscription.await_count == 2
+
+    assert hub.sessions == set()
+    assert manager.release_subscription.await_count == 2
+
+
 @pytest.mark.asyncio
 async def test_unconfigured_provider_manager_start_and_no_busy_loop():
     fake_redis = FakeRedis()

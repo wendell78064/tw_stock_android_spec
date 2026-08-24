@@ -5,6 +5,7 @@ from fastapi import Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import HTTPConnection
 
 from app.core.errors import AppError
 from app.core.settings import Settings, get_settings
@@ -42,8 +43,8 @@ def get_realtime_cache_service(request: Request):
     return request.app.state.realtime_cache_service
 
 
-def get_realtime_hub(request: Request):
-    return request.app.state.realtime_hub
+def get_realtime_hub(connection: HTTPConnection):
+    return connection.app.state.realtime_hub
 
 
 def get_realtime_provider_manager(request: Request):
