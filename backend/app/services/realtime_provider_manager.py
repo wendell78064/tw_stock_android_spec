@@ -1,8 +1,9 @@
 import asyncio
 import logging
+from collections import defaultdict
 
 from app.adapters.realtime_base import RealtimeMarketDataProvider
-from app.domain.realtime import ProviderCapabilities
+from app.domain.realtime import ProviderCapabilities, RealtimeQuoteType
 from app.services.intraday_candle_aggregator import IntradayCandleAggregator
 from app.services.realtime_alerts import RealtimeAlertEvaluationService
 from app.services.realtime_cache import RealtimeCacheService
@@ -10,6 +11,10 @@ from app.services.realtime_hub import RealtimeQuoteHub
 from app.services.realtime_strength import RealtimeTaxonomyAggregator
 
 logger = logging.getLogger(__name__)
+
+
+class RealtimeSubscriptionError(RuntimeError):
+    pass
 
 
 class RealtimeProviderManager:
@@ -31,6 +36,48 @@ class RealtimeProviderManager:
         self._ingestion_task: asyncio.Task | None = None
         self._running = False
         self.reconnect_count = 0
+        self._subscription_owners: dict[tuple[str, RealtimeQuoteType], set[str]] = defaultdict(set)
+        self._subscription_lock = asyncio.Lock()
+
+    async def acquire_subscription(
+        self, owner: str, security_key: str, quote_type: RealtimeQuoteType
+    ) -> None:
+        capabilities = await self.provider.get_capabilities()
+        if not capabilities.configured:
+            raise RealtimeSubscriptionError("Realtime provider is unconfigured")
+        identity = (security_key.upper(), quote_type)
+        async with self._subscription_lock:
+            owners = self._subscription_owners[identity]
+            if owner in owners:
+                return
+            first = not owners
+            owners.add(owner)
+            if first:
+                broker_owner = f"manager:{identity[0]}:{quote_type.value}"
+                try:
+                    await self.provider.acquire_subscription(
+                        broker_owner, identity[0], quote_type
+                    )
+                except Exception as error:
+                    owners.remove(owner)
+                    if not owners:
+                        del self._subscription_owners[identity]
+                    raise RealtimeSubscriptionError("Provider subscription failed") from error
+
+    async def release_subscription(
+        self, owner: str, security_key: str, quote_type: RealtimeQuoteType
+    ) -> None:
+        identity = (security_key.upper(), quote_type)
+        async with self._subscription_lock:
+            owners = self._subscription_owners.get(identity)
+            if not owners or owner not in owners:
+                return
+            owners.remove(owner)
+            if owners:
+                return
+            del self._subscription_owners[identity]
+            broker_owner = f"manager:{identity[0]}:{quote_type.value}"
+            await self.provider.release_subscription(broker_owner, identity[0], quote_type)
 
     async def start(self):
         self._running = True

@@ -12,7 +12,9 @@ from app.domain.realtime import (
     DataStatus,
     LicenseStatus,
     ProviderCapabilities,
+    RealtimeBidAsk,
     RealtimeQuote,
+    RealtimeQuoteType,
     TradingSession,
 )
 
@@ -31,9 +33,7 @@ class SubscriptionPriority(StrEnum):
     WATCHLIST = "P4"
 
 
-class QuoteKind(StrEnum):
-    TICK = "tick"
-    BID_ASK = "bid_ask"
+QuoteKind = RealtimeQuoteType
 
 
 class SubscriptionRegistry:
@@ -85,6 +85,9 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
         self._reconnect_delays = reconnect_delays
         self._client: Any = None
         self._queue: asyncio.Queue[RealtimeQuote] = asyncio.Queue()
+        self._smoke_queues: dict[RealtimeQuoteType, asyncio.Queue[Any]] = {
+            kind: asyncio.Queue(maxsize=1) for kind in RealtimeQuoteType
+        }
         self._registry = SubscriptionRegistry()
         self._connected = False
         self._closing = False
@@ -176,6 +179,27 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
         added = self._registry.acquire(owner, security_key, kinds)
         if self._connected:
             await self._apply(security_key, added, subscribe=True)
+
+    async def acquire_subscription(
+        self, owner: str, security_key: str, quote_type: RealtimeQuoteType
+    ) -> None:
+        added = self._registry.acquire(owner, security_key, {quote_type})
+        if self._connected:
+            await self._apply(security_key, added, subscribe=True)
+
+    async def release_subscription(
+        self, owner: str, security_key: str, quote_type: RealtimeQuoteType
+    ) -> None:
+        identity = (security_key.upper(), quote_type)
+        owners = self._registry._owners.get(identity)
+        if not owners or owner not in owners:
+            return
+        owners.remove(owner)
+        if owners:
+            return
+        del self._registry._owners[identity]
+        if self._connected:
+            await self._apply(security_key, {quote_type}, subscribe=False)
 
     async def release(self, owner: str, security_key: str) -> None:
         removed = self._registry.release(owner, security_key)
@@ -291,30 +315,47 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
         return quote
 
     def map_bidask(self, exchange: Any, event: Any) -> RealtimeQuote | None:
-        market = self._market(exchange)
-        code = str(self._value(event, "code"))
-        key = f"{market.upper()}:{code}"
+        mapped = self.map_bidask_event(exchange, event)
+        return self._enrich_quote_with_bidask(mapped)
+
+    def _enrich_quote_with_bidask(self, mapped: RealtimeBidAsk) -> RealtimeQuote | None:
+        key = f"{mapped.market_id.upper()}:{mapped.code}"
         previous = self._latest.get(key)
         if previous is None:
             return None
-        bid_prices = [Decimal(str(value)) for value in self._value(event, "bid_price", [])]
-        ask_prices = [Decimal(str(value)) for value in self._value(event, "ask_price", [])]
         quote = previous.model_copy(
             update={
-                "exchange_timestamp": self._timestamp(event),
-                "received_at": datetime.now(UTC),
-                "bid_price": bid_prices[0] if bid_prices else None,
-                "bid_size": (self._value(event, "bid_volume", []) or [None])[0],
-                "ask_price": ask_prices[0] if ask_prices else None,
-                "ask_size": (self._value(event, "ask_volume", []) or [None])[0],
-                "bid_prices": bid_prices,
-                "bid_volumes": list(self._value(event, "bid_volume", [])),
-                "ask_prices": ask_prices,
-                "ask_volumes": list(self._value(event, "ask_volume", [])),
+                "exchange_timestamp": mapped.exchange_timestamp,
+                "received_at": mapped.received_at,
+                "bid_price": mapped.bid_prices[0] if mapped.bid_prices else None,
+                "bid_size": mapped.bid_volumes[0] if mapped.bid_volumes else None,
+                "ask_price": mapped.ask_prices[0] if mapped.ask_prices else None,
+                "ask_size": mapped.ask_volumes[0] if mapped.ask_volumes else None,
+                "bid_prices": mapped.bid_prices,
+                "bid_volumes": mapped.bid_volumes,
+                "ask_prices": mapped.ask_prices,
+                "ask_volumes": mapped.ask_volumes,
             }
         )
         self._latest[key] = quote
         return quote
+
+    def map_bidask_event(self, exchange: Any, event: Any) -> RealtimeBidAsk:
+        market = self._market(exchange)
+        code = str(self._value(event, "code"))
+        bid_prices = [Decimal(str(value)) for value in self._value(event, "bid_price", [])]
+        ask_prices = [Decimal(str(value)) for value in self._value(event, "ask_price", [])]
+        return RealtimeBidAsk(
+            market_id=market,
+            code=code,
+            exchange_timestamp=self._timestamp(event),
+            received_at=datetime.now(UTC),
+            bid_prices=bid_prices,
+            bid_volumes=list(self._value(event, "bid_volume", [])),
+            ask_prices=ask_prices,
+            ask_volumes=list(self._value(event, "ask_volume", [])),
+            provider=self.provider_name,
+        )
 
     def _enqueue(self, quote: RealtimeQuote | None) -> None:
         if quote is not None and self._loop is not None:
@@ -322,15 +363,33 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
 
     def _on_tick(self, exchange: Any, event: Any) -> None:
         try:
-            self._enqueue(self.map_tick(exchange, event))
+            quote = self.map_tick(exchange, event)
+            self._enqueue_smoke(RealtimeQuoteType.TICK, quote)
+            self._enqueue(quote)
         except Exception as error:
             self._last_error = str(error)
 
     def _on_bidask(self, exchange: Any, event: Any) -> None:
         try:
-            self._enqueue(self.map_bidask(exchange, event))
+            mapped = self.map_bidask_event(exchange, event)
+            self._enqueue_smoke(RealtimeQuoteType.BID_ASK, mapped)
+            self._enqueue(self._enrich_quote_with_bidask(mapped))
         except Exception as error:
             self._last_error = str(error)
+
+    def _enqueue_smoke(self, quote_type: RealtimeQuoteType, event: Any) -> None:
+        if self._loop is None:
+            return
+        queue = self._smoke_queues[quote_type]
+
+        def put() -> None:
+            if queue.empty():
+                queue.put_nowait(event)
+
+        self._loop.call_soon_threadsafe(put)
+
+    async def wait_for_event(self, quote_type: RealtimeQuoteType, timeout: float) -> Any:
+        return await asyncio.wait_for(self._smoke_queues[quote_type].get(), timeout=timeout)
 
     async def health(self) -> bool:
         return self._connected

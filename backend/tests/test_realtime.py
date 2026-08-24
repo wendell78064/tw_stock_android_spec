@@ -13,7 +13,9 @@ from app.adapters.fake_realtime_provider import (
 from app.domain.realtime import (
     DataStatus,
     LicenseStatus,
+    ProviderCapabilities,
     RealtimeQuote,
+    RealtimeQuoteType,
 )
 from app.main import app
 from app.services.realtime_cache import RealtimeCacheService
@@ -160,6 +162,51 @@ async def test_hub_subscription_limits_and_routing():
 
     await hub.unregister_connection(session)
     assert len(hub.sessions) == 0
+
+
+@pytest.mark.asyncio
+async def test_manager_reference_counts_tick_and_bidask_independently():
+    provider = AsyncMock()
+    provider.get_capabilities.return_value = ProviderCapabilities(
+        provider_name="TEST",
+        source_type="WEBSOCKET",
+        configured=True,
+        realtime_available=True,
+        license_status=LicenseStatus.AUTHORIZED,
+    )
+    manager = RealtimeProviderManager(provider, AsyncMock(), AsyncMock())
+
+    await manager.acquire_subscription("ws:1", "TWSE:2330", RealtimeQuoteType.TICK)
+    await manager.acquire_subscription("ws:2", "TWSE:2330", RealtimeQuoteType.TICK)
+    provider.acquire_subscription.assert_awaited_once()
+    await manager.acquire_subscription("ws:1", "TWSE:2330", RealtimeQuoteType.BID_ASK)
+    assert provider.acquire_subscription.await_count == 2
+
+    await manager.release_subscription("ws:1", "TWSE:2330", RealtimeQuoteType.TICK)
+    provider.release_subscription.assert_not_awaited()
+    await manager.release_subscription("ws:2", "TWSE:2330", RealtimeQuoteType.TICK)
+    provider.release_subscription.assert_awaited_once()
+    assert ("TWSE:2330", RealtimeQuoteType.BID_ASK) in manager._subscription_owners
+    await manager.release_subscription("ws:1", "TWSE:2330", RealtimeQuoteType.BID_ASK)
+    assert provider.release_subscription.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_abnormal_websocket_disconnect_releases_all_provider_ownership():
+    manager = AsyncMock()
+    fake_redis = FakeRedis()
+    hub = RealtimeQuoteHub(
+        fake_redis, RealtimeCacheService(fake_redis), subscription_manager=manager
+    )
+    session = await hub.register_connection(AsyncMock())
+    await hub.handle_subscribe(
+        session,
+        [{"market": "TWSE", "code": "2330", "quote_types": ["tick", "bid_ask"]}],
+    )
+    assert manager.acquire_subscription.await_count == 2
+    await hub.unregister_connection(session)
+    assert manager.release_subscription.await_count == 2
+    assert session.provider_subscriptions == set()
 
 
 def test_http_quote_snapshot_api_endpoints():

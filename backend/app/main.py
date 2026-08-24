@@ -91,6 +91,7 @@ async def lifespan(app: FastAPI):
     manager = RealtimeProviderManager(
         provider, cache_service, hub, aggregator, taxonomy_aggregator, realtime_alert_service
     )
+    hub.subscription_manager = manager
 
     app.state.realtime_cache_service = cache_service
     app.state.realtime_hub = hub

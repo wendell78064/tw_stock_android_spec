@@ -19,6 +19,24 @@ Never commit these values, place them in Android, persist them in the database, 
 logs. No CA activation, account access, or trading permission is used. Before broader
 subscriptions, perform one production smoke with a single stock's Tick and BidAsk streams.
 
+The restricted administrator wrapper must expose only these fixed commands (the wrapper's shared
+`DOCKER` variable is reused):
+
+```sh
+smoke-realtime-tick|smoke-realtime-bidask)
+  MARKET="${2:-}"
+  CODE="${3:-}"
+  case "$MARKET" in TWSE|TPEX) ;; *) exit 2 ;; esac
+  case "$CODE" in
+    [0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+    *) exit 2 ;;
+  esac
+  if [ "$1" = "smoke-realtime-tick" ]; then QUOTE_TYPE=tick; else QUOTE_TYPE=bidask; fi
+  "$DOCKER" exec -i twml-backend python -m app.cli.smoke_realtime_quote \
+    --market "$MARKET" --code "$CODE" --quote-type "$QUOTE_TYPE" --timeout 10
+  ;;
+```
+
 ## 1. Directory Structure
 
 On Synology DS220+, all persistent TWML data is isolated under:

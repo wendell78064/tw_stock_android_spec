@@ -12,7 +12,7 @@ from app.adapters.shioaji_realtime_provider import (
     SubscriptionPriority,
 )
 from app.core.settings import Settings
-from app.domain.realtime import DataStatus, LicenseStatus
+from app.domain.realtime import DataStatus, LicenseStatus, RealtimeQuoteType
 from app.services.realtime_provider_manager import RealtimeProviderManager
 
 
@@ -156,6 +156,40 @@ async def test_disconnect_marks_stale_and_retains_requested_subscriptions():
     stale = await asyncio.wait_for(item._queue.get(), 0.1)
     assert stale.data_status is DataStatus.STALE
     assert ("TWSE:2330", "tick") in {(key, kind.value) for key, kind in item._registry.active}
+
+
+@pytest.mark.asyncio
+async def test_reconnect_restores_each_active_quote_type_once():
+    client = FakeClient()
+    item = make_provider(client)
+    await item.acquire_subscription(
+        "manager:tick", "TWSE:2330", RealtimeQuoteType.TICK
+    )
+    await item.acquire_subscription(
+        "manager:bidask", "TWSE:2330", RealtimeQuoteType.BID_ASK
+    )
+    await item.connect()
+    client.quote.subscriptions.clear()
+    item._connected = False
+    await item.connect()
+    assert sorted(client.quote.subscriptions) == [("2330", "bid_ask"), ("2330", "tick")]
+
+
+def test_bidask_domain_mapping_does_not_require_prior_tick():
+    item = make_provider()
+    event = item.map_bidask_event(
+        "OTC",
+        SimpleNamespace(
+            code="6488",
+            bid_price=["88.7"],
+            bid_volume=[2],
+            ask_price=["88.9"],
+            ask_volume=[3],
+        ),
+    )
+    assert event.market_id == "TPEx"
+    assert event.bid_prices == [Decimal("88.7")]
+    assert event.ask_volumes == [3]
 
 
 @pytest.mark.asyncio

@@ -30,6 +30,11 @@ class RealtimeEventKind(StrEnum):
     UPDATE = "UPDATE"
 
 
+class RealtimeQuoteType(StrEnum):
+    TICK = "tick"
+    BID_ASK = "bid_ask"
+
+
 class IntradayInterval(StrEnum):
     ONE_MINUTE = "1m"
     FIVE_MINUTES = "5m"
@@ -126,3 +131,16 @@ class RealtimeQuote(BaseModel):
     @property
     def composite_key(self) -> str:
         return f"{self.market_id.upper()}:{self.code}"
+
+
+class RealtimeBidAsk(BaseModel):
+    market_id: str
+    code: str
+    exchange_timestamp: datetime
+    received_at: datetime
+    bid_prices: list[Decimal]
+    bid_volumes: list[int]
+    ask_prices: list[Decimal]
+    ask_volumes: list[int]
+    data_status: DataStatus = DataStatus.LIVE
+    provider: str = "UNKNOWN"

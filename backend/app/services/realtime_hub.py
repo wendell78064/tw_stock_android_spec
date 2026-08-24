@@ -2,11 +2,17 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
+from typing import Protocol
 
 from fastapi import WebSocket
 from redis.asyncio import Redis
 
-from app.domain.realtime import IntradayCandle, IntradayInterval, RealtimeQuote
+from app.domain.realtime import (
+    IntradayCandle,
+    IntradayInterval,
+    RealtimeQuote,
+    RealtimeQuoteType,
+)
 from app.domain.realtime_strength import RealtimeTaxonomyType
 from app.services.realtime_alerts import REALTIME_ALERT_CHANNEL
 from app.services.realtime_cache import (
@@ -21,11 +27,23 @@ from app.services.realtime_cache import (
 logger = logging.getLogger(__name__)
 
 
+class SubscriptionManager(Protocol):
+    async def acquire_subscription(
+        self, owner: str, security_key: str, quote_type: RealtimeQuoteType
+    ) -> None: ...
+
+    async def release_subscription(
+        self, owner: str, security_key: str, quote_type: RealtimeQuoteType
+    ) -> None: ...
+
+
 class ConnectionSession:
     def __init__(self, websocket: WebSocket, max_subscriptions: int = 100):
         self.websocket = websocket
         self.max_subscriptions = max_subscriptions
         self.subscriptions: set[str] = set()  # "MARKET:CODE"
+        self.provider_subscriptions: set[tuple[str, RealtimeQuoteType]] = set()
+        self.owner_id = f"ws:{id(self)}"
         self.channels: set[str] = {"quote"}
         self._pending_coalesced: dict[str, RealtimeQuote] = {}
         self.is_alive = True
@@ -37,10 +55,12 @@ class RealtimeQuoteHub:
         redis: Redis,
         cache_service: RealtimeCacheService,
         max_subscriptions_per_conn: int = 100,
+        subscription_manager: SubscriptionManager | None = None,
     ):
         self.redis = redis
         self.cache_service = cache_service
         self.max_subscriptions_per_conn = max_subscriptions_per_conn
+        self.subscription_manager = subscription_manager
         self.sessions: set[ConnectionSession] = set()
         self.key_to_sessions: dict[str, set[ConnectionSession]] = defaultdict(set)
         self._pubsub_task: asyncio.Task | None = None
@@ -76,6 +96,12 @@ class RealtimeQuoteHub:
     async def unregister_connection(self, session: ConnectionSession):
         session.is_alive = False
         self.sessions.discard(session)
+        if self.subscription_manager is not None:
+            for key, quote_type in list(session.provider_subscriptions):
+                await self.subscription_manager.release_subscription(
+                    session.owner_id, key, quote_type
+                )
+        session.provider_subscriptions.clear()
         for key in list(session.subscriptions):
             self.key_to_sessions[key].discard(session)
             if not self.key_to_sessions[key]:
@@ -114,6 +140,15 @@ class RealtimeQuoteHub:
                 )
                 break
 
+            quote_types = self._quote_types(t)
+            if self.subscription_manager is not None:
+                for quote_type in quote_types:
+                    identity = (key, quote_type)
+                    if identity not in session.provider_subscriptions:
+                        await self.subscription_manager.acquire_subscription(
+                            session.owner_id, key, quote_type
+                        )
+                        session.provider_subscriptions.add(identity)
             session.subscriptions.add(key)
             self.key_to_sessions[key].add(session)
             added_keys.append(key)
@@ -182,11 +217,40 @@ class RealtimeQuoteHub:
             market = t.get("market", "").upper()
             code = t.get("code", "").upper()
             key = f"{market}:{code}"
+            requested = set(self._quote_types(t)) if self._has_quote_type(t) else {
+                quote_type
+                for subscribed_key, quote_type in session.provider_subscriptions
+                if subscribed_key == key
+            }
+            if self.subscription_manager is not None:
+                for quote_type in requested:
+                    identity = (key, quote_type)
+                    if identity in session.provider_subscriptions:
+                        await self.subscription_manager.release_subscription(
+                            session.owner_id, key, quote_type
+                        )
+                        session.provider_subscriptions.discard(identity)
+            if any(item[0] == key for item in session.provider_subscriptions):
+                continue
             session.subscriptions.discard(key)
             if key in self.key_to_sessions:
                 self.key_to_sessions[key].discard(session)
                 if not self.key_to_sessions[key]:
                     del self.key_to_sessions[key]
+
+    @staticmethod
+    def _has_quote_type(target: dict[str, str]) -> bool:
+        return "quote_type" in target or "quote_types" in target
+
+    @staticmethod
+    def _quote_types(target: dict[str, str]) -> list[RealtimeQuoteType]:
+        raw = target.get("quote_types") or [target.get("quote_type", "tick")]
+        if isinstance(raw, str):
+            raw = [raw]
+        try:
+            return list(dict.fromkeys(RealtimeQuoteType(str(item).lower()) for item in raw))
+        except ValueError as error:
+            raise ValueError("quote_type must be tick or bid_ask") from error
 
     async def _listen_redis_pubsub(self):
         pubsub = self.redis.pubsub()

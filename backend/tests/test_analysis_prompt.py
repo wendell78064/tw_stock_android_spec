@@ -23,7 +23,13 @@ from app.domain.analysis_snapshot import (
 )
 from app.domain.market_data import DataStatus
 from app.domain.market_spot import MarketSpotRepository
-from app.domain.pricing import DailyPriceRecord, PriceRepository, SecurityKey
+from app.domain.pricing import (
+    DailyPriceRecord,
+    PriceBasis,
+    PriceRepository,
+    SecurityKey,
+    TechnicalSnapshot,
+)
 from app.domain.security import (
     MarketCode,
     Security,
@@ -55,6 +61,130 @@ def _build_dummy_security(
         data_status=DataStatus.FINAL,
         themes=[],
     )
+
+
+def _dict_technical_snapshot(code: str, market: MarketCode) -> TechnicalSnapshot:
+    now = datetime.now(UTC)
+    return TechnicalSnapshot(
+        security=SecurityKey(market, code),
+        trade_date=date(2026, 8, 20),
+        price_basis=PriceBasis.RAW,
+        values={
+            "MA5": Decimal("975"),
+            "MA10": Decimal("970"),
+            "MA20": Decimal("965"),
+            "MA60": Decimal("940"),
+            "MA120": Decimal("910"),
+            "MA240": None,
+            "RSI14": Decimal("61.2"),
+            "MACD": Decimal("4.1"),
+            "MACD_SIGNAL": Decimal("3.5"),
+            "MACD_HISTOGRAM": Decimal("0.6"),
+            "KD_K": Decimal("72"),
+            "KD_D": Decimal("68"),
+            "BBANDS_UPPER": Decimal("1000"),
+            "BBANDS_MIDDLE": Decimal("965"),
+            "BBANDS_LOWER": Decimal("930"),
+            "ATR14": Decimal("18.5"),
+            "WILLIAMS_R": Decimal("-24"),
+            "OBV": Decimal("123456789"),
+        },
+        algorithm_version="test",
+        as_of=now,
+        received_at=now,
+        data_status=DataStatus.FINAL,
+    )
+
+
+def _one_daily_price(code: str, market: MarketCode) -> DailyPriceRecord:
+    now = datetime.now(UTC)
+    return DailyPriceRecord(
+        security=SecurityKey(market, code),
+        trade_date=date(2026, 8, 20),
+        open=Decimal("970"),
+        high=Decimal("985"),
+        low=Decimal("968"),
+        close=Decimal("980"),
+        adjusted_open=Decimal("970"),
+        adjusted_high=Decimal("985"),
+        adjusted_low=Decimal("968"),
+        adjusted_close=Decimal("980"),
+        volume_shares=1000,
+        turnover_amount=Decimal("980000"),
+        source_code="TEST",
+        as_of=now,
+        received_at=now,
+        data_status=DataStatus.FINAL,
+    )
+
+
+def _empty_query_result() -> MagicMock:
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    result.scalar_one_or_none.return_value = None
+    result.all.return_value = []
+    return result
+
+
+@pytest.mark.asyncio
+async def test_analysis_prompt_accepts_repository_dict_technical_contract() -> None:
+    session = AsyncMock()
+    session.execute.return_value = _empty_query_result()
+    sec_repo = AsyncMock(spec=SecurityRepository)
+    price_repo = AsyncMock(spec=PriceRepository)
+    market_repo = AsyncMock(spec=MarketSpotRepository)
+    sec_repo.find_by_code.return_value = [_build_dummy_security()]
+    price_repo.list_prices.return_value = [_one_daily_price("2330", MarketCode.TWSE)]
+    price_repo.list_technicals.return_value = [
+        _dict_technical_snapshot("2330", MarketCode.TWSE)
+    ]
+    market_repo.institutional.return_value = []
+    market_repo.breadth.return_value = []
+    market_repo.indexes.return_value = []
+
+    snapshot = await AnalysisSnapshotService(
+        session, sec_repo, price_repo, market_repo
+    ).build_snapshot("2330", MarketCode.TWSE)
+    assert snapshot.technicals.ma5 == Decimal("975")
+    assert snapshot.technicals.rsi == Decimal("61.2")
+    assert snapshot.technicals.obv == Decimal("123456789")
+    assert snapshot.technicals.ma240 is None
+    prompt = IndividualAnalysisPromptBuilder().build_prompt(snapshot)
+    assert prompt and "NULL" in prompt
+
+
+@pytest.mark.asyncio
+async def test_comparison_prompt_uses_same_dict_technical_snapshot_path() -> None:
+    from app.domain.analysis_snapshot import ComparisonSecurityItem
+    from app.services.comparison_prompt_builder import ComparisonAnalysisPromptBuilder
+
+    session = AsyncMock()
+    session.execute.return_value = _empty_query_result()
+    sec_repo = AsyncMock(spec=SecurityRepository)
+    price_repo = AsyncMock(spec=PriceRepository)
+    market_repo = AsyncMock(spec=MarketSpotRepository)
+    sec_repo.find_by_code.side_effect = lambda code, market: [
+        _build_dummy_security(code, market)
+    ]
+    price_repo.list_prices.side_effect = lambda key, *_: [
+        _one_daily_price(key.code, key.market)
+    ]
+    price_repo.list_technicals.side_effect = lambda key, *_: [
+        _dict_technical_snapshot(key.code, key.market)
+    ]
+    market_repo.institutional.return_value = []
+    market_repo.breadth.return_value = []
+    market_repo.indexes.return_value = []
+    service = AnalysisSnapshotService(session, sec_repo, price_repo, market_repo)
+    snapshot = await service.build_comparison_snapshot(
+        [
+            ComparisonSecurityItem(code="2330", market=MarketCode.TWSE),
+            ComparisonSecurityItem(code="2454", market=MarketCode.TWSE),
+        ]
+    )
+    prompt = ComparisonAnalysisPromptBuilder().build_prompt(snapshot)
+    assert len(snapshot.snapshots) == 2
+    assert prompt and "2330" in prompt and "2454" in prompt
 
 
 def _build_dummy_snapshot(
@@ -506,6 +636,3 @@ def test_comparison_analysis_prompt_api_validation() -> None:
             },
         )
         assert r2.status_code == 422 or r2.status_code == 400
-
-
-
