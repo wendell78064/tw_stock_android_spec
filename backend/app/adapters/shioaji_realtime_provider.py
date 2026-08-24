@@ -294,7 +294,12 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
 
     @classmethod
     def _market(cls, exchange: Any) -> str:
-        raw = str(exchange).upper()
+        canonical = getattr(exchange, "value", None)
+        if canonical is None:
+            canonical = getattr(exchange, "name", None)
+        raw = str(canonical if canonical is not None else exchange).strip().upper()
+        if raw.startswith("EXCHANGE."):
+            raw = raw.removeprefix("EXCHANGE.")
         if raw in {"TSE", "TWSE"}:
             return "TWSE"
         if raw in {"OTC", "TPEX"}:

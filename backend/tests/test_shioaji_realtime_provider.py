@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+import shioaji as sj
 
 from app.adapters.shioaji_realtime_provider import (
     ShioajiCallbackError,
@@ -172,6 +173,28 @@ def test_tick_and_bidask_mapping_preserve_decimal_timestamp_and_depth():
     assert depth.ask_volumes == [6, 7]
 
 
+@pytest.mark.parametrize(
+    ("exchange", "expected"),
+    [
+        (sj.Exchange.TSE, "TWSE"),
+        (sj.Exchange.OTC, "TPEx"),
+        ("TSE", "TWSE"),
+        ("TWSE", "TWSE"),
+        ("OTC", "TPEx"),
+        ("TPEX", "TPEx"),
+        ("Exchange.TSE", "TWSE"),
+        ("Exchange.OTC", "TPEx"),
+    ],
+)
+def test_stock_exchange_normalization(exchange, expected):
+    assert ShioajiRealtimeProvider._market(exchange) == expected
+
+
+def test_unknown_exchange_remains_explicit_error():
+    with pytest.raises(ShioajiProviderError, match="Unsupported Shioaji exchange: TAIFEX"):
+        ShioajiRealtimeProvider._market("TAIFEX")
+
+
 @pytest.mark.asyncio
 async def test_subscriptions_deduplicate_reference_count_and_restore():
     client = FakeClient()
@@ -225,12 +248,44 @@ async def test_worker_thread_tick_callback_reaches_async_waiter():
     item = make_provider(client)
     await item.connect()
     event = SimpleNamespace(code="2330", close="101.5", volume=2, total_volume=20)
-    worker = threading.Thread(target=client.tick_callback, args=("TSE", event))
+    worker = threading.Thread(target=client.tick_callback, args=(sj.Exchange.TSE, event))
     worker.start()
     result = await item.wait_for_event(RealtimeQuoteType.TICK, 0.5)
     worker.join()
     assert result.code == "2330"
     assert result.last_price == Decimal("101.5")
+
+
+@pytest.mark.asyncio
+async def test_bidask_callback_maps_canonical_tse_exchange():
+    client = FakeClient()
+    item = make_provider(client)
+    await item.connect()
+    event = SimpleNamespace(
+        code="2330",
+        bid_price=["101.0"],
+        bid_volume=[2],
+        ask_price=["101.5"],
+        ask_volume=[3],
+    )
+    worker = threading.Thread(target=client.bidask_callback, args=(sj.Exchange.TSE, event))
+    worker.start()
+    result = await item.wait_for_event(RealtimeQuoteType.BID_ASK, 0.5)
+    worker.join()
+    assert result.market_id == "TWSE"
+
+
+@pytest.mark.asyncio
+async def test_tick_callback_maps_canonical_otc_exchange():
+    client = FakeClient()
+    item = make_provider(client)
+    await item.connect()
+    event = SimpleNamespace(code="6488", close="88.8", volume=1, total_volume=5)
+    worker = threading.Thread(target=client.tick_callback, args=(sj.Exchange.OTC, event))
+    worker.start()
+    result = await item.wait_for_event(RealtimeQuoteType.TICK, 0.5)
+    worker.join()
+    assert result.market_id == "TPEx"
 
 
 @pytest.mark.asyncio
