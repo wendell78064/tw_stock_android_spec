@@ -209,6 +209,76 @@ async def test_abnormal_websocket_disconnect_releases_all_provider_ownership():
     assert session.provider_subscriptions == set()
 
 
+@pytest.mark.asyncio
+async def test_current_view_change_releases_old_tick_and_bidask_before_new_acquire():
+    manager = AsyncMock()
+    fake_redis = FakeRedis()
+    hub = RealtimeQuoteHub(
+        fake_redis, RealtimeCacheService(fake_redis), subscription_manager=manager
+    )
+    session = await hub.register_connection(AsyncMock())
+    both = {"quote_types": ["tick", "bid_ask"]}
+
+    await hub.handle_subscribe(
+        session, [{"market": "TWSE", "code": "2330", **both}]
+    )
+    await hub.handle_unsubscribe(
+        session, [{"market": "TWSE", "code": "2330", **both}]
+    )
+    await hub.handle_subscribe(
+        session, [{"market": "TWSE", "code": "2454", **both}]
+    )
+
+    released = {
+        (args.args[1], args.args[2])
+        for args in manager.release_subscription.await_args_list
+    }
+    acquired = {
+        (args.args[1], args.args[2])
+        for args in manager.acquire_subscription.await_args_list
+    }
+    assert released == {
+        ("TWSE:2330", RealtimeQuoteType.TICK),
+        ("TWSE:2330", RealtimeQuoteType.BID_ASK),
+    }
+    assert acquired == {
+        ("TWSE:2330", RealtimeQuoteType.TICK),
+        ("TWSE:2330", RealtimeQuoteType.BID_ASK),
+        ("TWSE:2454", RealtimeQuoteType.TICK),
+        ("TWSE:2454", RealtimeQuoteType.BID_ASK),
+    }
+    assert session.provider_subscriptions == {
+        ("TWSE:2454", RealtimeQuoteType.TICK),
+        ("TWSE:2454", RealtimeQuoteType.BID_ASK),
+    }
+
+
+@pytest.mark.asyncio
+async def test_invalid_current_view_target_is_rejected_without_provider_acquire():
+    manager = AsyncMock()
+    fake_redis = FakeRedis()
+    websocket = AsyncMock()
+    hub = RealtimeQuoteHub(
+        fake_redis, RealtimeCacheService(fake_redis), subscription_manager=manager
+    )
+    session = await hub.register_connection(websocket)
+
+    await hub.handle_subscribe(
+        session,
+        [{"market": "UNKNOWN", "code": "23X0", "quote_types": ["tick", "bid_ask"]}],
+    )
+
+    manager.acquire_subscription.assert_not_awaited()
+    assert session.provider_subscriptions == set()
+    websocket.send_json.assert_awaited_once_with(
+        {
+            "type": "error",
+            "version": 1,
+            "message": "market must be TWSE/TPEX and code must be 4 to 6 digits",
+        }
+    )
+
+
 def test_http_quote_snapshot_api_endpoints():
     fake_redis = FakeRedis()
     cache = RealtimeCacheService(fake_redis)

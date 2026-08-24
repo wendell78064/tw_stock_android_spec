@@ -10,12 +10,22 @@ import kotlinx.coroutines.launch
 import tw.market.ledger.model.RealtimeQuote
 
 class RealtimeSubscriptionManager(
-    private val client: RealtimeQuoteClient
+    private val client: RealtimeSubscriptionClient,
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + Job()),
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
+    private data class SubscriptionIdentity(
+        val market: String,
+        val code: String,
+        val quoteType: RealtimeQuoteType,
+    )
 
-    // Reference counter for securities: "MARKET:CODE" -> Count
-    private val refCounts = mutableMapOf<String, Int>()
+    private data class OwnerIdentity(
+        val owner: String,
+        val subscription: SubscriptionIdentity,
+    )
+
+    private val refCounts = mutableMapOf<SubscriptionIdentity, Int>()
+    private val ownerSubscriptions = mutableSetOf<OwnerIdentity>()
 
     // Latest quote cache: "MARKET:CODE" -> RealtimeQuote
     private val _latestQuotes = MutableStateFlow<Map<String, RealtimeQuote>>(emptyMap())
@@ -31,25 +41,58 @@ class RealtimeSubscriptionManager(
         }
     }
 
+    @Synchronized
     fun subscribe(market: String, code: String) {
-        val key = "${market.uppercase()}:${code.uppercase()}"
-        val count = refCounts.getOrDefault(key, 0)
-        refCounts[key] = count + 1
-
-        if (count == 0) {
+        val added = increment(market, code, setOf(RealtimeQuoteType.TICK))
+        if (added.isNotEmpty()) {
             client.connect()
-            client.subscribe(market, code)
+            client.subscribe(market, code, added)
         }
     }
 
+    @Synchronized
     fun unsubscribe(market: String, code: String) {
-        val key = "${market.uppercase()}:${code.uppercase()}"
-        val count = refCounts.getOrDefault(key, 0)
-        if (count <= 1) {
-            refCounts.remove(key)
-            client.unsubscribe(market, code)
-        } else {
-            refCounts[key] = count - 1
+        val removed = decrement(market, code, setOf(RealtimeQuoteType.TICK))
+        if (removed.isNotEmpty()) {
+            client.unsubscribe(market, code, removed)
+        }
+    }
+
+    @Synchronized
+    fun acquireCurrentView(owner: String, market: String, code: String) {
+        val quoteTypes = RealtimeQuoteType.entries.toSet()
+        val normalizedMarket = market.uppercase()
+        val normalizedCode = code.uppercase()
+        val newlyOwned = quoteTypes.filterTo(mutableSetOf()) { quoteType ->
+            ownerSubscriptions.add(
+                OwnerIdentity(
+                    owner,
+                    SubscriptionIdentity(normalizedMarket, normalizedCode, quoteType),
+                )
+            )
+        }
+        val added = increment(normalizedMarket, normalizedCode, newlyOwned)
+        if (added.isNotEmpty()) {
+            client.connect()
+            client.subscribe(normalizedMarket, normalizedCode, added)
+        }
+    }
+
+    @Synchronized
+    fun releaseCurrentView(owner: String, market: String, code: String) {
+        val normalizedMarket = market.uppercase()
+        val normalizedCode = code.uppercase()
+        val released = RealtimeQuoteType.entries.filterTo(mutableSetOf()) { quoteType ->
+            ownerSubscriptions.remove(
+                OwnerIdentity(
+                    owner,
+                    SubscriptionIdentity(normalizedMarket, normalizedCode, quoteType),
+                )
+            )
+        }
+        val removed = decrement(normalizedMarket, normalizedCode, released)
+        if (removed.isNotEmpty()) {
+            client.unsubscribe(normalizedMarket, normalizedCode, removed)
         }
     }
 
@@ -57,5 +100,41 @@ class RealtimeSubscriptionManager(
         val key = "${market.uppercase()}:${code.uppercase()}"
         val map: Map<String, RealtimeQuote> = _latestQuotes.value
         return map[key]
+    }
+
+    private fun increment(
+        market: String,
+        code: String,
+        quoteTypes: Set<RealtimeQuoteType>,
+    ): Set<RealtimeQuoteType> {
+        val added = mutableSetOf<RealtimeQuoteType>()
+        quoteTypes.forEach { quoteType ->
+            val identity = SubscriptionIdentity(market.uppercase(), code.uppercase(), quoteType)
+            val count = refCounts.getOrDefault(identity, 0)
+            refCounts[identity] = count + 1
+            if (count == 0) added.add(quoteType)
+        }
+        return added
+    }
+
+    private fun decrement(
+        market: String,
+        code: String,
+        quoteTypes: Set<RealtimeQuoteType>,
+    ): Set<RealtimeQuoteType> {
+        val removed = mutableSetOf<RealtimeQuoteType>()
+        quoteTypes.forEach { quoteType ->
+            val identity = SubscriptionIdentity(market.uppercase(), code.uppercase(), quoteType)
+            val count = refCounts.getOrDefault(identity, 0)
+            when {
+                count <= 0 -> Unit
+                count == 1 -> {
+                    refCounts.remove(identity)
+                    removed.add(quoteType)
+                }
+                else -> refCounts[identity] = count - 1
+            }
+        }
+        return removed
     }
 }

@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,13 +30,37 @@ class SecurityDetailViewModel @Inject constructor(
     private val detail: GetSecurityUseCase,
     private val subscriptionManager: RealtimeSubscriptionManager
 ) : ViewModel() {
+    private companion object {
+        val nextOwnerId = AtomicLong()
+    }
+
+    private data class Target(val code: String, val market: MarketCode)
+
     private val _uiState = MutableStateFlow<SecurityDetailUiState>(SecurityDetailUiState.Loading)
     val uiState: StateFlow<SecurityDetailUiState> = _uiState.asStateFlow()
 
     private val _realtimeQuote = MutableStateFlow<RealtimeQuote?>(null)
     val realtimeQuote: StateFlow<RealtimeQuote?> = _realtimeQuote.asStateFlow()
+    private val ownerId = "p2-current-view:${nextOwnerId.incrementAndGet()}"
+    private var target: Target? = null
+    private var quoteJob: Job? = null
 
     fun load(code: String, market: MarketCode) {
+        val nextTarget = Target(code.uppercase(), market)
+        if (target != nextTarget) {
+            releaseTarget()
+            target = nextTarget
+            _realtimeQuote.value = null
+            subscriptionManager.acquireCurrentView(ownerId, market.name, code)
+            quoteJob = viewModelScope.launch {
+                subscriptionManager.latestQuotes.collect { map ->
+                    val active = target ?: return@collect
+                    _realtimeQuote.value =
+                        map["${active.market.name}:${active.code}"] ?: _realtimeQuote.value
+                }
+            }
+        }
+
         viewModelScope.launch {
             _uiState.value = SecurityDetailUiState.Loading
             try {
@@ -47,17 +73,24 @@ class SecurityDetailViewModel @Inject constructor(
                 _uiState.value = SecurityDetailUiState.Error(error.message ?: "載入失敗")
             }
 
-            // Realtime quote subscription
-            subscriptionManager.subscribe(market.name, code)
         }
+    }
 
-        viewModelScope.launch {
-            subscriptionManager.latestQuotes.collect { map ->
-                val q = map["${market.name.uppercase()}:${code.uppercase()}"]
-                if (q != null) {
-                    _realtimeQuote.value = q
-                }
-            }
-        }
+    fun leave(code: String, market: MarketCode) {
+        if (target == Target(code.uppercase(), market)) releaseTarget()
+    }
+
+    private fun releaseTarget() {
+        val current = target ?: return
+        subscriptionManager.releaseCurrentView(ownerId, current.market.name, current.code)
+        target = null
+        quoteJob?.cancel()
+        quoteJob = null
+        _realtimeQuote.value = null
+    }
+
+    override fun onCleared() {
+        releaseTarget()
+        super.onCleared()
     }
 }

@@ -24,6 +24,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -136,8 +137,12 @@ fun SecurityDetailRoute(
     aiPromptViewModel: SecurityAiPromptViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val realtimeQuote by viewModel.realtimeQuote.collectAsStateWithLifecycle()
     var tab by remember { mutableIntStateOf(0) }
     LaunchedEffect(code, market) { viewModel.load(code, market) }
+    DisposableEffect(viewModel, code, market) {
+        onDispose { viewModel.leave(code, market) }
+    }
     LaunchedEffect(code, market) { spotViewModel.load(code, market) }
     LaunchedEffect(code, market) { aiPromptViewModel.load(code, market) }
     val institutional by spotViewModel.institutional.collectAsStateWithLifecycle()
@@ -157,9 +162,9 @@ fun SecurityDetailRoute(
             0 -> SecurityChartRoute(code, market)
             1 -> SecurityInstitutionalScreen(institutional, window, spotViewModel::loadInstitutional)
             2 -> SecurityCreditScreen(credit)
-            3 -> SecurityDetailScreen(state)
+            3 -> SecurityDetailScreen(state, realtimeQuote)
             4 -> SecurityAiPromptScreen(aiPromptState, onRetry = { aiPromptViewModel.load(code, market) })
-            else -> SecurityDetailScreen(state)
+            else -> SecurityDetailScreen(state, realtimeQuote)
         }
     }
 }
@@ -273,7 +278,7 @@ fun SecurityDetailScreen(state: SecurityDetailUiState, realtimeQuote: RealtimeQu
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("即時價格: $${q.lastPrice} (${q.changePercent ?: "0"}%)", modifier = Modifier.testTag("realtime-last-price"))
+                Text("即時價格: $${q.lastPrice} (${q.changePercent ?: "--"}%)", modifier = Modifier.testTag("realtime-last-price"))
                 Text("[${q.dataStatus.name}]", color = if (q.dataStatus == RealtimeDataStatus.LIVE) Color.Red else Color.Gray, modifier = Modifier.testTag("realtime-status-badge"))
             }
             HorizontalDivider()

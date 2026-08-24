@@ -127,7 +127,14 @@ class RealtimeQuoteHub:
         for t in targets:
             market = t.get("market", "").upper()
             code = t.get("code", "").upper()
-            if not market or not code:
+            if not self._valid_security_target(market, code):
+                await session.websocket.send_json(
+                    {
+                        "type": "error",
+                        "version": 1,
+                        "message": "market must be TWSE/TPEX and code must be 4 to 6 digits",
+                    }
+                )
                 continue
             key = f"{market}:{code}"
             if len(session.subscriptions) >= session.max_subscriptions:
@@ -216,6 +223,15 @@ class RealtimeQuoteHub:
         for t in targets:
             market = t.get("market", "").upper()
             code = t.get("code", "").upper()
+            if not self._valid_security_target(market, code):
+                await session.websocket.send_json(
+                    {
+                        "type": "error",
+                        "version": 1,
+                        "message": "market must be TWSE/TPEX and code must be 4 to 6 digits",
+                    }
+                )
+                continue
             key = f"{market}:{code}"
             requested = set(self._quote_types(t)) if self._has_quote_type(t) else {
                 quote_type
@@ -241,6 +257,10 @@ class RealtimeQuoteHub:
     @staticmethod
     def _has_quote_type(target: dict[str, str]) -> bool:
         return "quote_type" in target or "quote_types" in target
+
+    @staticmethod
+    def _valid_security_target(market: str, code: str) -> bool:
+        return market in {"TWSE", "TPEX"} and code.isdigit() and 4 <= len(code) <= 6
 
     @staticmethod
     def _quote_types(target: dict[str, str]) -> list[RealtimeQuoteType]:

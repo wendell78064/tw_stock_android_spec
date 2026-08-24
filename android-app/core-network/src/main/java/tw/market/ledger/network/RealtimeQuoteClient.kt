@@ -27,10 +27,28 @@ import tw.market.ledger.model.IntradayInterval
 import kotlin.math.min
 import kotlin.math.pow
 
+enum class RealtimeQuoteType(val wireValue: String) {
+    TICK("tick"),
+    BID_ASK("bid_ask"),
+}
+
+data class RealtimeSubscriptionTarget(
+    val market: String,
+    val code: String,
+    val quoteType: RealtimeQuoteType,
+)
+
+interface RealtimeSubscriptionClient {
+    val quotesFlow: SharedFlow<RealtimeQuote>
+    fun connect()
+    fun subscribe(market: String, code: String, quoteTypes: Set<RealtimeQuoteType>)
+    fun unsubscribe(market: String, code: String, quoteTypes: Set<RealtimeQuoteType>)
+}
+
 class RealtimeQuoteClient(
     private val okHttpClient: OkHttpClient,
     val serverUrl: String
-) {
+) : RealtimeSubscriptionClient {
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     private val moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
 
@@ -38,7 +56,7 @@ class RealtimeQuoteClient(
     val connectionState: StateFlow<RealtimeConnectionState> = _connectionState.asStateFlow()
 
     private val _quotesFlow = MutableSharedFlow<RealtimeQuote>(extraBufferCapacity = 64)
-    val quotesFlow: SharedFlow<RealtimeQuote> = _quotesFlow.asSharedFlow()
+    override val quotesFlow: SharedFlow<RealtimeQuote> = _quotesFlow.asSharedFlow()
     private val _candlesFlow = MutableSharedFlow<IntradayCandle>(extraBufferCapacity = 64)
     val candlesFlow: SharedFlow<IntradayCandle> = _candlesFlow.asSharedFlow()
     private val _aggregateUpdates = MutableSharedFlow<String>(extraBufferCapacity = 16)
@@ -46,11 +64,11 @@ class RealtimeQuoteClient(
     private val globalChannels = mutableSetOf<String>()
 
     private var webSocket: WebSocket? = null
-    private val subscribedKeys = mutableSetOf<Pair<String, String>>() // (market, code)
+    private val subscribedTargets = mutableSetOf<RealtimeSubscriptionTarget>()
     private var reconnectAttempt = 0
     private var isExplicitDisconnect = false
 
-    fun connect() {
+    override fun connect() {
         isExplicitDisconnect = false
         if (_connectionState.value == RealtimeConnectionState.CONNECTED || _connectionState.value == RealtimeConnectionState.CONNECTING) {
             return
@@ -68,17 +86,45 @@ class RealtimeQuoteClient(
         _connectionState.value = RealtimeConnectionState.DISCONNECTED
     }
 
-    fun subscribe(market: String, code: String) {
-        subscribedKeys.add(Pair(market.uppercase(), code.uppercase()))
-        if (_connectionState.value == RealtimeConnectionState.CONNECTED) {
-            sendSubscriptionMessage("subscribe", listOf(mapOf("market" to market, "code" to code)))
+    @Synchronized
+    override fun subscribe(
+        market: String,
+        code: String,
+        quoteTypes: Set<RealtimeQuoteType>,
+    ) {
+        val normalizedMarket = market.uppercase()
+        val normalizedCode = code.uppercase()
+        val added = quoteTypes.filterTo(mutableSetOf()) { quoteType ->
+            subscribedTargets.add(
+                RealtimeSubscriptionTarget(normalizedMarket, normalizedCode, quoteType)
+            )
+        }
+        if (added.isNotEmpty() && _connectionState.value == RealtimeConnectionState.CONNECTED) {
+            sendSubscriptionMessage(
+                "subscribe",
+                targets(normalizedMarket, normalizedCode, added),
+            )
         }
     }
 
-    fun unsubscribe(market: String, code: String) {
-        subscribedKeys.remove(Pair(market.uppercase(), code.uppercase()))
-        if (_connectionState.value == RealtimeConnectionState.CONNECTED) {
-            sendSubscriptionMessage("unsubscribe", listOf(mapOf("market" to market, "code" to code)))
+    @Synchronized
+    override fun unsubscribe(
+        market: String,
+        code: String,
+        quoteTypes: Set<RealtimeQuoteType>,
+    ) {
+        val normalizedMarket = market.uppercase()
+        val normalizedCode = code.uppercase()
+        val removed = quoteTypes.filterTo(mutableSetOf()) { quoteType ->
+            subscribedTargets.remove(
+                RealtimeSubscriptionTarget(normalizedMarket, normalizedCode, quoteType)
+            )
+        }
+        if (removed.isNotEmpty() && _connectionState.value == RealtimeConnectionState.CONNECTED) {
+            sendSubscriptionMessage(
+                "unsubscribe",
+                targets(normalizedMarket, normalizedCode, removed),
+            )
         }
     }
 
@@ -90,7 +136,7 @@ class RealtimeQuoteClient(
         }
     }
 
-    private fun sendSubscriptionMessage(type: String, targets: List<Map<String, String>>) {
+    private fun sendSubscriptionMessage(type: String, targets: List<Map<String, Any>>) {
         val payload = mapOf(
             "type" to type,
             "version" to 1,
@@ -101,12 +147,36 @@ class RealtimeQuoteClient(
         webSocket?.send(json)
     }
 
+    @Synchronized
     private fun resubscribeAll() {
-        if (subscribedKeys.isNotEmpty()) {
-            val targets = subscribedKeys.map { mapOf("market" to it.first, "code" to it.second) }
+        val targets = activeSubscriptionTargets()
+        if (targets.isNotEmpty()) {
             sendSubscriptionMessage("subscribe", targets)
         }
     }
+
+    @Synchronized
+    internal fun activeSubscriptionTargets(): List<Map<String, Any>> = subscribedTargets
+        .groupBy { it.market to it.code }
+        .map { (security, rows) ->
+            mapOf(
+                "market" to security.first,
+                "code" to security.second,
+                "quote_types" to rows.map { it.quoteType.wireValue }.sorted(),
+            )
+        }
+
+    private fun targets(
+        market: String,
+        code: String,
+        quoteTypes: Set<RealtimeQuoteType>,
+    ): List<Map<String, Any>> = listOf(
+        mapOf(
+            "market" to market,
+            "code" to code,
+            "quote_types" to quoteTypes.map { it.wireValue }.sorted(),
+        )
+    )
 
     private fun scheduleReconnect() {
         if (isExplicitDisconnect) return
