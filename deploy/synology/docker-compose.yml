@@ -75,6 +75,10 @@ services:
       ACCESS_TOKEN_MINUTES: ${ACCESS_TOKEN_MINUTES:-15}
       REFRESH_TOKEN_DAYS: ${REFRESH_TOKEN_DAYS:-30}
       SYNC_PAGE_LIMIT: ${SYNC_PAGE_LIMIT:-100}
+      REALTIME_PROVIDER: ${REALTIME_PROVIDER:-}
+      SHIOAJI_API_KEY: ${SHIOAJI_API_KEY:-}
+      SHIOAJI_SECRET_KEY: ${SHIOAJI_SECRET_KEY:-}
+      SHIOAJI_SIMULATION: ${SHIOAJI_SIMULATION:-true}
     volumes:
       - ${TWML_DATA_ROOT:-/volume1/docker/tw-market-ledger}/temp:/app/temp
     depends_on:
