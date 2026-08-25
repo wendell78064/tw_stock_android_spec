@@ -1,4 +1,7 @@
+import asyncio
 import json
+import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -13,12 +16,24 @@ from app.domain.realtime import (
 from app.domain.realtime import (
     RealtimeEventKind,
     RealtimeQuote,
+    RealtimeQuoteType,
     TradingSession,
 )
 
 REALTIME_ALERT_CHANNEL = "realtime:alerts"
 REALTIME_ALERT_STATE_TTL_SECONDS = 172800
 TOUCH_TOLERANCE_PERCENT = Decimal("0.05")
+P1_ALERT_OWNER = "policy:p1_alert"
+REALTIME_TICK_RULE_TYPES = {
+    AlertRuleType.PRICE_TARGET,
+    AlertRuleType.PRICE_STOP,
+    AlertRuleType.PRICE_ADD,
+    AlertRuleType.MA_NEAR,
+    AlertRuleType.MA_TOUCH,
+    AlertRuleType.MA_CROSS_ABOVE,
+    AlertRuleType.MA_CROSS_BELOW,
+}
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -121,6 +136,65 @@ def evaluate_realtime_rule(
     )
 
 
+class RealtimeAlertSubscriptionPolicy:
+    def __init__(self, service, subscription_manager, refresh_interval_seconds: float = 60):
+        self.service = service
+        self.subscription_manager = subscription_manager
+        self.refresh_interval_seconds = refresh_interval_seconds
+        self.membership: set[str] = set()
+        self._task: asyncio.Task | None = None
+        self._lock = asyncio.Lock()
+
+    async def start(self) -> None:
+        self.service.set_membership_listener(self.reconcile)
+        await self.service.refresh()
+        self._task = asyncio.create_task(self._refresh_loop())
+
+    async def stop(self) -> None:
+        self.service.set_membership_listener(None)
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+        await self.reconcile(set())
+
+    async def reconcile(self, desired: set[str]) -> None:
+        async with self._lock:
+            added = desired - self.membership
+            removed = self.membership - desired
+            acquired = set()
+            try:
+                for security_key in sorted(added):
+                    await self.subscription_manager.acquire_subscription(
+                        P1_ALERT_OWNER, security_key, RealtimeQuoteType.TICK
+                    )
+                    acquired.add(security_key)
+                for security_key in sorted(removed):
+                    await self.subscription_manager.release_subscription(
+                        P1_ALERT_OWNER, security_key, RealtimeQuoteType.TICK
+                    )
+            except Exception:
+                for security_key in acquired:
+                    await self.subscription_manager.release_subscription(
+                        P1_ALERT_OWNER, security_key, RealtimeQuoteType.TICK
+                    )
+                raise
+            self.membership = set(desired)
+
+    async def _refresh_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self.refresh_interval_seconds)
+            try:
+                await self.service.refresh()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning("realtime_alert_membership_refresh_failed", exc_info=True)
+
+
 class RealtimeAlertEvaluationService:
     membership_refresh_interval_seconds = 60
 
@@ -129,10 +203,11 @@ class RealtimeAlertEvaluationService:
         self.repository = repository
         self.ma_service = ma_service or RealtimeDailyMaService()
         self.rules_by_security: dict[str, list[AlertRule]] = {}
-        self.security_info: dict[str, tuple[str, str]] = {}
+        self.security_info: dict[str, tuple[str, str, str]] = {}
         self.provider_status = "UNCONFIGURED"
         self.last_quote_at: datetime | None = None
         self._last_refresh = monotonic()
+        self._membership_listener: Callable[[set[str]], Awaitable[None]] | None = None
         self.metrics = {
             name: 0
             for name in (
@@ -159,12 +234,15 @@ class RealtimeAlertEvaluationService:
             r
             for r in await self.repository.list_rules(True)
             if r.evaluation_mode is AlertEvaluationMode.REALTIME
+            and r.rule_type in REALTIME_TICK_RULE_TYPES
         ]
         memberships = await self.repository.resolve_memberships(rules)
         security_ids = set().union(*memberships.values()) if memberships else set()
         contexts, info = await self.repository.realtime_ma_contexts(security_ids, rules)
         self.ma_service.contexts = contexts
-        self.security_info = {str(key): (value[0], value[1]) for key, value in info.items()}
+        self.security_info = {
+            str(key): (value[0], value[1], value[2]) for key, value in info.items()
+        }
         self.rules_by_security = {}
         for rule in rules:
             for security_id in memberships.get(rule.id, set()):
@@ -178,6 +256,26 @@ class RealtimeAlertEvaluationService:
             await self.redis.delete(f"realtime:alert:state:{rule_id}:{security_id}")
         self.metrics["realtime_alert_active_subscriptions"] = len(self.rules_by_security)
         self._last_refresh = monotonic()
+        if self._membership_listener is not None:
+            await self._membership_listener(self.realtime_security_keys())
+
+    def realtime_security_keys(self) -> set[str]:
+        keys = set()
+        for security_id in self.rules_by_security:
+            info = self.security_info.get(security_id)
+            if info is None or len(info) < 3:
+                raise ValueError(f"Missing realtime alert security metadata: {security_id}")
+            code, _name, market = info
+            market = market.upper()
+            if market not in {"TWSE", "TPEX"} or not code:
+                raise ValueError(f"Unsupported realtime alert security: {security_id}")
+            keys.add(f"{market}:{code}")
+        return keys
+
+    def set_membership_listener(
+        self, listener: Callable[[set[str]], Awaitable[None]] | None
+    ) -> None:
+        self._membership_listener = listener
 
     def status(self) -> dict:
         return {

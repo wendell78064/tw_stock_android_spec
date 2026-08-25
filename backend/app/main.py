@@ -40,7 +40,10 @@ from app.repositories.realtime_membership import (
 from app.repositories.sql_alert import SqlAlertRepository
 from app.services.intraday_candle_aggregator import IntradayCandleAggregator
 from app.services.readiness import ReadinessChecker
-from app.services.realtime_alerts import RealtimeAlertEvaluationService
+from app.services.realtime_alerts import (
+    RealtimeAlertEvaluationService,
+    RealtimeAlertSubscriptionPolicy,
+)
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
 from app.services.realtime_provider_manager import RealtimeProviderManager
@@ -102,9 +105,18 @@ async def lifespan(app: FastAPI):
 
     await hub.start()
     await manager.start()
+    alert_subscription_policy = None
+    if settings.p1_alert_realtime_enabled:
+        alert_subscription_policy = RealtimeAlertSubscriptionPolicy(
+            realtime_alert_service, manager
+        )
+        await alert_subscription_policy.start()
+    app.state.realtime_alert_subscription_policy = alert_subscription_policy
 
     yield
 
+    if alert_subscription_policy is not None:
+        await alert_subscription_policy.stop()
     await manager.stop()
     await hub.stop()
     await alert_session.close()

@@ -79,6 +79,7 @@ services:
       SHIOAJI_API_KEY: ${SHIOAJI_API_KEY:-}
       SHIOAJI_SECRET_KEY: ${SHIOAJI_SECRET_KEY:-}
       SHIOAJI_SIMULATION: ${SHIOAJI_SIMULATION:-true}
+      P1_ALERT_REALTIME_ENABLED: ${P1_ALERT_REALTIME_ENABLED:-false}
     volumes:
       - ${TWML_DATA_ROOT:-/volume1/docker/tw-market-ledger}/temp:/app/temp
     depends_on:

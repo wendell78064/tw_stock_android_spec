@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     shioaji_api_key: SecretStr | None = None
     shioaji_secret_key: SecretStr | None = None
     shioaji_simulation: bool = False
+    p1_alert_realtime_enabled: bool = False
 
     def effective_auth_secret(self) -> str:
         if self.auth_secret:

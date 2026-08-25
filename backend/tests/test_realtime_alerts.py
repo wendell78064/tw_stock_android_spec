@@ -8,20 +8,27 @@ from uuid import uuid4
 
 import pytest
 
-from app.domain.alert import AlertEvaluationMode, AlertRuleType
+from app.core.settings import Settings
+from app.domain.alert import AlertEvaluationMode, AlertRuleType, AlertScopeType
 from app.domain.realtime import (
     DataStatus,
+    LicenseStatus,
+    ProviderCapabilities,
     RealtimeEventKind,
     RealtimeQuote,
+    RealtimeQuoteType,
     TradingSession,
 )
 from app.services.realtime_alerts import (
+    P1_ALERT_OWNER,
     RealtimeAlertEvaluationService,
+    RealtimeAlertSubscriptionPolicy,
     RealtimeDailyMaService,
     RealtimeMaContext,
 )
 from app.services.realtime_cache import RealtimeCacheService
 from app.services.realtime_hub import RealtimeQuoteHub
+from app.services.realtime_provider_manager import RealtimeProviderManager
 from tests.test_alerts import rule
 
 D = Decimal
@@ -71,6 +78,24 @@ class RealtimeRepo:
 
     async def flush(self):
         return None
+
+
+class MembershipRepo:
+    def __init__(self, rules, memberships, info):
+        self.rules = rules
+        self.memberships = memberships
+        self.info = info
+
+    async def list_rules(self, enabled=None):
+        if enabled is None:
+            return self.rules
+        return [item for item in self.rules if item.enabled is enabled]
+
+    async def resolve_memberships(self, rules):
+        return {item.id: self.memberships.get(item.id, set()) for item in rules}
+
+    async def realtime_ma_contexts(self, security_ids, rules):
+        return {}, {key: self.info[key] for key in security_ids}
 
 
 def realtime_rule(kind, **kwargs):
@@ -227,3 +252,141 @@ async def test_alert_websocket_protocol_v1_channel():
     await __import__("asyncio").sleep(0)
     payload = websocket.send_json.call_args.args[0]
     assert payload["version"] == 1 and payload["type"] == "alert_event"
+
+
+@pytest.mark.asyncio
+async def test_p1_membership_uses_canonical_enabled_realtime_scope_expansion():
+    security_id, portfolio_security, watchlist_security = uuid4(), uuid4(), uuid4()
+    security_rule = replace(
+        realtime_rule(AlertRuleType.PRICE_TARGET, price=D("10")),
+        security_id=security_id,
+    )
+    portfolio_rule = replace(
+        realtime_rule(AlertRuleType.MA_TOUCH, ma=5),
+        scope_type=AlertScopeType.PORTFOLIO,
+        security_id=None,
+        portfolio_id=uuid4(),
+    )
+    watchlist_rule = replace(
+        realtime_rule(AlertRuleType.PRICE_STOP, price=D("10")),
+        scope_type=AlertScopeType.WATCHLIST,
+        security_id=None,
+        watchlist_id=uuid4(),
+    )
+    duplicate_rule = replace(security_rule, id=uuid4())
+    disabled_rule = replace(security_rule, id=uuid4(), enabled=False)
+    daily_rule = replace(security_rule, id=uuid4(), evaluation_mode=AlertEvaluationMode.EOD)
+    rules = [
+        security_rule,
+        portfolio_rule,
+        watchlist_rule,
+        duplicate_rule,
+        disabled_rule,
+        daily_rule,
+    ]
+    memberships = {
+        security_rule.id: {security_id},
+        portfolio_rule.id: {portfolio_security},
+        watchlist_rule.id: {watchlist_security},
+        duplicate_rule.id: {security_id},
+    }
+    info = {
+        security_id: ("2330", "", "TWSE"),
+        portfolio_security: ("6488", "", "TPEX"),
+        watchlist_security: ("2454", "", "TWSE"),
+    }
+    service = RealtimeAlertEvaluationService(
+        FakeRedis(), MembershipRepo(rules, memberships, info)
+    )
+
+    await service.refresh()
+
+    assert service.realtime_security_keys() == {
+        "TWSE:2330",
+        "TPEX:6488",
+        "TWSE:2454",
+    }
+    assert len(service.rules_by_security[str(security_id)]) == 2
+
+
+@pytest.mark.asyncio
+async def test_p1_policy_diffs_tick_membership_without_churn_or_bidask():
+    service = AsyncMock()
+    manager = AsyncMock()
+    policy = RealtimeAlertSubscriptionPolicy(service, manager)
+
+    await policy.reconcile({"TWSE:2330", "TPEX:6488"})
+    await policy.reconcile({"TWSE:2330", "TPEX:6488"})
+    await policy.reconcile({"TWSE:2330", "TWSE:2454"})
+
+    acquired = [call.args for call in manager.acquire_subscription.await_args_list]
+    released = [call.args for call in manager.release_subscription.await_args_list]
+    assert acquired == [
+        (P1_ALERT_OWNER, "TPEX:6488", RealtimeQuoteType.TICK),
+        (P1_ALERT_OWNER, "TWSE:2330", RealtimeQuoteType.TICK),
+        (P1_ALERT_OWNER, "TWSE:2454", RealtimeQuoteType.TICK),
+    ]
+    assert released == [(P1_ALERT_OWNER, "TPEX:6488", RealtimeQuoteType.TICK)]
+
+
+@pytest.mark.asyncio
+async def test_p0_p1_p2_share_tick_while_bidask_remains_p2_only():
+    provider = AsyncMock()
+    provider.get_capabilities.return_value = ProviderCapabilities(
+        provider_name="TEST",
+        source_type="WEBSOCKET",
+        configured=True,
+        realtime_available=True,
+        license_status=LicenseStatus.AUTHORIZED,
+    )
+    manager = RealtimeProviderManager(provider, AsyncMock(), AsyncMock())
+    security = "TWSE:2330"
+
+    await manager.acquire_subscription("policy:p0_portfolio", security, RealtimeQuoteType.TICK)
+    await manager.acquire_subscription(P1_ALERT_OWNER, security, RealtimeQuoteType.TICK)
+    await manager.acquire_subscription("policy:p2_current_view", security, RealtimeQuoteType.TICK)
+    await manager.acquire_subscription(
+        "policy:p2_current_view", security, RealtimeQuoteType.BID_ASK
+    )
+    assert provider.acquire_subscription.await_count == 2
+
+    await manager.release_subscription("policy:p2_current_view", security, RealtimeQuoteType.TICK)
+    await manager.release_subscription(
+        "policy:p2_current_view", security, RealtimeQuoteType.BID_ASK
+    )
+    assert provider.release_subscription.await_count == 1
+    await manager.release_subscription("policy:p0_portfolio", security, RealtimeQuoteType.TICK)
+    assert provider.release_subscription.await_count == 1
+    await manager.release_subscription(P1_ALERT_OWNER, security, RealtimeQuoteType.TICK)
+    assert provider.release_subscription.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_p1_refresh_restores_only_current_membership_and_shutdown_releases_it():
+    security_id = uuid4()
+    alert_rule = replace(
+        realtime_rule(AlertRuleType.PRICE_TARGET, price=D("10")), security_id=security_id
+    )
+    repository = MembershipRepo(
+        [alert_rule], {alert_rule.id: {security_id}}, {security_id: ("2330", "", "TWSE")}
+    )
+    service = RealtimeAlertEvaluationService(FakeRedis(), repository)
+    manager = AsyncMock()
+    policy = RealtimeAlertSubscriptionPolicy(service, manager, refresh_interval_seconds=3600)
+
+    await policy.start()
+    repository.rules = []
+    await service.refresh()
+    await policy.stop()
+
+    manager.acquire_subscription.assert_awaited_once_with(
+        P1_ALERT_OWNER, "TWSE:2330", RealtimeQuoteType.TICK
+    )
+    manager.release_subscription.assert_awaited_once_with(
+        P1_ALERT_OWNER, "TWSE:2330", RealtimeQuoteType.TICK
+    )
+    assert policy.membership == set()
+
+
+def test_p1_feature_gate_defaults_disabled():
+    assert Settings().p1_alert_realtime_enabled is False
