@@ -192,7 +192,7 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
     ) -> None:
         kinds = (
             {QuoteKind.TICK, QuoteKind.BID_ASK}
-            if priority in {SubscriptionPriority.PORTFOLIO, SubscriptionPriority.VIEWED_SECURITY}
+            if priority is SubscriptionPriority.VIEWED_SECURITY
             else {QuoteKind.TICK}
         )
         added = self._registry.acquire(owner, security_key, kinds)

@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import tw.market.ledger.model.RealtimeConnectionState
 import tw.market.ledger.model.RealtimeDataStatus
@@ -22,6 +24,7 @@ class RealtimeNetworkTest {
         private val mutableQuotes = MutableSharedFlow<RealtimeQuote>(extraBufferCapacity = 4)
         override val quotesFlow: SharedFlow<RealtimeQuote> = mutableQuotes
         val calls = mutableListOf<Call>()
+        val activeTargets = mutableSetOf<RealtimeSubscriptionTarget>()
         var connectCount = 0
 
         override fun connect() {
@@ -34,6 +37,7 @@ class RealtimeNetworkTest {
             quoteTypes: Set<RealtimeQuoteType>,
         ) {
             calls += Call("subscribe", market, code, quoteTypes)
+            quoteTypes.forEach { activeTargets += RealtimeSubscriptionTarget(market, code, it) }
         }
 
         override fun unsubscribe(
@@ -42,6 +46,7 @@ class RealtimeNetworkTest {
             quoteTypes: Set<RealtimeQuoteType>,
         ) {
             calls += Call("unsubscribe", market, code, quoteTypes)
+            quoteTypes.forEach { activeTargets -= RealtimeSubscriptionTarget(market, code, it) }
         }
     }
 
@@ -125,6 +130,113 @@ class RealtimeNetworkTest {
         assertEquals("TWSE", targets.single()["market"])
         assertEquals("2454", targets.single()["code"])
         assertEquals(listOf("bid_ask", "tick"), targets.single()["quote_types"])
+    }
+
+    @Test
+    fun portfolioMembershipIsTickOnlyDeduplicatedAndSetDiffed() {
+        val client = FakeSubscriptionClient()
+        val manager = RealtimeSubscriptionManager(
+            client,
+            portfolioRealtimeEnabled = true,
+        )
+
+        val first = manager.updatePortfolioMembership(
+            setOf(
+                RealtimeSecurityTarget("twse", "2330"),
+                RealtimeSecurityTarget("TWSE", "2330"),
+                RealtimeSecurityTarget("TPEX", "6488"),
+            )
+        )
+        assertTrue(first.enabled)
+        assertEquals(2, first.added.size)
+        assertTrue(client.calls.all { it.quoteTypes == setOf(RealtimeQuoteType.TICK) })
+
+        val unchanged = manager.updatePortfolioMembership(
+            setOf(
+                RealtimeSecurityTarget("TWSE", "2330"),
+                RealtimeSecurityTarget("TPEX", "6488"),
+            )
+        )
+        assertTrue(unchanged.added.isEmpty())
+        assertTrue(unchanged.removed.isEmpty())
+        assertEquals(2, client.calls.size)
+
+        val changed = manager.updatePortfolioMembership(
+            setOf(
+                RealtimeSecurityTarget("TPEX", "6488"),
+                RealtimeSecurityTarget("TWSE", "2308"),
+            )
+        )
+        assertEquals(setOf(RealtimeSecurityTarget("TWSE", "2308")), changed.added)
+        assertEquals(setOf(RealtimeSecurityTarget("TWSE", "2330")), changed.removed)
+        assertEquals(
+            setOf(
+                RealtimeSubscriptionTarget("TPEX", "6488", RealtimeQuoteType.TICK),
+                RealtimeSubscriptionTarget("TWSE", "2308", RealtimeQuoteType.TICK),
+            ),
+            client.activeTargets,
+        )
+    }
+
+    @Test
+    fun portfolioAndCurrentViewShareTickButKeepBidAskIndependent() {
+        val client = FakeSubscriptionClient()
+        val manager = RealtimeSubscriptionManager(
+            client,
+            portfolioRealtimeEnabled = true,
+        )
+
+        manager.updatePortfolioMembership(setOf(RealtimeSecurityTarget("TWSE", "2330")))
+        manager.acquireCurrentView("P2_DETAIL", "TWSE", "2330")
+        assertEquals(
+            listOf(
+                FakeSubscriptionClient.Call(
+                    "subscribe",
+                    "TWSE",
+                    "2330",
+                    setOf(RealtimeQuoteType.TICK),
+                ),
+                FakeSubscriptionClient.Call(
+                    "subscribe",
+                    "TWSE",
+                    "2330",
+                    setOf(RealtimeQuoteType.BID_ASK),
+                ),
+            ),
+            client.calls,
+        )
+
+        manager.releaseCurrentView("P2_DETAIL", "TWSE", "2330")
+        assertEquals(setOf(RealtimeQuoteType.BID_ASK), client.calls.last().quoteTypes)
+        assertTrue(
+            RealtimeSubscriptionTarget("TWSE", "2330", RealtimeQuoteType.TICK) in
+                client.activeTargets
+        )
+        manager.releasePortfolioMembership()
+        assertEquals(setOf(RealtimeQuoteType.TICK), client.calls.last().quoteTypes)
+        assertTrue(client.activeTargets.isEmpty())
+    }
+
+    @Test
+    fun portfolioGateDefaultsDisabledAndInvalidTargetsAreReported() {
+        val disabledClient = FakeSubscriptionClient()
+        val disabled = RealtimeSubscriptionManager(disabledClient)
+            .updatePortfolioMembership(setOf(RealtimeSecurityTarget("TWSE", "2330")))
+        assertFalse(disabled.enabled)
+        assertTrue(disabledClient.calls.isEmpty())
+
+        val enabledClient = FakeSubscriptionClient()
+        val enabled = RealtimeSubscriptionManager(
+            enabledClient,
+            portfolioRealtimeEnabled = true,
+        ).updatePortfolioMembership(
+            setOf(
+                RealtimeSecurityTarget("UNKNOWN", "2330"),
+                RealtimeSecurityTarget("TWSE", "23X0"),
+            )
+        )
+        assertEquals(2, enabled.rejected.size)
+        assertTrue(enabledClient.calls.isEmpty())
     }
 
     @Test

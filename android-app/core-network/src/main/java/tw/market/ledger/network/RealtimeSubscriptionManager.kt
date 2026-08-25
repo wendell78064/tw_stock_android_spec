@@ -9,10 +9,27 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tw.market.ledger.model.RealtimeQuote
 
+data class RealtimeSecurityTarget(
+    val market: String,
+    val code: String,
+)
+
+data class PortfolioMembershipUpdate(
+    val enabled: Boolean,
+    val added: Set<RealtimeSecurityTarget> = emptySet(),
+    val removed: Set<RealtimeSecurityTarget> = emptySet(),
+    val rejected: Set<RealtimeSecurityTarget> = emptySet(),
+)
+
 class RealtimeSubscriptionManager(
     private val client: RealtimeSubscriptionClient,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + Job()),
+    private val portfolioRealtimeEnabled: Boolean = false,
 ) {
+    companion object {
+        const val P0_PORTFOLIO_OWNER = "P0_PORTFOLIO"
+    }
+
     private data class SubscriptionIdentity(
         val market: String,
         val code: String,
@@ -26,6 +43,7 @@ class RealtimeSubscriptionManager(
 
     private val refCounts = mutableMapOf<SubscriptionIdentity, Int>()
     private val ownerSubscriptions = mutableSetOf<OwnerIdentity>()
+    private var portfolioTargets = emptySet<RealtimeSecurityTarget>()
 
     // Latest quote cache: "MARKET:CODE" -> RealtimeQuote
     private val _latestQuotes = MutableStateFlow<Map<String, RealtimeQuote>>(emptyMap())
@@ -96,6 +114,65 @@ class RealtimeSubscriptionManager(
         }
     }
 
+    @Synchronized
+    fun updatePortfolioMembership(
+        targets: Set<RealtimeSecurityTarget>,
+    ): PortfolioMembershipUpdate {
+        val normalized = targets.mapTo(mutableSetOf()) {
+            RealtimeSecurityTarget(it.market.uppercase(), it.code.uppercase())
+        }
+        val rejected = normalized.filterNotTo(mutableSetOf(), ::isValidPortfolioTarget)
+        if (!portfolioRealtimeEnabled) {
+            return PortfolioMembershipUpdate(enabled = false, rejected = rejected)
+        }
+        val current = portfolioTargets
+        val next = normalized - rejected
+        val removed = current - next
+        val added = next - current
+
+        removed.sortedWith(compareBy({ it.market }, { it.code })).forEach { target ->
+            val identity = SubscriptionIdentity(target.market, target.code, RealtimeQuoteType.TICK)
+            if (ownerSubscriptions.remove(OwnerIdentity(P0_PORTFOLIO_OWNER, identity))) {
+                val brokerRemoved = decrement(
+                    target.market,
+                    target.code,
+                    setOf(RealtimeQuoteType.TICK),
+                )
+                if (brokerRemoved.isNotEmpty()) {
+                    client.unsubscribe(target.market, target.code, brokerRemoved)
+                }
+            }
+        }
+
+        var connectRequired = false
+        added.sortedWith(compareBy({ it.market }, { it.code })).forEach { target ->
+            val identity = SubscriptionIdentity(target.market, target.code, RealtimeQuoteType.TICK)
+            if (ownerSubscriptions.add(OwnerIdentity(P0_PORTFOLIO_OWNER, identity))) {
+                val brokerAdded = increment(
+                    target.market,
+                    target.code,
+                    setOf(RealtimeQuoteType.TICK),
+                )
+                if (brokerAdded.isNotEmpty()) {
+                    client.subscribe(target.market, target.code, brokerAdded)
+                    connectRequired = true
+                }
+            }
+        }
+        if (connectRequired) client.connect()
+        portfolioTargets = next
+        return PortfolioMembershipUpdate(
+            enabled = true,
+            added = added,
+            removed = removed,
+            rejected = rejected,
+        )
+    }
+
+    @Synchronized
+    fun releasePortfolioMembership(): PortfolioMembershipUpdate =
+        updatePortfolioMembership(emptySet())
+
     fun getQuoteState(market: String, code: String): RealtimeQuote? {
         val key = "${market.uppercase()}:${code.uppercase()}"
         val map: Map<String, RealtimeQuote> = _latestQuotes.value
@@ -137,4 +214,7 @@ class RealtimeSubscriptionManager(
         }
         return removed
     }
+
+    private fun isValidPortfolioTarget(target: RealtimeSecurityTarget): Boolean =
+        target.market in setOf("TWSE", "TPEX") && target.code.matches(Regex("^[0-9]{4,6}$"))
 }

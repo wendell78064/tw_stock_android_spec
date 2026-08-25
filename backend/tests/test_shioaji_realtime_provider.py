@@ -205,7 +205,8 @@ async def test_subscriptions_deduplicate_reference_count_and_restore():
     assert sorted(client.quote.subscriptions) == [("2330", "bid_ask"), ("2330", "tick")]
     assert client.login_calls[0]["subscribe_trade"] is False
     await item.release("view", "TWSE:2330")
-    assert client.quote.unsubscriptions == []
+    assert client.quote.unsubscriptions == [("2330", "bid_ask")]
+    assert ("TWSE:2330", RealtimeQuoteType.TICK) in item._registry.active
     await item.release("portfolio", "TWSE:2330")
     assert sorted(client.quote.unsubscriptions) == [("2330", "bid_ask"), ("2330", "tick")]
 

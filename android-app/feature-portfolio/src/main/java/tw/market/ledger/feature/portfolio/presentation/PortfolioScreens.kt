@@ -15,6 +15,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.IOException
 import java.math.BigDecimal
+import java.math.MathContext
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +23,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tw.market.ledger.feature.portfolio.domain.*
 import tw.market.ledger.model.*
+import tw.market.ledger.network.RealtimeSecurityTarget
+import tw.market.ledger.network.RealtimeSubscriptionManager
 
 sealed interface PortfolioUiState {
     data object Loading : PortfolioUiState
@@ -34,22 +37,40 @@ sealed interface PortfolioUiState {
 }
 
 @HiltViewModel
-class PortfolioViewModel @Inject constructor(private val repository: PortfolioRepository) : ViewModel() {
+class PortfolioViewModel @Inject constructor(
+    private val repository: PortfolioRepository,
+    private val realtimeSubscriptions: RealtimeSubscriptionManager,
+) : ViewModel() {
     private val _state = MutableStateFlow<PortfolioUiState>(PortfolioUiState.Loading)
     val state: StateFlow<PortfolioUiState> = _state.asStateFlow()
     val sort = MutableStateFlow(HoldingSort.MARKET_VALUE)
-    init { refresh() }
+    init {
+        viewModelScope.launch {
+            realtimeSubscriptions.latestQuotes.collect { quotes ->
+                _state.value = _state.value.withRealtimeQuotes(quotes)
+            }
+        }
+        refresh()
+    }
 
     fun refresh() = viewModelScope.launch {
         _state.value = PortfolioUiState.Loading
         try {
             val result = repository.dashboard()
+            if (!result.summary.fromCache) {
+                realtimeSubscriptions.updatePortfolioMembership(
+                    result.holdings.mapTo(mutableSetOf()) {
+                        RealtimeSecurityTarget(it.market.name, it.securityCode)
+                    }
+                )
+            }
+            val current = result.withRealtimeQuotes(realtimeSubscriptions.latestQuotes.value)
             _state.value = when {
-                result.summary.fromCache -> PortfolioUiState.Offline(result)
-                result.holdings.isEmpty() -> PortfolioUiState.Empty
-                result.summary.dataStatus == DataStatus.STALE -> PortfolioUiState.Stale(result)
-                result.summary.dataStatus == DataStatus.PARTIAL -> PortfolioUiState.Partial(result)
-                else -> PortfolioUiState.Success(result)
+                current.summary.fromCache -> PortfolioUiState.Offline(current)
+                current.holdings.isEmpty() -> PortfolioUiState.Empty
+                current.summary.dataStatus == DataStatus.STALE -> PortfolioUiState.Stale(current)
+                current.summary.dataStatus == DataStatus.PARTIAL -> PortfolioUiState.Partial(current)
+                else -> PortfolioUiState.Success(current)
             }
         } catch (error: IOException) {
             _state.value = PortfolioUiState.Error("目前離線，無法讀取持股快取")
@@ -86,6 +107,95 @@ class PortfolioViewModel @Inject constructor(private val repository: PortfolioRe
         else -> null
     }
 }
+
+private fun PortfolioUiState.withRealtimeQuotes(
+    quotes: Map<String, RealtimeQuote>,
+): PortfolioUiState = when (this) {
+    is PortfolioUiState.Success -> copy(dashboard = dashboard.withRealtimeQuotes(quotes))
+    is PortfolioUiState.Partial -> copy(dashboard = dashboard.withRealtimeQuotes(quotes))
+    is PortfolioUiState.Stale -> copy(dashboard = dashboard.withRealtimeQuotes(quotes))
+    is PortfolioUiState.Offline -> copy(dashboard = dashboard.withRealtimeQuotes(quotes))
+    else -> this
+}
+
+private fun PortfolioDashboard.withRealtimeQuotes(
+    quotes: Map<String, RealtimeQuote>,
+): PortfolioDashboard {
+    var changed = false
+    val repriced = holdings.map { holding ->
+        val quote = quotes["${holding.market.name}:${holding.securityCode}"]
+        val price = quote?.lastPrice?.toBigDecimalOrNull()
+        if (quote == null || quote.dataStatus == RealtimeDataStatus.UNAVAILABLE || price == null) {
+            return@map holding
+        }
+        val value = price * holding.quantityShares.toBigDecimal()
+        val cost = holding.costBasis.toBigDecimalOrNull()
+        val unrealized = cost?.let(value::subtract)
+        changed = true
+        holding.copy(
+            latestPrice = price.asPlainString(),
+            priceAsOf = quote.exchangeTimestamp,
+            priceDataStatus = quote.dataStatus.toPortfolioStatus(),
+            marketValue = value.asPlainString(),
+            unrealizedPnl = unrealized?.asPlainString(),
+            unrealizedReturnPercent = if (cost != null && cost.signum() != 0) {
+                unrealized?.multiply(BigDecimal("100"))
+                    ?.divide(cost, MathContext.DECIMAL64)
+                    ?.asPlainString()
+            } else null,
+        )
+    }
+    if (!changed) return this
+
+    val totalValue = repriced.mapNotNull { it.marketValue?.toBigDecimalOrNull() }
+        .takeIf { it.size == repriced.size }
+        ?.fold(BigDecimal.ZERO, BigDecimal::add)
+    val totalCost = repriced.mapNotNull { it.costBasis.toBigDecimalOrNull() }
+        .fold(BigDecimal.ZERO, BigDecimal::add)
+    val withAllocation = repriced.map { holding ->
+        val value = holding.marketValue?.toBigDecimalOrNull()
+        holding.copy(
+            allocationPercent = if (value != null && totalValue != null && totalValue.signum() != 0) {
+                value.multiply(BigDecimal("100"))
+                    .divide(totalValue, MathContext.DECIMAL64)
+                    .asPlainString()
+            } else null,
+        )
+    }
+    val totalUnrealized = totalValue?.subtract(totalCost)
+    val statuses = withAllocation.map { it.priceDataStatus }.toSet()
+    val status = when {
+        totalValue == null || DataStatus.UNAVAILABLE in statuses || DataStatus.PARTIAL in statuses ->
+            DataStatus.PARTIAL
+        DataStatus.STALE in statuses -> DataStatus.STALE
+        DataStatus.DELAYED in statuses -> DataStatus.DELAYED
+        DataStatus.LIVE in statuses -> DataStatus.LIVE
+        else -> summary.dataStatus
+    }
+    return copy(
+        summary = summary.copy(
+            totalMarketValue = totalValue?.asPlainString(),
+            totalUnrealizedPnl = totalUnrealized?.asPlainString(),
+            totalReturnPercent = if (totalUnrealized != null && totalCost.signum() != 0) {
+                totalUnrealized.multiply(BigDecimal("100"))
+                    .divide(totalCost, MathContext.DECIMAL64)
+                    .asPlainString()
+            } else null,
+            priceAsOf = withAllocation.mapNotNull { it.priceAsOf }.minOrNull(),
+            dataStatus = status,
+        ),
+        holdings = withAllocation,
+    )
+}
+
+private fun RealtimeDataStatus.toPortfolioStatus(): DataStatus = when (this) {
+    RealtimeDataStatus.LIVE -> DataStatus.LIVE
+    RealtimeDataStatus.STALE -> DataStatus.STALE
+    RealtimeDataStatus.DELAYED -> DataStatus.DELAYED
+    RealtimeDataStatus.UNAVAILABLE -> DataStatus.UNAVAILABLE
+}
+
+private fun BigDecimal.asPlainString(): String = stripTrailingZeros().toPlainString()
 
 @Composable
 fun PortfolioRoute(

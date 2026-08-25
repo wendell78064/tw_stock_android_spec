@@ -221,6 +221,18 @@ async def test_latest_close_valuation_summary_and_allocation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_holdings_exclude_fully_closed_historical_position() -> None:
+    repository = MemoryPortfolioRepository(
+        [
+            tx(TransactionSide.BUY, 1000, "10", sequence=1),
+            tx(TransactionSide.SELL, 1000, "11", sequence=2),
+        ]
+    )
+    service = PortfolioService(repository, MemorySecurityRepository(), MemoryPriceRepository())
+    assert await service.holdings(PORTFOLIO_ID) == []
+
+
+@pytest.mark.asyncio
 async def test_missing_and_stale_prices_are_not_zero_filled() -> None:
     repository = MemoryPortfolioRepository([tx(TransactionSide.BUY, 1000, "10")])
     missing = PortfolioService(repository, MemorySecurityRepository(), MemoryPriceRepository(None))
