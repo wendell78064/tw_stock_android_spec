@@ -1,15 +1,17 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from pydantic import ValidationError
 from starlette.testclient import TestClient
 
 from app.adapters.fake_realtime_provider import (
     FakeRealtimeProvider,
     UnconfiguredRealtimeProvider,
 )
+from app.core.settings import Settings
 from app.domain.realtime import (
     DataStatus,
     LicenseStatus,
@@ -19,6 +21,7 @@ from app.domain.realtime import (
 )
 from app.main import app
 from app.services.realtime_cache import RealtimeCacheService
+from app.services.realtime_capacity import RealtimeCapacityError, RealtimeSubscriptionError
 from app.services.realtime_hub import RealtimeQuoteHub
 from app.services.realtime_provider_manager import RealtimeProviderManager
 
@@ -192,6 +195,134 @@ async def test_manager_reference_counts_tick_and_bidask_independently():
 
 
 @pytest.mark.asyncio
+async def test_global_capacity_counts_unique_resources_after_owner_deduplication():
+    provider = AsyncMock()
+    provider.get_capabilities.return_value = ProviderCapabilities(
+        provider_name="TEST",
+        source_type="WEBSOCKET",
+        configured=True,
+        realtime_available=True,
+        license_status=LicenseStatus.AUTHORIZED,
+        subscription_hard_limit=3,
+    )
+    manager = RealtimeProviderManager(provider, AsyncMock(), AsyncMock(), subscription_budget=2)
+
+    await manager.acquire_subscription("P0", "TWSE:2330", RealtimeQuoteType.TICK)
+    await manager.acquire_subscription("P1", "TWSE:2330", RealtimeQuoteType.TICK)
+    await manager.acquire_subscription("P2", "TWSE:2330", RealtimeQuoteType.TICK)
+    await manager.acquire_subscription("P2", "TWSE:2330", RealtimeQuoteType.BID_ASK)
+    assert manager.capacity_status()["active_resources"] == 2
+    with pytest.raises(RealtimeCapacityError):
+        await manager.acquire_subscription("P1", "TWSE:2454", RealtimeQuoteType.TICK)
+    await manager.acquire_subscription("P3", "TWSE:2330", RealtimeQuoteType.TICK)
+    assert manager.capacity_status() == {
+        "budget": 2,
+        "provider_hard_limit": 3,
+        "active_resources": 2,
+        "remaining_slots": 0,
+        "capacity_rejections": 1,
+    }
+    assert provider.acquire_subscription.await_count == 2
+
+    await manager.release_subscription("P2", "TWSE:2330", RealtimeQuoteType.TICK)
+    await manager.release_subscription("P0", "TWSE:2330", RealtimeQuoteType.TICK)
+    await manager.release_subscription("P3", "TWSE:2330", RealtimeQuoteType.TICK)
+    assert manager.capacity_status()["active_resources"] == 2
+    await manager.release_subscription("P1", "TWSE:2330", RealtimeQuoteType.TICK)
+    assert manager.capacity_status()["active_resources"] == 1
+    await manager.acquire_subscription("P1", "TWSE:2454", RealtimeQuoteType.TICK)
+    assert manager.capacity_status()["active_resources"] == 2
+
+
+@pytest.mark.asyncio
+async def test_capacity_reservation_and_unsubscribe_failures_preserve_truthful_state():
+    provider = AsyncMock()
+    provider.get_capabilities.return_value = ProviderCapabilities(
+        provider_name="TEST",
+        source_type="WEBSOCKET",
+        configured=True,
+        realtime_available=True,
+        license_status=LicenseStatus.AUTHORIZED,
+        subscription_hard_limit=1,
+    )
+    provider.acquire_subscription.side_effect = RuntimeError("subscribe failed")
+    manager = RealtimeProviderManager(provider, AsyncMock(), AsyncMock(), subscription_budget=1)
+    with pytest.raises(RealtimeSubscriptionError):
+        await manager.acquire_subscription("P1", "TWSE:2330", RealtimeQuoteType.TICK)
+    assert manager.capacity_status()["active_resources"] == 0
+
+    provider.acquire_subscription.side_effect = None
+    await manager.acquire_subscription("P1", "TWSE:2330", RealtimeQuoteType.TICK)
+    provider.release_subscription.side_effect = RuntimeError("unsubscribe failed")
+    with pytest.raises(RealtimeSubscriptionError):
+        await manager.release_subscription("P1", "TWSE:2330", RealtimeQuoteType.TICK)
+    assert manager.capacity_status()["active_resources"] == 1
+    assert manager._subscription_owners[("TWSE:2330", RealtimeQuoteType.TICK)] == {"P1"}
+
+
+@pytest.mark.asyncio
+async def test_p2_capacity_rejection_rolls_back_partial_target_and_preserves_p0():
+    provider = AsyncMock()
+    provider.get_capabilities.return_value = ProviderCapabilities(
+        provider_name="TEST",
+        source_type="WEBSOCKET",
+        configured=True,
+        realtime_available=True,
+        license_status=LicenseStatus.AUTHORIZED,
+        subscription_hard_limit=2,
+    )
+    manager = RealtimeProviderManager(provider, AsyncMock(), AsyncMock(), subscription_budget=2)
+    await manager.acquire_subscription("P0", "TWSE:2330", RealtimeQuoteType.TICK)
+    await manager.acquire_subscription("OTHER", "TWSE:2454", RealtimeQuoteType.TICK)
+    hub = RealtimeQuoteHub(
+        FakeRedis(), AsyncMock(), subscription_manager=manager
+    )
+    websocket = AsyncMock()
+    session = await hub.register_connection(websocket)
+
+    with pytest.raises(RealtimeCapacityError):
+        await hub.handle_subscribe(
+            session,
+            [{"market": "TWSE", "code": "2330", "quote_types": ["tick", "bid_ask"]}],
+        )
+
+    assert manager._subscription_owners[("TWSE:2330", RealtimeQuoteType.TICK)] == {"P0"}
+    assert session.provider_subscriptions == set()
+    assert manager.capacity_status()["active_resources"] == 2
+
+
+@pytest.mark.asyncio
+async def test_budget_above_provider_hard_limit_is_rejected_at_start():
+    provider = AsyncMock()
+    provider.get_capabilities.return_value = ProviderCapabilities(
+        provider_name="TEST",
+        source_type="WEBSOCKET",
+        configured=True,
+        realtime_available=True,
+        license_status=LicenseStatus.AUTHORIZED,
+        subscription_hard_limit=2,
+    )
+    manager = RealtimeProviderManager(provider, AsyncMock(), AsyncMock(), subscription_budget=3)
+    with pytest.raises(RealtimeCapacityError):
+        await manager.start()
+
+
+def test_budget_setting_accepts_unset_and_positive_but_rejects_nonpositive():
+    assert Settings().realtime_broker_subscription_budget is None
+    assert (
+        Settings(realtime_broker_subscription_budget="").realtime_broker_subscription_budget
+        is None
+    )
+    assert Settings(realtime_broker_subscription_budget=1).realtime_broker_subscription_budget == 1
+    with pytest.raises(ValidationError):
+        Settings(realtime_broker_subscription_budget=0)
+    with pytest.raises(ValidationError):
+        Settings(realtime_broker_subscription_budget=-1)
+    with pytest.raises(ValidationError):
+        Settings(p1_alert_realtime_enabled=True)
+
+
+@pytest.mark.asyncio
 async def test_abnormal_websocket_disconnect_releases_all_provider_ownership():
     manager = AsyncMock()
     fake_redis = FakeRedis()
@@ -342,6 +473,13 @@ def test_http_and_websocket_resolve_same_application_realtime_hub(monkeypatch):
     )
     manager.provider.health = AsyncMock(return_value=True)
     manager.reconnect_count = 0
+    manager.capacity_status = Mock(return_value={
+        "budget": 10,
+        "provider_hard_limit": 200,
+        "active_resources": 0,
+        "remaining_slots": 10,
+        "capacity_rejections": 0,
+    })
     hub = RealtimeQuoteHub(fake_redis, cache, subscription_manager=manager)
     hub.provider_status = "CONNECTED"
 
@@ -357,6 +495,7 @@ def test_http_and_websocket_resolve_same_application_realtime_hub(monkeypatch):
         http_health = client.get("/v1/quotes/health")
         assert http_health.status_code == 200
         assert http_health.json()["active_ws_connections"] == 1
+        assert http_health.json()["remaining_broker_slots"] == 10
 
         websocket.send_json(
             {

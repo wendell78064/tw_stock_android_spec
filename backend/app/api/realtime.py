@@ -26,6 +26,7 @@ from app.domain.realtime_strength import (
 )
 from app.services.intraday_candle_aggregator import TAIPEI
 from app.services.realtime_cache import RealtimeCacheService
+from app.services.realtime_capacity import RealtimeCapacityError
 from app.services.realtime_hub import RealtimeQuoteHub
 from app.services.realtime_provider_manager import RealtimeProviderManager
 
@@ -53,6 +54,11 @@ class RealtimeHealthResponse(BaseModel):
     quotes_published: int
     quotes_coalesced: int
     reconnect_count: int
+    broker_subscription_budget: int | None
+    provider_subscription_hard_limit: int | None
+    active_broker_resources: int
+    remaining_broker_slots: int | None
+    capacity_rejections: int
 
 
 class IntradayCandleResponse(BaseModel):
@@ -210,6 +216,7 @@ async def get_realtime_health(
     capabilities = await manager.get_capabilities()
     healthy = await manager.provider.health()
     active_subs = sum(len(s.subscriptions) for s in hub.sessions)
+    capacity = manager.capacity_status()
 
     return RealtimeHealthResponse(
         provider_connected=healthy,
@@ -221,6 +228,11 @@ async def get_realtime_health(
         quotes_published=hub.quotes_published,
         quotes_coalesced=hub.quotes_coalesced,
         reconnect_count=manager.reconnect_count,
+        broker_subscription_budget=capacity["budget"],
+        provider_subscription_hard_limit=capacity["provider_hard_limit"],
+        active_broker_resources=capacity["active_resources"],
+        remaining_broker_slots=capacity["remaining_slots"],
+        capacity_rejections=capacity["capacity_rejections"],
     )
 
 
@@ -276,7 +288,17 @@ async def websocket_quotes_endpoint(
 
                 if msg_type == "subscribe":
                     targets = msg.get("securities", [])
-                    await hub.handle_subscribe(session, targets, msg.get("channels"))
+                    try:
+                        await hub.handle_subscribe(session, targets, msg.get("channels"))
+                    except RealtimeCapacityError as error:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "version": version,
+                                "message": str(error),
+                            }
+                        )
+                        continue
                     await websocket.send_json(
                         {
                             "type": "status",

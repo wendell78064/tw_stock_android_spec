@@ -19,6 +19,7 @@ from app.domain.realtime import (
     RealtimeQuoteType,
     TradingSession,
 )
+from app.services.realtime_capacity import RealtimeCapacityError
 
 REALTIME_ALERT_CHANNEL = "realtime:alerts"
 REALTIME_ALERT_STATE_TTL_SECONDS = 172800
@@ -142,6 +143,7 @@ class RealtimeAlertSubscriptionPolicy:
         self.subscription_manager = subscription_manager
         self.refresh_interval_seconds = refresh_interval_seconds
         self.membership: set[str] = set()
+        self.rejected_membership: set[str] = set()
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
 
@@ -160,6 +162,7 @@ class RealtimeAlertSubscriptionPolicy:
                 pass
             self._task = None
         await self.reconcile(set())
+        self.service.subscription_status = "DISABLED"
 
     async def reconcile(self, desired: set[str]) -> None:
         async with self._lock:
@@ -167,22 +170,32 @@ class RealtimeAlertSubscriptionPolicy:
             removed = self.membership - desired
             acquired = set()
             try:
-                for security_key in sorted(added):
-                    await self.subscription_manager.acquire_subscription(
-                        P1_ALERT_OWNER, security_key, RealtimeQuoteType.TICK
-                    )
-                    acquired.add(security_key)
                 for security_key in sorted(removed):
                     await self.subscription_manager.release_subscription(
                         P1_ALERT_OWNER, security_key, RealtimeQuoteType.TICK
                     )
+                    self.membership.remove(security_key)
+                for security_key in sorted(added):
+                    try:
+                        await self.subscription_manager.acquire_subscription(
+                            P1_ALERT_OWNER, security_key, RealtimeQuoteType.TICK
+                        )
+                        acquired.add(security_key)
+                        self.membership.add(security_key)
+                    except RealtimeCapacityError:
+                        continue
             except Exception:
                 for security_key in acquired:
                     await self.subscription_manager.release_subscription(
                         P1_ALERT_OWNER, security_key, RealtimeQuoteType.TICK
                     )
+                    self.membership.remove(security_key)
                 raise
-            self.membership = set(desired)
+            self.rejected_membership = desired - self.membership
+            self.service.subscription_status = (
+                "PARTIAL" if self.rejected_membership else "ACTIVE"
+            )
+            self.service.subscription_rejected_count = len(self.rejected_membership)
 
     async def _refresh_loop(self) -> None:
         while True:
@@ -208,6 +221,8 @@ class RealtimeAlertEvaluationService:
         self.last_quote_at: datetime | None = None
         self._last_refresh = monotonic()
         self._membership_listener: Callable[[set[str]], Awaitable[None]] | None = None
+        self.subscription_status = "DISABLED"
+        self.subscription_rejected_count = 0
         self.metrics = {
             name: 0
             for name in (
@@ -284,6 +299,8 @@ class RealtimeAlertEvaluationService:
             "authorized": self.provider_status == "LIVE",
             "active_rule_count": sum(map(len, self.rules_by_security.values())),
             "subscribed_security_count": len(self.rules_by_security),
+            "subscription_coverage": self.subscription_status,
+            "subscription_rejected_count": self.subscription_rejected_count,
             "last_quote_at": self.last_quote_at.isoformat() if self.last_quote_at else None,
         }
 

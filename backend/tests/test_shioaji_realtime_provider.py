@@ -120,6 +120,12 @@ async def test_contract_resolution_supports_twse_tpex_and_rejects_mismatch():
 
 
 @pytest.mark.asyncio
+async def test_shioaji_capabilities_publish_single_canonical_hard_limit():
+    capabilities = await make_provider().get_capabilities()
+    assert capabilities.subscription_hard_limit == 200
+
+
+@pytest.mark.asyncio
 async def test_callbacks_register_on_canonical_api_before_subscribe_and_stay_reachable():
     client = FakeClient()
     factory_calls = []

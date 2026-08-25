@@ -1,7 +1,7 @@
 from functools import lru_cache
 from secrets import token_urlsafe
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +22,21 @@ class Settings(BaseSettings):
     shioaji_secret_key: SecretStr | None = None
     shioaji_simulation: bool = False
     p1_alert_realtime_enabled: bool = False
+    realtime_broker_subscription_budget: int | None = Field(default=None, gt=0)
+
+    @field_validator("realtime_broker_subscription_budget", mode="before")
+    @classmethod
+    def empty_budget_is_unconfigured(cls, value):
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def validate_realtime_capacity(self):
+        if (
+            self.p1_alert_realtime_enabled
+            and self.realtime_broker_subscription_budget is None
+        ):
+            raise ValueError("P1 realtime requires an explicit broker subscription budget")
+        return self
 
     def effective_auth_secret(self) -> str:
         if self.auth_secret:

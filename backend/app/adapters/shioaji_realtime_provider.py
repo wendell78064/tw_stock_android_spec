@@ -22,6 +22,7 @@ from app.domain.realtime import (
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 logger = logging.getLogger(__name__)
+SHIOAJI_SUBSCRIPTION_HARD_LIMIT = 200
 
 
 class ShioajiProviderError(RuntimeError):
@@ -133,6 +134,7 @@ class ShioajiRealtimeProvider(RealtimeMarketDataProvider):
             ),
             configured=self.configured,
             last_error=self._last_error,
+            subscription_hard_limit=SHIOAJI_SUBSCRIPTION_HARD_LIMIT,
         )
 
     async def connect(self) -> None:

@@ -23,6 +23,7 @@ from app.services.realtime_cache import (
     CHANNEL_REALTIME_THEME,
     RealtimeCacheService,
 )
+from app.services.realtime_capacity import RealtimeCapacityError
 
 logger = logging.getLogger(__name__)
 
@@ -149,13 +150,25 @@ class RealtimeQuoteHub:
 
             quote_types = self._quote_types(t)
             if self.subscription_manager is not None:
-                for quote_type in quote_types:
-                    identity = (key, quote_type)
-                    if identity not in session.provider_subscriptions:
-                        await self.subscription_manager.acquire_subscription(
-                            session.owner_id, key, quote_type
+                acquired = []
+                try:
+                    for quote_type in quote_types:
+                        identity = (key, quote_type)
+                        if identity not in session.provider_subscriptions:
+                            await self.subscription_manager.acquire_subscription(
+                                session.owner_id, key, quote_type
+                            )
+                            session.provider_subscriptions.add(identity)
+                            acquired.append(identity)
+                except RealtimeCapacityError:
+                    for acquired_key, acquired_type in acquired:
+                        await self.subscription_manager.release_subscription(
+                            session.owner_id, acquired_key, acquired_type
                         )
-                        session.provider_subscriptions.add(identity)
+                        session.provider_subscriptions.discard(
+                            (acquired_key, acquired_type)
+                        )
+                    raise
             session.subscriptions.add(key)
             self.key_to_sessions[key].add(session)
             added_keys.append(key)

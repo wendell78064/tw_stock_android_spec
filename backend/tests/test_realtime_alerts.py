@@ -27,6 +27,7 @@ from app.services.realtime_alerts import (
     RealtimeMaContext,
 )
 from app.services.realtime_cache import RealtimeCacheService
+from app.services.realtime_capacity import RealtimeCapacityError
 from app.services.realtime_hub import RealtimeQuoteHub
 from app.services.realtime_provider_manager import RealtimeProviderManager
 from tests.test_alerts import rule
@@ -390,3 +391,21 @@ async def test_p1_refresh_restores_only_current_membership_and_shutdown_releases
 
 def test_p1_feature_gate_defaults_disabled():
     assert Settings().p1_alert_realtime_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_p1_capacity_rejection_reports_partial_without_disturbing_existing_owner():
+    service = SimpleNamespace(
+        subscription_status="DISABLED", subscription_rejected_count=0
+    )
+    manager = AsyncMock()
+    manager.acquire_subscription.side_effect = [None, RealtimeCapacityError("full")]
+    policy = RealtimeAlertSubscriptionPolicy(service, manager)
+
+    await policy.reconcile({"TWSE:2330", "TWSE:2454"})
+
+    assert policy.membership == {"TWSE:2330"}
+    assert policy.rejected_membership == {"TWSE:2454"}
+    assert service.subscription_status == "PARTIAL"
+    assert service.subscription_rejected_count == 1
+    manager.release_subscription.assert_not_awaited()

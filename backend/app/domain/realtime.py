@@ -78,6 +78,7 @@ class ProviderCapabilities(BaseModel):
     license_status: LicenseStatus = LicenseStatus.UNCONFIGURED
     configured: bool = False
     last_error: str | None = None
+    subscription_hard_limit: int | None = None
 
     @property
     def is_live_eligible(self) -> bool:
