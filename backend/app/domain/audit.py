@@ -29,6 +29,9 @@ class RepairScopeType(StrEnum):
     DATE_RANGE = "DATE_RANGE"
 
 
+MAX_REPAIR_RANGE_DAYS: int = 30
+
+
 @dataclass(frozen=True)
 class RepairScope:
     scope_type: RepairScopeType
@@ -53,6 +56,13 @@ class RepairScope:
                 raise ValueError("DATE_RANGE repair scope requires start_date and end_date")
             if self.start_date > self.end_date:
                 raise ValueError("start_date cannot be after end_date")
+            days_span = (self.end_date - self.start_date).days + 1
+            if days_span > MAX_REPAIR_RANGE_DAYS:
+                raise ValueError(
+                    f"DATE_RANGE span ({days_span} days) exceeds maximum allowed precision repair "
+                    f"limit ({MAX_REPAIR_RANGE_DAYS} days). Broad multi-year ranges cannot qualify "
+                    "for precision repair."
+                )
 
 
 @dataclass(frozen=True)

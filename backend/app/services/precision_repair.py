@@ -25,7 +25,7 @@ from app.domain.audit import (
 from app.domain.calendar import TradingCalendar
 from app.domain.pricing import PriceBasis, SecurityKey
 from app.domain.security import MarketCode
-from app.repositories.models import DailyPriceModel, MarketModel, SecurityModel
+from app.repositories.models import DailyPriceModel, IngestionRunModel, MarketModel, SecurityModel
 from app.repositories.sql_derivatives import SqlDerivativesRepository
 from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.repositories.sql_price import SqlPriceRepository
@@ -72,9 +72,10 @@ class PrecisionRepairPlanner:
         daily_price_datasets = {"DAILY_PRICES", "TWSE_DAILY", "TPEX_DAILY", "PRICES"}
         is_daily_price = dataset_upper in daily_price_datasets
         is_spot = dataset_upper in MARKET_SPOT_DATASETS or dataset_upper in ("MARKET_SPOT", "SPOT")
-        is_derivatives = dataset_upper in DERIVATIVE_DATASETS or dataset_upper in (
-            "DERIVATIVES",
-            "TAIFEX",
+        is_derivatives = (
+            dataset_upper in DERIVATIVE_DATASETS
+            or dataset_upper in ("DERIVATIVES", "TAIFEX", "TAIFEX_PUT_CALL", "OPTION_PUT_CALL")
+            or dataset_upper.startswith("TAIFEX_")
         )
         is_technicals = dataset_upper in ("TECHNICALS", "TECHNICAL_SNAPSHOTS")
         is_industry = dataset_upper in ("INDUSTRY_STRENGTH", "INDUSTRY_SNAPSHOTS")
@@ -94,8 +95,15 @@ class PrecisionRepairPlanner:
                 reason="Audit status is already COMPLETE; no repair required",
             )
 
-        # If data is not yet published (e.g. today before publication window)
+        # If data is not yet published (e.g. future date, or finding indicates not yet published)
         today = date.today()
+        reason_lower = (finding.reason or "").lower()
+        is_not_published_signal = (
+            "not published" in reason_lower
+            or "not yet published" in reason_lower
+            or "publication pending" in reason_lower
+            or "upstream publication" in reason_lower
+        )
         if finding.target_date > today:
             return RepairDecision(
                 finding_id=finding.finding_id,
@@ -105,30 +113,50 @@ class PrecisionRepairPlanner:
                     "data not published"
                 ),
             )
+        if finding.target_date == today and is_not_published_signal:
+            return RepairDecision(
+                finding_id=finding.finding_id,
+                outcome=RepairDecisionOutcome.NOT_PUBLISHED,
+                reason=(
+                    f"Dataset {finding.dataset} for today {today.isoformat()} "
+                    f"is not yet published upstream ({finding.reason})"
+                ),
+            )
 
         # 5. Build exact bounded repair scope
-        if finding.security_code and finding.market:
-            scope = RepairScope(
-                scope_type=RepairScopeType.SECURITY_DATE,
-                dataset=finding.dataset,
-                target_date=finding.target_date,
-                market=finding.market,
-                security_code=finding.security_code,
-            )
-        elif finding.start_date and finding.end_date and (finding.start_date != finding.end_date):
-            scope = RepairScope(
-                scope_type=RepairScopeType.DATE_RANGE,
-                dataset=finding.dataset,
-                start_date=finding.start_date,
-                end_date=finding.end_date,
-                market=finding.market,
-            )
-        else:
-            scope = RepairScope(
-                scope_type=RepairScopeType.DATASET_DATE,
-                dataset=finding.dataset,
-                target_date=finding.target_date,
-                market=finding.market,
+        try:
+            if finding.security_code and finding.market:
+                scope = RepairScope(
+                    scope_type=RepairScopeType.SECURITY_DATE,
+                    dataset=finding.dataset,
+                    target_date=finding.target_date,
+                    market=finding.market,
+                    security_code=finding.security_code,
+                )
+            elif (
+                finding.start_date
+                and finding.end_date
+                and (finding.start_date != finding.end_date)
+            ):
+                scope = RepairScope(
+                    scope_type=RepairScopeType.DATE_RANGE,
+                    dataset=finding.dataset,
+                    start_date=finding.start_date,
+                    end_date=finding.end_date,
+                    market=finding.market,
+                )
+            else:
+                scope = RepairScope(
+                    scope_type=RepairScopeType.DATASET_DATE,
+                    dataset=finding.dataset,
+                    target_date=finding.target_date,
+                    market=finding.market,
+                )
+        except ValueError as err:
+            return RepairDecision(
+                finding_id=finding.finding_id,
+                outcome=RepairDecisionOutcome.UNSUPPORTED,
+                reason=f"Invalid or unbounded repair scope: {err}",
             )
 
         return RepairDecision(
@@ -172,10 +200,10 @@ class PrecisionRepairService:
 
         scope = decision.scope
 
-        # Concurrency safety via distributed_job_lock if redis available
+        # Concurrency safety: Mutually exclude conflicting market-data mutations with Daily Pipeline
         if self.redis is not None and not skip_lock:
             async with distributed_job_lock(
-                self.redis, "precision-repair", ttl_seconds=600
+                self.redis, "daily-pipeline", ttl_seconds=600
             ) as acquired:
                 if not acquired:
                     return PrecisionRepairResult(
@@ -184,7 +212,7 @@ class PrecisionRepairService:
                         executed=False,
                         status_before=finding.audit_status,
                         status_after=finding.audit_status,
-                        error="JOB_LOCK_BUSY: Could not acquire precision-repair job lock",
+                        error="JOB_LOCK_BUSY: Pipeline/Repair lock held by another runner",
                         executed_at=datetime.now(UTC),
                     )
                 return await self._do_repair_and_reaudit(finding, decision, scope)
@@ -208,8 +236,22 @@ class PrecisionRepairService:
         except Exception as ex:
             err_msg = str(ex)
 
-        # Re-audit the exact scope
+        # Re-audit the exact scope with real data-quality checks
         re_audit_status, re_audit_report = await self._re_audit_scope(scope)
+
+        # Audit trail persistence: record repair execution metadata in ingestion_runs
+        persisted_run_id = await self._persist_repair_audit_trail(
+            finding=finding,
+            decision=decision,
+            scope=scope,
+            status_before=finding.audit_status,
+            status_after=re_audit_status,
+            inserted=inserted,
+            updated=updated,
+            error=err_msg,
+            run_id_str=run_id_str,
+            executed_at=now,
+        )
 
         return PrecisionRepairResult(
             finding_id=finding.finding_id,
@@ -220,10 +262,71 @@ class PrecisionRepairService:
             repaired_records_inserted=inserted,
             repaired_records_updated=updated,
             error=err_msg,
-            ingestion_run_id=run_id_str,
+            ingestion_run_id=persisted_run_id or run_id_str,
             re_audit_report=re_audit_report,
             executed_at=now,
         )
+
+    async def _persist_repair_audit_trail(
+        self,
+        finding: AuditFinding,
+        decision: RepairDecision,
+        scope: RepairScope,
+        status_before: AuditStatus,
+        status_after: AuditStatus,
+        inserted: int,
+        updated: int,
+        error: str | None,
+        run_id_str: str | None,
+        executed_at: datetime,
+    ) -> str | None:
+        try:
+            import json
+            from uuid import UUID, uuid4
+
+            try:
+                run_uuid = UUID(run_id_str) if run_id_str else uuid4()
+            except (ValueError, AttributeError):
+                run_uuid = uuid4()
+            # If run was already created in ingestion_runs, update its error_message or metadata
+            existing = await self.session.get(IngestionRunModel, run_uuid)
+            meta = {
+                "repair_finding_id": finding.finding_id,
+                "repair_decision": decision.outcome.value,
+                "repair_scope": scope.scope_type.value,
+                "status_before": status_before.value,
+                "status_after": status_after.value,
+                "scope_dataset": scope.dataset,
+                "target_date": scope.target_date.isoformat() if scope.target_date else None,
+            }
+            if existing is not None:
+                existing.error_message = (
+                    f"{existing.error_message}; {json.dumps(meta)}"
+                    if existing.error_message
+                    else json.dumps(meta)
+                )
+                await self.session.commit()
+                return str(existing.id)
+            else:
+                repair_run = IngestionRunModel(
+                    id=run_uuid,
+                    provider="PRECISION_REPAIR",
+                    dataset=scope.dataset,
+                    started_at=executed_at,
+                    finished_at=datetime.now(UTC),
+                    status=status_after.value if not error else "FAILED",
+                    fetched_count=inserted + updated,
+                    inserted_count=inserted,
+                    updated_count=updated,
+                    rejected_count=0 if not error else 1,
+                    error_message=error or json.dumps(meta),
+                )
+                self.session.add(repair_run)
+                await self.session.commit()
+                return str(repair_run.id)
+        except Exception:
+            # Audit trail persistence should not abort repair result
+            return run_id_str
 
     async def _dispatch_repair(self, scope: RepairScope) -> tuple[int, int, str | None]:
         dataset = scope.dataset.upper()
@@ -423,21 +526,50 @@ class PrecisionRepairService:
                 )
             )
             row = (await self.session.execute(stmt)).scalars().first()
-            if row is not None:
-                return AuditStatus.COMPLETE, {
-                    "security": f"{scope.market}:{scope.security_code}",
-                    "trade_date": target_date.isoformat(),
-                    "has_trade": row.close is not None,
-                    "close": str(row.close) if row.close is not None else None,
-                    "status": "COMPLETE",
-                }
-            else:
+            if row is None:
                 return AuditStatus.FAILED, {
                     "security": f"{scope.market}:{scope.security_code}",
                     "trade_date": target_date.isoformat(),
                     "status": "FAILED",
                     "reason": "Price record still missing after repair",
                 }
+
+            # Canonical Data Quality validation on row:
+            # 1. Trading row must have valid OHLC consistency
+            #    (high >= max(open, close), low <= min(open, close), high >= low)
+            # 2. Non-negative volume
+            has_trade = row.close is not None
+            if has_trade:
+                if any(v is None for v in (row.open, row.high, row.low, row.close)):
+                    return AuditStatus.FAILED, {
+                        "security": f"{scope.market}:{scope.security_code}",
+                        "trade_date": target_date.isoformat(),
+                        "status": "FAILED",
+                        "reason": "INVALID_OHLC: Trading row has missing OHLC components",
+                    }
+                o, h, l_val, c = float(row.open), float(row.high), float(row.low), float(row.close)
+                if h < max(o, c) or l_val > min(o, c) or h < l_val:
+                    return AuditStatus.FAILED, {
+                        "security": f"{scope.market}:{scope.security_code}",
+                        "trade_date": target_date.isoformat(),
+                        "status": "FAILED",
+                        "reason": "INVALID_OHLC: High/Low bounds violated against Open/Close",
+                    }
+            if row.volume_shares is not None and row.volume_shares < 0:
+                return AuditStatus.FAILED, {
+                    "security": f"{scope.market}:{scope.security_code}",
+                    "trade_date": target_date.isoformat(),
+                    "status": "FAILED",
+                    "reason": "NEGATIVE_VOLUME: Share volume cannot be negative",
+                }
+
+            return AuditStatus.COMPLETE, {
+                "security": f"{scope.market}:{scope.security_code}",
+                "trade_date": target_date.isoformat(),
+                "has_trade": has_trade,
+                "close": str(row.close) if has_trade else None,
+                "status": "COMPLETE",
+            }
 
         # For dataset_date or general date scope, run daily audit
         daily_report = await self.audit_service.audit_date(target_date)
