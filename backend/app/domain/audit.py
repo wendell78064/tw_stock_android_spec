@@ -13,6 +13,101 @@ class AuditStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class RepairDecisionOutcome(StrEnum):
+    REPAIRABLE = "REPAIRABLE"
+    NOT_PUBLISHED = "NOT_PUBLISHED"
+    HOLIDAY = "HOLIDAY"
+    UNAVAILABLE = "UNAVAILABLE"
+    UNSUPPORTED = "UNSUPPORTED"
+    SKIP = "SKIP"
+    FAILED = "FAILED"
+
+
+class RepairScopeType(StrEnum):
+    SECURITY_DATE = "SECURITY_DATE"
+    DATASET_DATE = "DATASET_DATE"
+    DATE_RANGE = "DATE_RANGE"
+
+
+@dataclass(frozen=True)
+class RepairScope:
+    scope_type: RepairScopeType
+    dataset: str
+    target_date: date | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    market: str | None = None
+    security_code: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.scope_type == RepairScopeType.SECURITY_DATE:
+            if not self.target_date or not self.market or not self.security_code:
+                raise ValueError(
+                    "SECURITY_DATE repair scope requires target_date, market, and security_code"
+                )
+        elif self.scope_type == RepairScopeType.DATASET_DATE:
+            if not self.target_date:
+                raise ValueError("DATASET_DATE repair scope requires target_date")
+        elif self.scope_type == RepairScopeType.DATE_RANGE:
+            if not self.start_date or not self.end_date:
+                raise ValueError("DATE_RANGE repair scope requires start_date and end_date")
+            if self.start_date > self.end_date:
+                raise ValueError("start_date cannot be after end_date")
+
+
+@dataclass(frozen=True)
+class AuditFinding:
+    finding_id: str
+    dataset: str
+    target_date: date
+    audit_status: AuditStatus
+    market: str | None = None
+    security_code: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    missing_count: int = 0
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class RepairDecision:
+    finding_id: str
+    outcome: RepairDecisionOutcome
+    reason: str
+    scope: RepairScope | None = None
+
+
+@dataclass
+class PrecisionRepairResult:
+    finding_id: str
+    decision: RepairDecision
+    executed: bool
+    status_before: AuditStatus
+    status_after: AuditStatus
+    repaired_records_inserted: int = 0
+    repaired_records_updated: int = 0
+    error: str | None = None
+    ingestion_run_id: str | None = None
+    re_audit_report: dict[str, Any] = field(default_factory=dict)
+    executed_at: datetime | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+
+        def _serialize(val: Any) -> Any:
+            if isinstance(val, date | datetime):
+                return val.isoformat()
+            if isinstance(val, dict):
+                return {k: _serialize(v) for k, v in val.items()}
+            if isinstance(val, list):
+                return [_serialize(item) for item in val]
+            if isinstance(val, StrEnum):
+                return str(val)
+            return val
+
+        return _serialize(data)
+
+
 @dataclass
 class SecurityMasterAudit:
     total_securities: int
