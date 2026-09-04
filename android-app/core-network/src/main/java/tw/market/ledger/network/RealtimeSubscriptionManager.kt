@@ -28,14 +28,23 @@ data class WatchlistMembershipUpdate(
     val rejected: Set<RealtimeSecurityTarget> = emptySet(),
 )
 
+data class IndustryMembershipUpdate(
+    val enabled: Boolean,
+    val added: Set<RealtimeSecurityTarget> = emptySet(),
+    val removed: Set<RealtimeSecurityTarget> = emptySet(),
+    val rejected: Set<RealtimeSecurityTarget> = emptySet(),
+)
+
 class RealtimeSubscriptionManager(
     private val client: RealtimeSubscriptionClient,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + Job()),
     private val portfolioRealtimeEnabled: Boolean = false,
     private val watchlistRealtimeEnabled: Boolean = false,
+    private val industryRealtimeEnabled: Boolean = false,
 ) {
     companion object {
         const val P0_PORTFOLIO_OWNER = "P0_PORTFOLIO"
+        const val P3_INDUSTRY_OWNER = "P3_INDUSTRY"
         const val P4_WATCHLIST_OWNER = "P4_WATCHLIST"
     }
 
@@ -54,6 +63,7 @@ class RealtimeSubscriptionManager(
     private val ownerSubscriptions = mutableSetOf<OwnerIdentity>()
     private var portfolioTargets = emptySet<RealtimeSecurityTarget>()
     private var watchlistTargets = emptySet<RealtimeSecurityTarget>()
+    private var industryTargets = emptySet<RealtimeSecurityTarget>()
 
     // Latest quote cache: "MARKET:CODE" -> RealtimeQuote
     private val _latestQuotes = MutableStateFlow<Map<String, RealtimeQuote>>(emptyMap())
@@ -213,6 +223,37 @@ class RealtimeSubscriptionManager(
     @Synchronized
     fun releaseWatchlistMembership(): WatchlistMembershipUpdate =
         updateWatchlistMembership(emptySet())
+
+    @Synchronized
+    fun updateIndustryMembership(
+        targets: Set<RealtimeSecurityTarget>,
+    ): IndustryMembershipUpdate {
+        val normalized = targets.mapTo(mutableSetOf()) {
+            RealtimeSecurityTarget(it.market.uppercase(), it.code.uppercase())
+        }
+        val rejected = normalized.filterNotTo(mutableSetOf(), ::isValidTarget)
+        if (!industryRealtimeEnabled) {
+            return IndustryMembershipUpdate(enabled = false, rejected = rejected)
+        }
+        val current = industryTargets
+        val next = normalized - rejected
+        val removed = current - next
+        val added = next - current
+
+        updateTickOwnership(P3_INDUSTRY_OWNER, removed, acquire = false)
+        updateTickOwnership(P3_INDUSTRY_OWNER, added, acquire = true)
+        industryTargets = next
+        return IndustryMembershipUpdate(
+            enabled = true,
+            added = added,
+            removed = removed,
+            rejected = rejected,
+        )
+    }
+
+    @Synchronized
+    fun releaseIndustryMembership(): IndustryMembershipUpdate =
+        updateIndustryMembership(emptySet())
 
     fun getQuoteState(market: String, code: String): RealtimeQuote? {
         val key = "${market.uppercase()}:${code.uppercase()}"

@@ -34,8 +34,35 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import tw.market.ledger.model.TaxonomyLeader
 import tw.market.ledger.model.TaxonomyStrength
+
+@Composable
+fun StrengthDetailRoute(
+    id: String,
+    isIndustryTaxonomy: Boolean,
+    onSecurityClick: (String, String) -> Unit,
+    viewModel: StrengthDetailViewModel = hiltViewModel(),
+) {
+    androidx.compose.runtime.LaunchedEffect(id, isIndustryTaxonomy) {
+        viewModel.load(id, isIndustryTaxonomy)
+    }
+    DisposableEffect(viewModel) {
+        viewModel.activateRealtime()
+        onDispose(viewModel::deactivateRealtime)
+    }
+    val uiState by viewModel.uiState.collectAsState()
+    StrengthDetailScreen(
+        uiState = uiState,
+        onWindowSelect = viewModel::setWindow,
+        onSecurityClick = onSecurityClick,
+        onRetry = { viewModel.load(id, isIndustryTaxonomy) },
+    )
+}
 
 @Composable
 fun StrengthDetailScreen(
@@ -217,7 +244,7 @@ fun LeaderRow(leader: TaxonomyLeader, onClick: () -> Unit) {
         ) {
             Column {
                 Text("${leader.name} (${leader.code})", fontWeight = FontWeight.Bold)
-                Text("最新收盤: ${leader.latestClose ?: "--"}", style = MaterialTheme.typography.bodySmall)
+                Text("最新收盤: ${leader.latestClose ?: "--"} · ${leader.dataStatus}", style = MaterialTheme.typography.bodySmall)
             }
             Text(
                 text = "${leader.returnPct}%",

@@ -143,6 +143,7 @@ object AppModule {
             client,
             portfolioRealtimeEnabled = BuildConfig.P0_PORTFOLIO_REALTIME_ENABLED,
             watchlistRealtimeEnabled = BuildConfig.P4_WATCHLIST_REALTIME_ENABLED,
+            industryRealtimeEnabled = BuildConfig.P3_INDUSTRY_REALTIME_ENABLED,
         )
 
     @Provides

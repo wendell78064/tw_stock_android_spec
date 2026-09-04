@@ -38,6 +38,9 @@ import tw.market.ledger.model.TaxonomyLeader
 import tw.market.ledger.model.TaxonomyStrength
 import tw.market.ledger.model.TaxonomyStrengthDetail
 import tw.market.ledger.model.Theme
+import tw.market.ledger.network.RealtimeQuoteType
+import tw.market.ledger.network.RealtimeSubscriptionClient
+import tw.market.ledger.network.RealtimeSubscriptionManager
 
 private val SAMPLE_STRENGTH = TaxonomyStrength(
     id = "str_1",
@@ -151,7 +154,9 @@ class IndustryStrengthViewModelTest {
     @Test
     fun `strength detail viewmodel loads detail and leaders`() = runTest(dispatcher) {
         val repo = FakeStrengthRepository()
-        val vm = StrengthDetailViewModel(repo)
+        val client = FakeRealtimeClient()
+        val manager = RealtimeSubscriptionManager(client, scope = backgroundScope, industryRealtimeEnabled = true)
+        val vm = StrengthDetailViewModel(repo, manager)
         vm.load("ind_1", isIndustryTaxonomy = true, window = 20)
         dispatcher.scheduler.advanceUntilIdle()
 
@@ -162,6 +167,125 @@ class IndustryStrengthViewModelTest {
         assertEquals(1, success.detail.leaders.size)
         assertEquals("2330", success.detail.leaders[0].code)
     }
+
+    @Test
+    fun `strength detail viewmodel manages p3 realtime lifecycle and set-diff`() = runTest(dispatcher) {
+        val repo = FakeStrengthRepository()
+        val client = FakeRealtimeClient()
+        val managerScope = kotlinx.coroutines.CoroutineScope(dispatcher + kotlinx.coroutines.Job())
+        val manager = RealtimeSubscriptionManager(client, scope = managerScope, industryRealtimeEnabled = true)
+        val store = androidx.lifecycle.ViewModelStore()
+        val vm = StrengthDetailViewModel(repo, manager)
+        store.put("detail", vm)
+
+        // 1. Initial load before activation -> no subscriptions
+        vm.load("ind_1", isIndustryTaxonomy = true, window = 20)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(client.calls.isEmpty())
+
+        // 2. Entering detail screen activates realtime -> acquires leaders + laggards
+        vm.activateRealtime()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(
+            listOf(
+                FakeRealtimeClient.Call("subscribe", "TWSE", "2303", setOf(RealtimeQuoteType.TICK)),
+                FakeRealtimeClient.Call("subscribe", "TWSE", "2330", setOf(RealtimeQuoteType.TICK)),
+            ),
+            client.calls.sortedBy { it.code }
+        )
+
+        // 3. Emitting realtime quote updates leader row overlay
+        client.emit(
+            tw.market.ledger.model.RealtimeQuote(
+                securityId = "sec_1",
+                marketId = "TWSE",
+                code = "2330",
+                exchangeTimestamp = "2026-09-04T09:30:00Z",
+                receivedAt = "2026-09-04T09:30:01Z",
+                lastPrice = "1050.0",
+                change = "50.0",
+                changePercent = "5.00",
+                dataStatus = tw.market.ledger.model.RealtimeDataStatus.LIVE,
+            )
+        )
+        dispatcher.scheduler.advanceUntilIdle()
+        val updatedState = vm.uiState.value as StrengthDetailUiState.Success
+        val leader2330 = updatedState.detail.leaders.first { it.code == "2330" }
+        assertEquals("1050.0", leader2330.latestClose)
+        assertEquals("5.00", leader2330.returnPct)
+        assertEquals(DataStatus.LIVE, leader2330.dataStatus)
+
+        // 4. Same membership reorder / reload causes no subscription churn
+        client.calls.clear()
+        repo.detailResult = Result.success(
+            TaxonomyStrengthDetail(
+                snapshot = SAMPLE_STRENGTH,
+                leaders = listOf(SAMPLE_LAGGARD), // reordered
+                laggards = listOf(SAMPLE_LEADER),
+                isStale = false,
+            )
+        )
+        vm.load("ind_1", isIndustryTaxonomy = true, window = 20)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertTrue(client.calls.isEmpty()) // No churn on identical union set
+
+        // 5. Switching taxonomy performs set-diff
+        client.calls.clear()
+        val leaderNew = TaxonomyLeader(
+            securityId = "sec_3",
+            code = "2454",
+            name = "聯發科",
+            market = MarketCode.TWSE,
+            returnPct = "3.00",
+            latestClose = "1200.0",
+            dataStatus = DataStatus.FINAL,
+        )
+        repo.detailResult = Result.success(
+            TaxonomyStrengthDetail(
+                snapshot = SAMPLE_STRENGTH,
+                leaders = listOf(leaderNew),
+                laggards = listOf(SAMPLE_LEADER), // 2330 retained, 2303 removed
+                isStale = false,
+            )
+        )
+        vm.load("ind_2", isIndustryTaxonomy = true, window = 20)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(
+            listOf(FakeRealtimeClient.Call("unsubscribe", "TWSE", "2303", setOf(RealtimeQuoteType.TICK))),
+            client.calls.filter { it.action == "unsubscribe" }
+        )
+        assertEquals(
+            listOf(FakeRealtimeClient.Call("subscribe", "TWSE", "2454", setOf(RealtimeQuoteType.TICK))),
+            client.calls.filter { it.action == "subscribe" }
+        )
+
+        // 6. Leaving screen / clearing ViewModelStore releases all P3 ownership
+        client.calls.clear()
+        store.clear()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(
+            listOf(
+                FakeRealtimeClient.Call("unsubscribe", "TWSE", "2330", setOf(RealtimeQuoteType.TICK)),
+                FakeRealtimeClient.Call("unsubscribe", "TWSE", "2454", setOf(RealtimeQuoteType.TICK)),
+            ),
+            client.calls.sortedBy { it.code }
+        )
+    }
+}
+
+private class FakeRealtimeClient : RealtimeSubscriptionClient {
+    data class Call(val action: String, val market: String, val code: String, val quoteTypes: Set<RealtimeQuoteType>)
+    private val mutableQuotes = kotlinx.coroutines.flow.MutableSharedFlow<tw.market.ledger.model.RealtimeQuote>(replay = 1)
+    override val quotesFlow: kotlinx.coroutines.flow.SharedFlow<tw.market.ledger.model.RealtimeQuote> = mutableQuotes
+    val calls = mutableListOf<Call>()
+    override fun connect() = Unit
+    override fun subscribe(market: String, code: String, quoteTypes: Set<RealtimeQuoteType>) {
+        calls += Call("subscribe", market, code, quoteTypes)
+    }
+    override fun unsubscribe(market: String, code: String, quoteTypes: Set<RealtimeQuoteType>) {
+        calls += Call("unsubscribe", market, code, quoteTypes)
+    }
+    fun emit(quote: tw.market.ledger.model.RealtimeQuote) = mutableQuotes.tryEmit(quote)
 }
 
 @RunWith(RobolectricTestRunner::class)

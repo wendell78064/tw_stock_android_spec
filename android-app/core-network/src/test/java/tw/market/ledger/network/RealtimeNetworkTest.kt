@@ -306,6 +306,96 @@ class RealtimeNetworkTest {
     }
 
     @Test
+    fun p3IndustryMembershipDefaultDisabledAndTickOnlyDeduplicated() {
+        val client = FakeSubscriptionClient()
+        val disabledManager = RealtimeSubscriptionManager(client, industryRealtimeEnabled = false)
+
+        val disabledUpdate = disabledManager.updateIndustryMembership(
+            setOf(
+                RealtimeSecurityTarget("TWSE", "2330"),
+                RealtimeSecurityTarget("TPEX", "6488"),
+                RealtimeSecurityTarget("INVALID", "abc"),
+            )
+        )
+        assertFalse(disabledUpdate.enabled)
+        assertEquals(1, disabledUpdate.rejected.size)
+        assertTrue(client.calls.isEmpty())
+
+        val enabledManager = RealtimeSubscriptionManager(client, industryRealtimeEnabled = true)
+        val first = enabledManager.updateIndustryMembership(
+            setOf(
+                RealtimeSecurityTarget("twse", "2330"),
+                RealtimeSecurityTarget("TWSE", "2330"),
+                RealtimeSecurityTarget("TPEX", "6488"),
+                RealtimeSecurityTarget("INVALID", "bad"),
+            )
+        )
+        assertTrue(first.enabled)
+        assertEquals(2, first.added.size)
+        assertEquals(1, first.rejected.size)
+        assertTrue(client.calls.all { it.quoteTypes == setOf(RealtimeQuoteType.TICK) })
+
+        val unchanged = enabledManager.updateIndustryMembership(
+            setOf(
+                RealtimeSecurityTarget("TWSE", "2330"),
+                RealtimeSecurityTarget("TPEX", "6488"),
+            )
+        )
+        assertTrue(unchanged.added.isEmpty())
+        assertTrue(unchanged.removed.isEmpty())
+
+        val switched = enabledManager.updateIndustryMembership(
+            setOf(
+                RealtimeSecurityTarget("TPEX", "6488"),
+                RealtimeSecurityTarget("TWSE", "2454"),
+            )
+        )
+        assertEquals(setOf(RealtimeSecurityTarget("TWSE", "2454")), switched.added)
+        assertEquals(setOf(RealtimeSecurityTarget("TWSE", "2330")), switched.removed)
+
+        enabledManager.releaseIndustryMembership()
+        assertTrue(client.activeTargets.isEmpty())
+    }
+
+    @Test
+    fun p0P2P3AndP4ShareTickWhileBidAskAndOwnerReleasesRemainIndependent() {
+        val client = FakeSubscriptionClient()
+        val manager = RealtimeSubscriptionManager(
+            client,
+            portfolioRealtimeEnabled = true,
+            watchlistRealtimeEnabled = true,
+            industryRealtimeEnabled = true,
+        )
+
+        manager.updatePortfolioMembership(setOf(RealtimeSecurityTarget("TWSE", "2330")))
+        manager.updateWatchlistMembership(setOf(RealtimeSecurityTarget("TWSE", "2330")))
+        manager.updateIndustryMembership(setOf(RealtimeSecurityTarget("TWSE", "2330")))
+        manager.acquireCurrentView("P2_DETAIL", "TWSE", "2330")
+
+        // 2330 Tick has only 1 subscribe call across P0, P4, P3, P2
+        assertEquals(1, client.calls.count { it.action == "subscribe" && it.quoteTypes == setOf(RealtimeQuoteType.TICK) })
+        // 2330 BidAsk has 1 subscribe call owned by P2
+        assertEquals(1, client.calls.count { it.action == "subscribe" && it.quoteTypes == setOf(RealtimeQuoteType.BID_ASK) })
+
+        // Release P2 Current View -> BidAsk released, Tick retained by P0+P3+P4
+        manager.releaseCurrentView("P2_DETAIL", "TWSE", "2330")
+        assertEquals(1, client.calls.count { it.action == "unsubscribe" && it.quoteTypes == setOf(RealtimeQuoteType.BID_ASK) })
+        assertTrue(RealtimeSubscriptionTarget("TWSE", "2330", RealtimeQuoteType.TICK) in client.activeTargets)
+
+        // Release P3 Industry Detail -> Tick retained by P0+P4
+        manager.releaseIndustryMembership()
+        assertTrue(RealtimeSubscriptionTarget("TWSE", "2330", RealtimeQuoteType.TICK) in client.activeTargets)
+
+        // Release P4 Watchlist -> Tick retained by P0
+        manager.releaseWatchlistMembership()
+        assertTrue(RealtimeSubscriptionTarget("TWSE", "2330", RealtimeQuoteType.TICK) in client.activeTargets)
+
+        // Release P0 Portfolio -> Final Tick released
+        manager.releasePortfolioMembership()
+        assertTrue(client.activeTargets.isEmpty())
+    }
+
+    @Test
     fun testRealtimeQuoteModelProperties() {
         val quote = RealtimeQuote(
             securityId = "sec_2330",
