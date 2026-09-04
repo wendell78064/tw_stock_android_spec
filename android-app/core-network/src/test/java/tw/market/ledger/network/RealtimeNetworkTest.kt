@@ -240,6 +240,72 @@ class RealtimeNetworkTest {
     }
 
     @Test
+    fun watchlistMembershipIsTickOnlyDeduplicatedSetDiffedAndSafelyGated() {
+        val disabledClient = FakeSubscriptionClient()
+        val disabled = RealtimeSubscriptionManager(disabledClient)
+            .updateWatchlistMembership(setOf(RealtimeSecurityTarget("TWSE", "2330")))
+        assertFalse(disabled.enabled)
+        assertTrue(disabledClient.calls.isEmpty())
+
+        val client = FakeSubscriptionClient()
+        val manager = RealtimeSubscriptionManager(client, watchlistRealtimeEnabled = true)
+        val first = manager.updateWatchlistMembership(
+            setOf(
+                RealtimeSecurityTarget("twse", "2330"),
+                RealtimeSecurityTarget("TWSE", "2330"),
+                RealtimeSecurityTarget("TPEX", "6488"),
+                RealtimeSecurityTarget("UNKNOWN", "9999"),
+            )
+        )
+        assertEquals(2, first.added.size)
+        assertEquals(1, first.rejected.size)
+        assertTrue(client.calls.all { it.quoteTypes == setOf(RealtimeQuoteType.TICK) })
+
+        val unchanged = manager.updateWatchlistMembership(
+            setOf(
+                RealtimeSecurityTarget("TWSE", "2330"),
+                RealtimeSecurityTarget("TPEX", "6488"),
+            )
+        )
+        assertTrue(unchanged.added.isEmpty())
+        assertTrue(unchanged.removed.isEmpty())
+
+        val changed = manager.updateWatchlistMembership(
+            setOf(
+                RealtimeSecurityTarget("TPEX", "6488"),
+                RealtimeSecurityTarget("TWSE", "2454"),
+            )
+        )
+        assertEquals(setOf(RealtimeSecurityTarget("TWSE", "2454")), changed.added)
+        assertEquals(setOf(RealtimeSecurityTarget("TWSE", "2330")), changed.removed)
+        manager.releaseWatchlistMembership()
+        assertTrue(client.activeTargets.isEmpty())
+    }
+
+    @Test
+    fun p0P2AndP4ShareTickWhileBidAskAndOwnerReleasesRemainIndependent() {
+        val client = FakeSubscriptionClient()
+        val manager = RealtimeSubscriptionManager(
+            client,
+            portfolioRealtimeEnabled = true,
+            watchlistRealtimeEnabled = true,
+        )
+
+        manager.updatePortfolioMembership(setOf(RealtimeSecurityTarget("TWSE", "2330")))
+        manager.updateWatchlistMembership(setOf(RealtimeSecurityTarget("TWSE", "2330")))
+        manager.acquireCurrentView("P2_DETAIL", "TWSE", "2330")
+
+        assertEquals(1, client.calls.count { it.action == "subscribe" && it.quoteTypes == setOf(RealtimeQuoteType.TICK) })
+        assertEquals(1, client.calls.count { it.action == "subscribe" && it.quoteTypes == setOf(RealtimeQuoteType.BID_ASK) })
+
+        manager.releaseCurrentView("P2_DETAIL", "TWSE", "2330")
+        manager.releaseWatchlistMembership()
+        assertTrue(RealtimeSubscriptionTarget("TWSE", "2330", RealtimeQuoteType.TICK) in client.activeTargets)
+        manager.releasePortfolioMembership()
+        assertTrue(client.activeTargets.isEmpty())
+    }
+
+    @Test
     fun testRealtimeQuoteModelProperties() {
         val quote = RealtimeQuote(
             securityId = "sec_2330",

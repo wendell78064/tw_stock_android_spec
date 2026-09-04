@@ -21,13 +21,22 @@ data class PortfolioMembershipUpdate(
     val rejected: Set<RealtimeSecurityTarget> = emptySet(),
 )
 
+data class WatchlistMembershipUpdate(
+    val enabled: Boolean,
+    val added: Set<RealtimeSecurityTarget> = emptySet(),
+    val removed: Set<RealtimeSecurityTarget> = emptySet(),
+    val rejected: Set<RealtimeSecurityTarget> = emptySet(),
+)
+
 class RealtimeSubscriptionManager(
     private val client: RealtimeSubscriptionClient,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + Job()),
     private val portfolioRealtimeEnabled: Boolean = false,
+    private val watchlistRealtimeEnabled: Boolean = false,
 ) {
     companion object {
         const val P0_PORTFOLIO_OWNER = "P0_PORTFOLIO"
+        const val P4_WATCHLIST_OWNER = "P4_WATCHLIST"
     }
 
     private data class SubscriptionIdentity(
@@ -44,6 +53,7 @@ class RealtimeSubscriptionManager(
     private val refCounts = mutableMapOf<SubscriptionIdentity, Int>()
     private val ownerSubscriptions = mutableSetOf<OwnerIdentity>()
     private var portfolioTargets = emptySet<RealtimeSecurityTarget>()
+    private var watchlistTargets = emptySet<RealtimeSecurityTarget>()
 
     // Latest quote cache: "MARKET:CODE" -> RealtimeQuote
     private val _latestQuotes = MutableStateFlow<Map<String, RealtimeQuote>>(emptyMap())
@@ -173,6 +183,37 @@ class RealtimeSubscriptionManager(
     fun releasePortfolioMembership(): PortfolioMembershipUpdate =
         updatePortfolioMembership(emptySet())
 
+    @Synchronized
+    fun updateWatchlistMembership(
+        targets: Set<RealtimeSecurityTarget>,
+    ): WatchlistMembershipUpdate {
+        val normalized = targets.mapTo(mutableSetOf()) {
+            RealtimeSecurityTarget(it.market.uppercase(), it.code.uppercase())
+        }
+        val rejected = normalized.filterNotTo(mutableSetOf(), ::isValidTarget)
+        if (!watchlistRealtimeEnabled) {
+            return WatchlistMembershipUpdate(enabled = false, rejected = rejected)
+        }
+        val current = watchlistTargets
+        val next = normalized - rejected
+        val removed = current - next
+        val added = next - current
+
+        updateTickOwnership(P4_WATCHLIST_OWNER, removed, acquire = false)
+        updateTickOwnership(P4_WATCHLIST_OWNER, added, acquire = true)
+        watchlistTargets = next
+        return WatchlistMembershipUpdate(
+            enabled = true,
+            added = added,
+            removed = removed,
+            rejected = rejected,
+        )
+    }
+
+    @Synchronized
+    fun releaseWatchlistMembership(): WatchlistMembershipUpdate =
+        updateWatchlistMembership(emptySet())
+
     fun getQuoteState(market: String, code: String): RealtimeQuote? {
         val key = "${market.uppercase()}:${code.uppercase()}"
         val map: Map<String, RealtimeQuote> = _latestQuotes.value
@@ -215,6 +256,30 @@ class RealtimeSubscriptionManager(
         return removed
     }
 
-    private fun isValidPortfolioTarget(target: RealtimeSecurityTarget): Boolean =
+    private fun updateTickOwnership(
+        owner: String,
+        targets: Set<RealtimeSecurityTarget>,
+        acquire: Boolean,
+    ) {
+        var connectRequired = false
+        targets.sortedWith(compareBy({ it.market }, { it.code })).forEach { target ->
+            val identity = SubscriptionIdentity(target.market, target.code, RealtimeQuoteType.TICK)
+            if (acquire && ownerSubscriptions.add(OwnerIdentity(owner, identity))) {
+                val added = increment(target.market, target.code, setOf(RealtimeQuoteType.TICK))
+                if (added.isNotEmpty()) {
+                    client.subscribe(target.market, target.code, added)
+                    connectRequired = true
+                }
+            } else if (!acquire && ownerSubscriptions.remove(OwnerIdentity(owner, identity))) {
+                val removed = decrement(target.market, target.code, setOf(RealtimeQuoteType.TICK))
+                if (removed.isNotEmpty()) client.unsubscribe(target.market, target.code, removed)
+            }
+        }
+        if (connectRequired) client.connect()
+    }
+
+    private fun isValidPortfolioTarget(target: RealtimeSecurityTarget): Boolean = isValidTarget(target)
+
+    private fun isValidTarget(target: RealtimeSecurityTarget): Boolean =
         target.market in setOf("TWSE", "TPEX") && target.code.matches(Regex("^[0-9]{4,6}$"))
 }

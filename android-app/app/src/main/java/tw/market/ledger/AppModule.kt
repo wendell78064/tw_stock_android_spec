@@ -142,6 +142,7 @@ object AppModule {
         tw.market.ledger.network.RealtimeSubscriptionManager(
             client,
             portfolioRealtimeEnabled = BuildConfig.P0_PORTFOLIO_REALTIME_ENABLED,
+            watchlistRealtimeEnabled = BuildConfig.P4_WATCHLIST_REALTIME_ENABLED,
         )
 
     @Provides

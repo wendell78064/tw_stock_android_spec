@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,6 +38,10 @@ import tw.market.ledger.feature.watchlist.domain.WatchlistRepository
 import tw.market.ledger.model.WatchlistDashboard
 import tw.market.ledger.model.WatchlistItem
 import tw.market.ledger.model.WatchlistSort
+import tw.market.ledger.model.RealtimeDataStatus
+import tw.market.ledger.model.RealtimeQuote
+import tw.market.ledger.network.RealtimeSecurityTarget
+import tw.market.ledger.network.RealtimeSubscriptionManager
 
 sealed interface WatchlistUiState {
     data object Loading : WatchlistUiState
@@ -49,22 +54,41 @@ sealed interface WatchlistUiState {
 }
 
 @HiltViewModel
-class WatchlistViewModel @Inject constructor(private val repository: WatchlistRepository) : ViewModel() {
+class WatchlistViewModel @Inject constructor(
+    private val repository: WatchlistRepository,
+    private val realtimeSubscriptions: RealtimeSubscriptionManager,
+) : ViewModel() {
     private val mutableState = MutableStateFlow<WatchlistUiState>(WatchlistUiState.Loading)
     val state: StateFlow<WatchlistUiState> = mutableState
     private var selected: String? = null
     private var sort = WatchlistSort.MANUAL
-    init { refresh() }
+    private var realtimeActive = false
+    init {
+        viewModelScope.launch {
+            realtimeSubscriptions.latestQuotes.collect { quotes ->
+                mutableState.value = mutableState.value.withRealtimeQuotes(quotes)
+            }
+        }
+        refresh()
+    }
     fun refresh(id: String? = selected) = viewModelScope.launch {
         mutableState.value = WatchlistUiState.Loading
         runCatching { repository.dashboard(id) }.onSuccess { dashboard ->
             selected = dashboard.selectedId
+            if (realtimeActive && !dashboard.offline) {
+                realtimeSubscriptions.updateWatchlistMembership(
+                    dashboard.items.mapTo(mutableSetOf()) {
+                        RealtimeSecurityTarget(it.market, it.securityCode)
+                    }
+                )
+            }
+            val current = dashboard.withRealtimeQuotes(realtimeSubscriptions.latestQuotes.value)
             mutableState.value = when {
-                dashboard.offline -> WatchlistUiState.Offline(dashboard)
-                dashboard.items.isEmpty() -> WatchlistUiState.Empty(dashboard)
-                dashboard.items.any { it.dataStatus == "PARTIAL" || it.dataStatus == "UNAVAILABLE" } -> WatchlistUiState.Partial(dashboard)
-                dashboard.items.any { it.dataStatus == "STALE" } -> WatchlistUiState.Stale(dashboard)
-                else -> WatchlistUiState.Success(dashboard.copy(items = sorted(dashboard.items)), sort)
+                current.offline -> WatchlistUiState.Offline(current)
+                current.items.isEmpty() -> WatchlistUiState.Empty(current)
+                current.items.any { it.dataStatus == "PARTIAL" || it.dataStatus == "UNAVAILABLE" } -> WatchlistUiState.Partial(current)
+                current.items.any { it.dataStatus == "STALE" } -> WatchlistUiState.Stale(current)
+                else -> WatchlistUiState.Success(current.copy(items = sorted(current.items)), sort)
             }
         }.onFailure { mutableState.value = WatchlistUiState.Error(it.message ?: "載入失敗") }
     }
@@ -95,9 +119,62 @@ class WatchlistViewModel @Inject constructor(private val repository: WatchlistRe
         val to = (from + delta).coerceIn(0, ordered.lastIndex); if (from >= 0 && from != to) { val moved = ordered.removeAt(from); ordered.add(to, moved); selected?.let { repository.reorder(it, ordered.map { row -> row.id }) } }
     }
     private fun mutate(block: suspend () -> Unit) = viewModelScope.launch { runCatching { block() }.onSuccess { refresh() }.onFailure { mutableState.value = WatchlistUiState.Error(it.message ?: "操作失敗") } }
+    fun activateRealtime() {
+        realtimeActive = true
+        mutableState.value.dashboardOrNull()?.takeUnless { it.offline }?.let { dashboard ->
+            realtimeSubscriptions.updateWatchlistMembership(
+                dashboard.items.mapTo(mutableSetOf()) {
+                    RealtimeSecurityTarget(it.market, it.securityCode)
+                }
+            )
+        }
+    }
+    fun deactivateRealtime() {
+        realtimeActive = false
+        realtimeSubscriptions.releaseWatchlistMembership()
+    }
+    override fun onCleared() {
+        deactivateRealtime()
+        super.onCleared()
+    }
 }
 
+private fun WatchlistUiState.dashboardOrNull(): WatchlistDashboard? = when (this) {
+    is WatchlistUiState.Empty -> dashboard
+    is WatchlistUiState.Success -> dashboard
+    is WatchlistUiState.Offline -> dashboard
+    is WatchlistUiState.Stale -> dashboard
+    is WatchlistUiState.Partial -> dashboard
+    else -> null
+}
+
+private fun WatchlistUiState.withRealtimeQuotes(quotes: Map<String, RealtimeQuote>): WatchlistUiState =
+    when (this) {
+        is WatchlistUiState.Empty -> copy(dashboard = dashboard.withRealtimeQuotes(quotes))
+        is WatchlistUiState.Success -> copy(dashboard = dashboard.withRealtimeQuotes(quotes))
+        is WatchlistUiState.Offline -> this
+        is WatchlistUiState.Stale -> copy(dashboard = dashboard.withRealtimeQuotes(quotes))
+        is WatchlistUiState.Partial -> copy(dashboard = dashboard.withRealtimeQuotes(quotes))
+        else -> this
+    }
+
+private fun WatchlistDashboard.withRealtimeQuotes(quotes: Map<String, RealtimeQuote>): WatchlistDashboard =
+    copy(items = items.map { item ->
+        val quote = quotes["${item.market.uppercase()}:${item.securityCode.uppercase()}"]
+        if (quote == null || quote.dataStatus == RealtimeDataStatus.UNAVAILABLE) item else item.copy(
+            close = quote.lastPrice,
+            change = quote.change ?: item.change,
+            changePercent = quote.changePercent ?: item.changePercent,
+            priceAsOf = quote.exchangeTimestamp,
+            dataStatus = quote.dataStatus.name,
+        )
+    })
+
 @Composable fun WatchlistRoute(onAlert: (WatchlistItem) -> Unit = {}, viewModel: WatchlistViewModel = hiltViewModel()) {
+    DisposableEffect(viewModel) {
+        viewModel.activateRealtime()
+        onDispose(viewModel::deactivateRealtime)
+    }
     val state by viewModel.state.collectAsState(); WatchlistScreen(state, viewModel, onAlert)
 }
 

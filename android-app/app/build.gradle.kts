@@ -27,6 +27,10 @@ android {
         System.getenv("P0_PORTFOLIO_REALTIME_ENABLED")
             ?: project.findProperty("P0_PORTFOLIO_REALTIME_ENABLED") as? String
         )?.toBooleanStrictOrNull() ?: false
+    val p4WatchlistRealtimeEnabled = (
+        System.getenv("P4_WATCHLIST_REALTIME_ENABLED")
+            ?: project.findProperty("P4_WATCHLIST_REALTIME_ENABLED") as? String
+        )?.toBooleanStrictOrNull() ?: false
 
     val hasAnySigningInput = !keystoreFile.isNullOrBlank() || !keystorePassword.isNullOrBlank() || !keyAlias.isNullOrBlank() || !keyPassword.isNullOrBlank()
     val isSigningFullyConfigured = !keystoreFile.isNullOrBlank() && !keystorePassword.isNullOrBlank() && !keyAlias.isNullOrBlank() && !keyPassword.isNullOrBlank() && file(keystoreFile).exists()
@@ -54,6 +58,7 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000/v1/\"")
             buildConfigField("String", "WS_BASE_URL", "\"ws://10.0.2.2:8000/v1/ws/quotes\"")
             buildConfigField("boolean", "P0_PORTFOLIO_REALTIME_ENABLED", p0PortfolioRealtimeEnabled.toString())
+            buildConfigField("boolean", "P4_WATCHLIST_REALTIME_ENABLED", p4WatchlistRealtimeEnabled.toString())
         }
         getByName("release") {
             isMinifyEnabled = false
@@ -63,6 +68,7 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"https://stock-api.orca-wave.com/v1/\"")
             buildConfigField("String", "WS_BASE_URL", "\"wss://stock-api.orca-wave.com/v1/ws/quotes\"")
             buildConfigField("boolean", "P0_PORTFOLIO_REALTIME_ENABLED", p0PortfolioRealtimeEnabled.toString())
+            buildConfigField("boolean", "P4_WATCHLIST_REALTIME_ENABLED", p4WatchlistRealtimeEnabled.toString())
         }
     }
 
