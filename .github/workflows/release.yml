@@ -5,6 +5,19 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      enable_p0:
+        description: "Enable P0 Portfolio Realtime"
+        type: boolean
+        default: false
+      enable_p3:
+        description: "Enable P3 Industry Realtime"
+        type: boolean
+        default: false
+      enable_p4:
+        description: "Enable P4 Watchlist Realtime"
+        type: boolean
+        default: false
 
 jobs:
   build-and-release:
@@ -27,6 +40,10 @@ jobs:
 
       - name: Resolve Version and Execution Mode
         id: version_check
+        env:
+          INPUT_ENABLE_P0: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_p0 == true }}
+          INPUT_ENABLE_P3: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_p3 == true }}
+          INPUT_ENABLE_P4: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_p4 == true }}
         run: |
           # Extract versionName from app/build.gradle.kts
           APP_VERSION=$(grep 'versionName = ' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
@@ -41,12 +58,20 @@ jobs:
               exit 1
             fi
             IS_RELEASE="true"
+            ENABLE_P0="false"
+            ENABLE_P3="false"
+            ENABLE_P4="false"
             echo "Mode: Production Tag Release (${TAG})"
           else
             TAG="${EXPECTED_TAG}"
             IS_RELEASE="false"
+            ENABLE_P0="${INPUT_ENABLE_P0:-false}"
+            ENABLE_P3="${INPUT_ENABLE_P3:-false}"
+            ENABLE_P4="${INPUT_ENABLE_P4:-false}"
             echo "Mode: Manual Verification Build (No release will be published)"
           fi
+
+          echo "Feature Gates: P0=${ENABLE_P0} P3=${ENABLE_P3} P4=${ENABLE_P4}"
 
           TITLE="TW Market Ledger ${TAG}"
 
@@ -54,6 +79,9 @@ jobs:
           echo "version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
           echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
           echo "is_release=${IS_RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "enable_p0=${ENABLE_P0}" >> "$GITHUB_OUTPUT"
+          echo "enable_p3=${ENABLE_P3}" >> "$GITHUB_OUTPUT"
+          echo "enable_p4=${ENABLE_P4}" >> "$GITHUB_OUTPUT"
 
       - name: Decode Android Keystore
         id: keystore
@@ -75,8 +103,15 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ENABLE_P0: ${{ steps.version_check.outputs.enable_p0 }}
+          ENABLE_P3: ${{ steps.version_check.outputs.enable_p3 }}
+          ENABLE_P4: ${{ steps.version_check.outputs.enable_p4 }}
         run: |
-          ./gradlew --no-daemon openApiValidate openApiGenerate :app:assembleRelease
+          echo "Building Release APK with feature gates: P0=${ENABLE_P0}, P3=${ENABLE_P3}, P4=${ENABLE_P4}"
+          ./gradlew --no-daemon openApiValidate openApiGenerate :app:assembleRelease \
+            -PP0_PORTFOLIO_REALTIME_ENABLED="${ENABLE_P0}" \
+            -PP3_INDUSTRY_REALTIME_ENABLED="${ENABLE_P3}" \
+            -PP4_WATCHLIST_REALTIME_ENABLED="${ENABLE_P4}"
 
       - name: Verify Signed APK with apksigner
         id: verify_apk
