@@ -81,8 +81,14 @@ services:
       SHIOAJI_SIMULATION: ${SHIOAJI_SIMULATION:-true}
       P1_ALERT_REALTIME_ENABLED: ${P1_ALERT_REALTIME_ENABLED:-false}
       REALTIME_BROKER_SUBSCRIPTION_BUDGET: ${REALTIME_BROKER_SUBSCRIPTION_BUDGET:-}
+      FCM_ENABLED: ${FCM_ENABLED:-false}
+      FCM_PROJECT_ID: ${FCM_PROJECT_ID:-}
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
+      FCM_MAX_RETRIES: ${FCM_MAX_RETRIES:-3}
+      FCM_MONITORING_USER_ID: ${FCM_MONITORING_USER_ID:-}
     volumes:
       - ${TWML_DATA_ROOT:-/volume1/docker/tw-market-ledger}/temp:/app/temp
+      - ${TWML_DATA_ROOT:-/volume1/docker/tw-market-ledger}/config:/app/config:ro
     depends_on:
       postgres:
         condition: service_healthy

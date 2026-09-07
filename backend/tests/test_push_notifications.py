@@ -365,3 +365,45 @@ async def test_invalid_token_deactivates_token():
     deliv = (await session.scalars(select(PushDeliveryModel))).first()
     assert deliv.status == "INVALID_TOKEN"
     assert deliv.attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_monitoring_user_id_unset_safe():
+    session = MemorySession()
+    provider = FakePushProvider()
+    service = PushNotificationService(session, provider)
+
+    # When event.user_id is None (e.g. FCM_MONITORING_USER_ID is unset), deliver_event fails safe
+    event = PushEventModel(
+        id=uuid4(),
+        user_id=None,
+        event_type="DATASET_STALE",
+        title="Title",
+        body="Body",
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+    results = await service.deliver_event(event)
+    assert results == []
+    assert len(provider.sent_messages) == 0
+
+
+@pytest.mark.asyncio
+async def test_missing_credential_file_safe_when_disabled():
+    settings = Settings(
+        fcm_enabled=False,
+        fcm_project_id="sample-project",
+        fcm_credentials_file="/nonexistent/path/serviceAccount.json",
+    )
+    provider = FcmPushProvider(settings)
+    assert provider.configured is False
+
+    health = await provider.health()
+    assert health["status"] == "UNCONFIGURED"
+    assert health["configured"] is False
+
+    # Send attempt fails closed without accessing filesystem or raising exceptions
+    res = await provider.send("tok-123", PushNotificationPayload("e1", "ALERT", "2330", "T", "B"))
+    assert res.success is False
+    assert res.error == "FCM_UNCONFIGURED"
+

@@ -18,6 +18,10 @@ on:
         description: "Enable P4 Watchlist Realtime"
         type: boolean
         default: false
+      enable_fcm:
+        description: "Enable FCM in Release Build"
+        type: boolean
+        default: false
 
 jobs:
   build-and-release:
@@ -44,6 +48,7 @@ jobs:
           INPUT_ENABLE_P0: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_p0 == true }}
           INPUT_ENABLE_P3: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_p3 == true }}
           INPUT_ENABLE_P4: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_p4 == true }}
+          INPUT_ENABLE_FCM: ${{ github.event_name == 'workflow_dispatch' && inputs.enable_fcm == true }}
         run: |
           # Extract versionName from app/build.gradle.kts
           APP_VERSION=$(grep 'versionName = ' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')
@@ -61,6 +66,7 @@ jobs:
             ENABLE_P0="false"
             ENABLE_P3="false"
             ENABLE_P4="false"
+            ENABLE_FCM="false"
             echo "Mode: Production Tag Release (${TAG})"
           else
             TAG="${EXPECTED_TAG}"
@@ -68,10 +74,11 @@ jobs:
             ENABLE_P0="${INPUT_ENABLE_P0:-false}"
             ENABLE_P3="${INPUT_ENABLE_P3:-false}"
             ENABLE_P4="${INPUT_ENABLE_P4:-false}"
+            ENABLE_FCM="${INPUT_ENABLE_FCM:-false}"
             echo "Mode: Manual Verification Build (No release will be published)"
           fi
 
-          echo "Feature Gates: P0=${ENABLE_P0} P3=${ENABLE_P3} P4=${ENABLE_P4}"
+          echo "Feature Gates: P0=${ENABLE_P0} P3=${ENABLE_P3} P4=${ENABLE_P4} FCM=${ENABLE_FCM}"
 
           TITLE="TW Market Ledger ${TAG}"
 
@@ -82,6 +89,27 @@ jobs:
           echo "enable_p0=${ENABLE_P0}" >> "$GITHUB_OUTPUT"
           echo "enable_p3=${ENABLE_P3}" >> "$GITHUB_OUTPUT"
           echo "enable_p4=${ENABLE_P4}" >> "$GITHUB_OUTPUT"
+          echo "enable_fcm=${ENABLE_FCM}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure Firebase Google Services
+        id: google_services
+        env:
+          ENABLE_FCM: ${{ steps.version_check.outputs.enable_fcm }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ "${ENABLE_FCM}" = "true" ]; then
+            if [ -z "${GOOGLE_SERVICES_JSON_BASE64}" ]; then
+              echo "::error::enable_fcm=true but secret GOOGLE_SERVICES_JSON_BASE64 is empty or not configured!"
+              exit 1
+            fi
+            echo "==> Decoding GOOGLE_SERVICES_JSON_BASE64 into app/google-services.json..."
+            echo "${GOOGLE_SERVICES_JSON_BASE64}" | base64 -d > app/google-services.json
+            chmod 600 app/google-services.json
+            echo "google_services_configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "==> FCM disabled for this build. google-services.json will not be injected."
+            echo "google_services_configured=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Decode Android Keystore
         id: keystore
@@ -214,11 +242,15 @@ jobs:
             --title "${TITLE}" \
             --notes "Production release of TW Market Ledger ${TAG_NAME}. Digitally signed and configured for production API (${TITLE})."
 
-      - name: Cleanup Keystore Material
+      - name: Cleanup Secrets and Sensitive Material
         if: always()
         run: |
           if [ -n "${{ steps.keystore.outputs.keystore_path }}" ] && [ -f "${{ steps.keystore.outputs.keystore_path }}" ]; then
             shred -u "${{ steps.keystore.outputs.keystore_path }}" 2>/dev/null || rm -f "${{ steps.keystore.outputs.keystore_path }}"
             echo "Temporary keystore securely wiped."
+          fi
+          if [ -f "app/google-services.json" ]; then
+            shred -u "app/google-services.json" 2>/dev/null || rm -f "app/google-services.json"
+            echo "Temporary google-services.json securely wiped."
           fi
           rm -f /tmp/apksigner_output.txt
