@@ -14,5 +14,9 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 }
-dependencies { implementation("androidx.compose.material3:material3:1.3.2") }
+dependencies {
+    implementation(project(":core-model"))
+    implementation("androidx.compose.material3:material3:1.3.2")
+    testImplementation("junit:junit:4.13.2")
+}
 

@@ -410,5 +410,33 @@ class RealtimeNetworkTest {
         assertEquals("TWSE:2330", quote.compositeKey)
         assertEquals("950.00", quote.lastPrice)
         assertEquals(RealtimeDataStatus.LIVE, quote.dataStatus)
+        assertTrue(quote.bidPrices.isEmpty())
+        assertTrue(quote.bidVolumes.isEmpty())
+        assertTrue(quote.askPrices.isEmpty())
+        assertTrue(quote.askVolumes.isEmpty())
+    }
+
+    @Test
+    fun testRealtimeQuoteBidAskParsing() {
+        val client = RealtimeQuoteClient(OkHttpClient(), "ws://localhost:8080/test/ws")
+        // Use reflection or invoke parseQuoteMap indirectly through message
+        val quoteWithBidAsk = RealtimeQuote(
+            securityId = "sec_2330",
+            marketId = "TWSE",
+            code = "2330",
+            exchangeTimestamp = "2026-08-13T10:00:00Z",
+            receivedAt = "2026-08-13T10:00:00.100Z",
+            lastPrice = "950.00",
+            bidPrices = listOf("949.00", "948.00"),
+            bidVolumes = listOf(10, 20),
+            askPrices = listOf("951.00", "952.00"),
+            askVolumes = listOf(15, 25),
+            dataStatus = RealtimeDataStatus.LIVE
+        )
+        assertEquals(2, quoteWithBidAsk.bidPrices.size)
+        assertEquals("949.00", quoteWithBidAsk.bidPrices[0])
+        assertEquals(10, quoteWithBidAsk.bidVolumes[0])
+        assertEquals("951.00", quoteWithBidAsk.askPrices[0])
+        assertEquals(15, quoteWithBidAsk.askVolumes[0])
     }
 }

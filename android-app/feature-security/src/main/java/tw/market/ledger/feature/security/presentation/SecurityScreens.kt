@@ -44,6 +44,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tw.market.ledger.model.MarketCode
 import tw.market.ledger.model.Security
+import tw.market.ledger.ui.OrderBookMapper
+import tw.market.ledger.ui.OrderBookSection
+import java.math.BigDecimal
 import tw.market.ledger.model.Candle
 import tw.market.ledger.model.ChartRange
 import tw.market.ledger.model.PriceBasis
@@ -283,6 +286,20 @@ fun SecurityDetailScreen(state: SecurityDetailUiState, realtimeQuote: RealtimeQu
             }
             HorizontalDivider()
         }
+        val orderBookModel = realtimeQuote?.let { q ->
+            val refPrice = q.previousClose?.toBigDecimalOrNull()
+                ?: q.lastPrice.toBigDecimalOrNull()
+            OrderBookMapper.map(
+                bidPrices = q.bidPrices,
+                bidVolumes = q.bidVolumes,
+                askPrices = q.askPrices,
+                askVolumes = q.askVolumes,
+                status = q.dataStatus,
+                referencePrice = refPrice,
+            )
+        }
+        OrderBookSection(uiModel = orderBookModel)
+        HorizontalDivider()
         when (state) {
             SecurityDetailUiState.Loading -> CircularProgressIndicator()
             is SecurityDetailUiState.Error -> StateMessage("載入失敗：${state.message}")
