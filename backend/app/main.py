@@ -119,8 +119,27 @@ async def lifespan(app: FastAPI):
         await alert_subscription_policy.start()
     app.state.realtime_alert_subscription_policy = alert_subscription_policy
 
+    # Push Outbox Background Dispatcher
+    push_dispatcher = None
+    from app.adapters.fcm_push import FcmPushProvider
+    from app.services.push_notifications import PushOutboxDispatcher
+
+    push_provider = FcmPushProvider(settings)
+    if settings.fcm_enabled and push_provider.configured:
+        push_dispatcher = PushOutboxDispatcher(
+            session_factory=app.state.session_factory,
+            provider=push_provider,
+            interval_seconds=settings.fcm_dispatch_interval_seconds,
+            batch_size=settings.fcm_dispatch_batch_size,
+            max_retries=settings.fcm_max_retries,
+        )
+        await push_dispatcher.start()
+    app.state.push_dispatcher = push_dispatcher
+
     yield
 
+    if push_dispatcher is not None:
+        await push_dispatcher.stop()
     if alert_subscription_policy is not None:
         await alert_subscription_policy.stop()
     await manager.stop()

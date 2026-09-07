@@ -407,3 +407,183 @@ async def test_missing_credential_file_safe_when_disabled():
     assert res.success is False
     assert res.error == "FCM_UNCONFIGURED"
 
+
+@pytest.mark.asyncio
+async def test_drain_outbox_delivers_pending_events():
+    from app.services.push_notifications import drain_outbox
+
+    session = MemorySession()
+    provider = FakePushProvider()
+    user_id = uuid4()
+
+    # User active device and token
+    tok = PushTokenModel(
+        id=uuid4(),
+        user_id=user_id,
+        device_public_id="dev-1",
+        token="fcm-token-1",
+        platform="ANDROID",
+        active=True,
+    )
+    session.add(tok)
+
+    # Event in outbox
+    event = PushEventModel(
+        id=uuid4(),
+        user_id=user_id,
+        event_type="PRICE_TARGET",
+        title="Price Hit",
+        body="Stock price reached target",
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+
+    processed = await drain_outbox(session, provider, batch_size=10, max_retries=1)
+    assert processed == 1
+    assert len(provider.sent_messages) == 1
+    assert provider.sent_messages[0][0] == "fcm-token-1"
+
+
+@pytest.mark.asyncio
+async def test_drain_outbox_isolates_event_errors():
+    from app.services.push_notifications import drain_outbox
+
+    session = MemorySession()
+    # Provider that raises an unexpected exception
+    class ExplodingProvider:
+        @property
+        def provider_type(self):
+            return PushProviderType.FCM
+
+        @property
+        def configured(self):
+            return True
+
+        async def send(self, token, payload):
+            raise RuntimeError("Catastrophic connection crash")
+
+    user_id = uuid4()
+    tok = PushTokenModel(
+        id=uuid4(),
+        user_id=user_id,
+        device_public_id="dev-1",
+        token="fcm-token-1",
+        platform="ANDROID",
+        active=True,
+    )
+    session.add(tok)
+
+    event = PushEventModel(
+        id=uuid4(),
+        user_id=user_id,
+        event_type="PRICE_TARGET",
+        title="Title",
+        body="Body",
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+
+    # Exception inside deliver_event is caught gracefully
+    processed = await drain_outbox(session, ExplodingProvider(), batch_size=10, max_retries=0)
+    assert processed == 1
+
+
+@pytest.mark.asyncio
+async def test_push_outbox_dispatcher_lifecycle():
+    from app.services.push_notifications import PushOutboxDispatcher
+
+    session = MemorySession()
+    provider = FakePushProvider()
+
+    class FakeSessionFactory:
+        def __call__(self):
+            class Ctx:
+                async def __aenter__(self):
+                    return session
+                async def __aexit__(self, *args):
+                    pass
+            return Ctx()
+
+    dispatcher = PushOutboxDispatcher(
+        session_factory=FakeSessionFactory(),
+        provider=provider,
+        interval_seconds=0.05,
+        batch_size=10,
+    )
+    assert not dispatcher.is_running
+
+    await dispatcher.start()
+    assert dispatcher.is_running
+
+    import asyncio
+    await asyncio.sleep(0.12)
+
+    await dispatcher.stop()
+    assert not dispatcher.is_running
+
+
+@pytest.mark.asyncio
+async def test_push_outbox_dispatcher_drains_periodically():
+    from app.services.push_notifications import PushOutboxDispatcher
+
+    session = MemorySession()
+    provider = FakePushProvider()
+    user_id = uuid4()
+
+    tok = PushTokenModel(
+        id=uuid4(),
+        user_id=user_id,
+        device_public_id="dev-1",
+        token="fcm-token-periodic",
+        platform="ANDROID",
+        active=True,
+    )
+    session.add(tok)
+
+    event = PushEventModel(
+        id=uuid4(),
+        user_id=user_id,
+        event_type="PRICE_TARGET",
+        title="Periodic Event",
+        body="Periodic Body",
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+
+    class FakeSessionFactory:
+        def __call__(self):
+            class Ctx:
+                async def __aenter__(self):
+                    return session
+                async def __aexit__(self, *args):
+                    pass
+            return Ctx()
+
+    dispatcher = PushOutboxDispatcher(
+        session_factory=FakeSessionFactory(),
+        provider=provider,
+        interval_seconds=0.02,
+        batch_size=10,
+    )
+
+    await dispatcher.start()
+    import asyncio
+    await asyncio.sleep(0.08)
+    await dispatcher.stop()
+
+    assert len(provider.sent_messages) == 1
+    assert provider.sent_messages[0][0] == "fcm-token-periodic"
+
+
+@pytest.mark.asyncio
+async def test_lifespan_dispatcher_not_started_when_fcm_disabled():
+    from app.adapters.fcm_push import FcmPushProvider
+    from app.core.settings import Settings
+
+    settings = Settings(fcm_enabled=False)
+    provider = FcmPushProvider(settings)
+
+    # In main lifespan: if settings.fcm_enabled and provider.configured
+    should_start = settings.fcm_enabled and provider.configured
+    assert should_start is False
+

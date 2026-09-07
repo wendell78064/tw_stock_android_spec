@@ -1,9 +1,11 @@
+import asyncio
 from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+from sqlalchemy import exists, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.errors import AppError
 from app.domain.push import (
@@ -13,6 +15,8 @@ from app.domain.push import (
 )
 from app.repositories.models import UserDeviceModel
 from app.repositories.push_models import PushDeliveryModel, PushEventModel, PushTokenModel
+
+logger = structlog.get_logger()
 
 
 class PushNotificationProvider(Protocol):
@@ -233,3 +237,118 @@ class PushNotificationService:
                 await asyncio.sleep(2 ** attempt)
             results.append(result)
         return results
+
+
+async def drain_outbox(
+    session: AsyncSession,
+    provider: PushNotificationProvider,
+    batch_size: int = 50,
+    max_retries: int = 3,
+) -> int:
+    """Drain pending push events safely using row-level locking.
+
+    Events with active un-delivered rows are locked with FOR UPDATE SKIP LOCKED
+    to avoid race conditions across concurrent workers or CLI executions.
+    """
+    stmt = (
+        select(PushEventModel)
+        .where(
+            PushEventModel.user_id.is_not(None),
+            ~exists(
+                select(PushDeliveryModel.id).where(
+                    PushDeliveryModel.event_id == PushEventModel.id
+                )
+            ),
+        )
+        .order_by(PushEventModel.created_at)
+        .limit(batch_size)
+        .with_for_update(skip_locked=True)
+    )
+    events = (await session.scalars(stmt)).all()
+    if not events:
+        return 0
+
+    service = PushNotificationService(session, provider)
+    processed = 0
+    for event in events:
+        try:
+            await service.deliver_event(event, max_retries=max_retries)
+            processed += 1
+        except Exception as exc:
+            logger.error(
+                "push_outbox_event_dispatch_failed",
+                event_id=str(event.id),
+                error=str(exc),
+            )
+    return processed
+
+
+class PushOutboxDispatcher:
+    """Background outbox dispatcher task owned by application lifespan."""
+
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        provider: PushNotificationProvider,
+        interval_seconds: float = 3.0,
+        batch_size: int = 50,
+        max_retries: int = 3,
+    ) -> None:
+        self.session_factory = session_factory
+        self.provider = provider
+        self.interval_seconds = interval_seconds
+        self.batch_size = batch_size
+        self.max_retries = max_retries
+        self._task: asyncio.Task | None = None
+        self._running = False
+        self._logger = logger
+
+    @property
+    def is_running(self) -> bool:
+        return self._running and self._task is not None and not self._task.done()
+
+    async def start(self) -> None:
+        if self._running:
+            return
+        self._running = True
+        self._task = asyncio.create_task(self._run_loop(), name="push-outbox-dispatcher")
+        self._logger.info(
+            "push_outbox_dispatcher_started",
+            interval_seconds=self.interval_seconds,
+            batch_size=self.batch_size,
+        )
+
+    async def stop(self) -> None:
+        if not self._running:
+            return
+        self._running = False
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+        self._logger.info("push_outbox_dispatcher_stopped")
+
+    async def _run_loop(self) -> None:
+        while self._running:
+            try:
+                async with self.session_factory() as session:
+                    processed = await drain_outbox(
+                        session=session,
+                        provider=self.provider,
+                        batch_size=self.batch_size,
+                        max_retries=self.max_retries,
+                    )
+                    if processed > 0:
+                        self._logger.info("push_outbox_drained_batch", count=processed)
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                self._logger.error("push_outbox_dispatcher_iteration_error", error=str(exc))
+
+            try:
+                await asyncio.sleep(self.interval_seconds)
+            except asyncio.CancelledError:
+                break
