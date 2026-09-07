@@ -792,3 +792,30 @@ class UserSettingModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DataQualityAnomalyModel(Base):
+    __tablename__ = "data_quality_anomalies"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key", name="uq_data_quality_anomalies_dedupe_key"),
+        Index("ix_data_quality_anomalies_status", "status"),
+        Index("ix_data_quality_anomalies_target_date", "target_date"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    dedupe_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    anomaly_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    dataset: Mapped[str] = mapped_column(String(64), nullable=False)
+    scope_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_date: Mapped[date] = mapped_column(Date, nullable=False)
+    severity: Mapped[str] = mapped_column(String(24), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="ACTIVE")
+    occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
