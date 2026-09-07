@@ -189,11 +189,9 @@ def get_ai_provider(
 def get_push_provider(
     settings: Annotated[Settings, Depends(get_settings)],
 ):
-    from app.services.push_notifications import FakePushProvider, UnconfiguredPushProvider
+    from app.adapters.fcm_push import FcmPushProvider
 
-    if settings.app_env.lower() in {"development", "test", "ci"}:
-        return FakePushProvider()
-    return UnconfiguredPushProvider()
+    return FcmPushProvider(settings)
 
 
 ai_provider = get_ai_provider

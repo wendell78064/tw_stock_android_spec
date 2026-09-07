@@ -5,12 +5,14 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import AppError
 from app.domain.push import (
     PushDeliveryResult,
     PushNotificationPayload,
     PushProviderType,
 )
-from app.repositories.models import UserSettingModel
+from app.repositories.models import UserDeviceModel
+from app.repositories.push_models import PushDeliveryModel, PushEventModel, PushTokenModel
 
 
 class PushNotificationProvider(Protocol):
@@ -94,7 +96,6 @@ class PushNotificationService:
         self.session = session
         self.provider = provider
         self.redis = redis_client
-        self._local_dedup_set: set[str] = set()
 
     async def register_token(
         self,
@@ -103,27 +104,39 @@ class PushNotificationService:
         token: str,
         platform: str = "ANDROID",
     ) -> None:
-        stmt = select(UserSettingModel).where(
-            UserSettingModel.user_id == user_id,
-            UserSettingModel.key == f"push_token:{device_public_id}",
-            UserSettingModel.deleted_at.is_(None),
-        )
-        setting = (await self.session.scalars(stmt)).first()
+        device = await self.session.scalar(select(UserDeviceModel).where(
+            UserDeviceModel.user_id == user_id,
+            UserDeviceModel.device_public_id == device_public_id,
+            UserDeviceModel.revoked_at.is_(None),
+        ).with_for_update())
+        if device is None:
+            raise AppError("DEVICE_NOT_OWNED", "Register an owned active device first", 403)
+        existing = await self.session.scalar(select(PushTokenModel).where(
+            PushTokenModel.token == token))
+        if existing and (existing.user_id != user_id or
+                         existing.device_public_id != device_public_id):
+            raise AppError("TOKEN_CONFLICT", "Token belongs to another installation", 409)
+        setting = await self.session.scalar(select(PushTokenModel).where(
+            PushTokenModel.user_id == user_id,
+            PushTokenModel.device_public_id == device_public_id,
+        ))
         now_utc = datetime.now(UTC)
 
         if setting:
-            setting.value = {"token": token, "platform": platform, "active": True}
+            setting.token = token
+            setting.platform = platform
+            setting.active = True
             setting.updated_at = now_utc
-            setting.version += 1
+            setting.last_seen_at = now_utc
         else:
-            new_setting = UserSettingModel(
+            new_setting = PushTokenModel(
                 id=uuid4(),
                 user_id=user_id,
-                key=f"push_token:{device_public_id}",
-                value={"token": token, "platform": platform, "active": True},
+                device_public_id=device_public_id,
+                token=token, platform=platform, active=True,
                 created_at=now_utc,
                 updated_at=now_utc,
-                version=1,
+                last_seen_at=now_utc,
             )
             self.session.add(new_setting)
         await self.session.commit()
@@ -131,15 +144,14 @@ class PushNotificationService:
     async def unregister_token(
         self, user_id: UUID, device_public_id: str
     ) -> None:
-        stmt = select(UserSettingModel).where(
-            UserSettingModel.user_id == user_id,
-            UserSettingModel.key == f"push_token:{device_public_id}",
-            UserSettingModel.deleted_at.is_(None),
+        stmt = select(PushTokenModel).where(
+            PushTokenModel.user_id == user_id,
+            PushTokenModel.device_public_id == device_public_id,
         )
         setting = (await self.session.scalars(stmt)).first()
         if setting:
-            setting.value = {"token": None, "active": False}
-            setting.deleted_at = datetime.now(UTC)
+            setting.active = False
+            setting.updated_at = datetime.now(UTC)
             await self.session.commit()
 
     async def dispatch_alert_event(
@@ -150,52 +162,74 @@ class PushNotificationService:
         security_code: str,
         message: str,
     ) -> list[PushDeliveryResult]:
-        # 1. Deduplication check per event ID
-        dedup_key = f"push_dedup:{event_id}"
-        if self.redis:
-            try:
-                is_new = await self.redis.set(dedup_key, "1", nx=True, ex=86400)
-                if not is_new:
-                    return []
-            except Exception:
-                if str(event_id) in self._local_dedup_set:
-                    return []
-                self._local_dedup_set.add(str(event_id))
-        else:
-            if str(event_id) in self._local_dedup_set:
-                return []
-            self._local_dedup_set.add(str(event_id))
-
-        # 2. Lookup active user tokens from settings
-        stmt = select(UserSettingModel).where(
-            UserSettingModel.user_id == user_id,
-            UserSettingModel.deleted_at.is_(None),
-        )
-        settings = (await self.session.scalars(stmt)).all()
-        token_entries = []
-        for s in settings:
-            if (
-                s.key.startswith("push_token:")
-                and isinstance(s.value, dict)
-                and s.value.get("active")
-                and s.value.get("token")
-            ):
-                token_entries.append(s.value["token"])
-
-        if not token_entries:
+        existing = await self.session.get(PushEventModel, event_id)
+        if existing:
             return []
+        event = PushEventModel(id=event_id, user_id=user_id, event_type=alert_type[:64],
+                               title="TW Market Ledger 提醒",
+                               body="有新的提醒，請開啟通知中心查看。",
+                               created_at=datetime.now(UTC))
+        self.session.add(event)
+        await self.session.commit()
+        return await self.deliver_event(event)
 
-        payload = PushNotificationPayload(
-            event_id=str(event_id),
-            alert_type=alert_type,
-            security_code=security_code,
-            title=f"【台股警示】{security_code} {alert_type}",
-            body=message,
-        )
+    async def deliver_event(self, event: PushEventModel, max_retries: int = 3):
+        """One bounded dispatch. Row locks serialize concurrent dispatchers.
 
+        SENDING is persisted before I/O. An interrupted/ambiguous attempt is not replayed
+        automatically, since FCM cannot provide exactly-once delivery.
+        """
+        if event.user_id is None:
+            return []  # Monitoring recipient routing must be explicitly assigned.
+        await self.session.scalar(select(PushEventModel).where(
+            PushEventModel.id == event.id).with_for_update())
+        tokens = (await self.session.scalars(select(PushTokenModel).where(
+            PushTokenModel.user_id == event.user_id, PushTokenModel.active.is_(True)
+        ))).all()
+        pending = []
+        for token in tokens:
+            delivery = await self.session.scalar(select(PushDeliveryModel).where(
+                PushDeliveryModel.event_id == event.id, PushDeliveryModel.token_id == token.id))
+            if delivery is not None:
+                continue
+            delivery = PushDeliveryModel(id=uuid4(), event_id=event.id, token_id=token.id,
+                                         status="PENDING", attempts=0)
+            self.session.add(delivery)
+            pending.append((token, delivery))
+        await self.session.commit()
         results = []
-        for tok in token_entries:
-            res = await self.provider.send(tok, payload)
-            results.append(res)
-
+        for token, delivery in pending:
+            if not self.provider.configured:
+                delivery.status = "DISABLED"
+                await self.session.commit()
+                results.append(PushDeliveryResult(False, self.provider.provider_type.value,
+                                                  error="DISABLED", attempts=0))
+                continue
+            payload = PushNotificationPayload(str(event.id), event.event_type, "",
+                                              event.title, event.body)
+            for attempt in range(min(max(max_retries, 0), 5) + 1):
+                delivery.status = "SENDING"
+                delivery.attempts += 1
+                delivery.last_attempt_at = datetime.now(UTC)
+                await self.session.commit()
+                try:
+                    result = await self.provider.send(token.token, payload)
+                except Exception:
+                    result = PushDeliveryResult(False, self.provider.provider_type.value,
+                                                error="PROVIDER_ERROR")
+                delivery.error = result.error
+                delivery.message_id = result.message_id
+                if result.success:
+                    delivery.status = "SENT"
+                elif result.invalid_token:
+                    delivery.status = "INVALID_TOKEN"
+                    token.active = False
+                else:
+                    delivery.status = "FAILED"
+                await self.session.commit()
+                if result.success or not result.retryable or attempt == max_retries:
+                    break
+                import asyncio
+                await asyncio.sleep(2 ** attempt)
+            results.append(result)
         return results

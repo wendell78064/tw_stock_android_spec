@@ -6,6 +6,10 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "tw.market.ledger"
     compileSdk = 35
@@ -90,6 +94,7 @@ android {
 }
 
 dependencies {
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
     implementation(project(":core-ui"))
     implementation(project(":core-network"))
     implementation(project(":core-database"))

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.weekend_calendar import WeekendOnlyCalendar
+from app.core.settings import get_settings
 from app.domain.audit import (
     AuditStatus,
     DailyDataAuditReport,
@@ -19,6 +20,7 @@ from app.domain.monitoring import (
     NotificationEvent,
 )
 from app.repositories.models import DataQualityAnomalyModel, IngestionRunModel
+from app.repositories.push_models import PushEventModel
 from app.services.data_quality_audit import DataQualityAuditService
 
 # Default cooldown period: 24 hours between duplicate notifications unless severity escalates
@@ -230,6 +232,20 @@ class DataQualityMonitoringService:
                     )
                 )
 
+        # Persist only canonical cooldown-approved events, atomically with anomaly state.
+        # No provider calls in the Monitoring transaction.
+        for notification in notifications:
+            self.session.add(PushEventModel(
+                id=notification.event_id,
+                user_id=get_settings().fcm_monitoring_user_id,
+                event_type=notification.anomaly_type[:64],
+                title="TW Market Ledger 資料品質通知",
+                body=(
+                    f"{notification.severity.value}: "
+                    f"{notification.anomaly_type}. 請查看監測結果。"
+                ),
+                created_at=now_utc,
+            ))
         await self.session.commit()
 
         active_count = len(detected_dedupe_keys)

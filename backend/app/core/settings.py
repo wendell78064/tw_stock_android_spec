@@ -1,5 +1,6 @@
 from functools import lru_cache
 from secrets import token_urlsafe
+from uuid import UUID
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +24,11 @@ class Settings(BaseSettings):
     shioaji_simulation: bool = False
     p1_alert_realtime_enabled: bool = False
     realtime_broker_subscription_budget: int | None = Field(default=None, gt=0)
+    fcm_enabled: bool = False
+    fcm_project_id: str | None = None
+    fcm_credentials_file: str | None = None
+    fcm_max_retries: int = Field(default=3, ge=0, le=5)
+    fcm_monitoring_user_id: UUID | None = None
 
     @field_validator("realtime_broker_subscription_budget", mode="before")
     @classmethod

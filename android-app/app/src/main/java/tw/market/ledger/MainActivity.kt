@@ -54,6 +54,7 @@ class MainActivity : FragmentActivity() {
 
     @Inject lateinit var appLockManager: AppLockManager
     @Inject lateinit var appPrefs: AppPreferences
+    @Inject lateinit var pushMessaging: PushMessaging
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,6 +84,7 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         appLockManager.onAppForegrounded()
+        pushMessaging.refresh()
     }
 
     override fun onStop() {

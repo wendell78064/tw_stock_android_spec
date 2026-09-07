@@ -23,3 +23,7 @@ class PushDeliveryResult:
     provider: str
     message_id: str | None = None
     error: str | None = None
+    retryable: bool = False
+    invalid_token: bool = False
+    attempts: int = 1
+

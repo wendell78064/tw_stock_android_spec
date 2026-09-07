@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import uuid4
 
 from sqlalchemy import delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,7 @@ from app.repositories.models import (
     MarketModel,
     SecurityModel,
 )
+from app.repositories.push_models import PushEventModel
 
 
 class SqlAlertRepository:
@@ -269,6 +271,7 @@ class SqlAlertRepository:
     async def add_event(self, rule, security_id, trade_date, occurrence, fingerprint, eligible):
         now = datetime.now(UTC)
         row = AlertEventModel(
+            id=uuid4(),
             alert_rule_id=rule.id,
             security_id=security_id,
             triggered_at=now,
@@ -285,6 +288,13 @@ class SqlAlertRepository:
             created_at=now,
         )
         self.session.add(row)
+        if eligible:
+            persisted_rule = await self.session.get(AlertRuleModel, rule.id)
+            self.session.add(PushEventModel(
+                id=row.id, user_id=persisted_rule.user_id if persisted_rule else None,
+                event_type=str(occurrence.event_type)[:64], title="TW Market Ledger 提醒",
+                body="有新的提醒，請開啟通知中心查看。", created_at=now,
+            ))
         return row
 
     async def flush(self):

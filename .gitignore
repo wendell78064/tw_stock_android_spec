@@ -16,3 +16,6 @@ backend/.venv/
 *.keystore
 *.p12
 *.pepk
+# Firebase configuration is supplied privately for a configured verification build.
+**/google-services.json
+**/*service-account*.json

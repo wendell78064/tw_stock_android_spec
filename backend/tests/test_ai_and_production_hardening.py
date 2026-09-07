@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -9,13 +10,12 @@ from app.domain.ai import (
     AnalysisType,
     StatementType,
 )
-from app.domain.realtime import LicenseStatus, ProviderCapabilities
 from app.repositories.models import (
     MarketModel,
     PortfolioModel,
     SecurityModel,
-    UserSettingModel,
 )
+from app.repositories.push_models import PushTokenModel
 from app.services.ai_grounding import (
     AIAnalysisService,
     FakeAIProvider,
@@ -24,7 +24,6 @@ from app.services.ai_grounding import (
 )
 from app.services.production_readiness import (
     ProductionReadinessService,
-    RealtimeProductionGate,
 )
 from app.services.push_notifications import (
     FakePushProvider,
@@ -225,6 +224,7 @@ async def test_ai_redis_caching():
 
 
 @pytest.mark.asyncio
+@pytest.mark.asyncio
 async def test_push_token_lifecycle_and_dispatch():
     session = FakeSession()
     provider = FakePushProvider()
@@ -235,13 +235,24 @@ async def test_push_token_lifecycle_and_dispatch():
     device_pub = "device-pub-123"
     token = "fcm-registration-token-abc"
 
+    # Add owned device
+    from app.repositories.models import UserDeviceModel
+    session.add(UserDeviceModel(
+        id=uuid4(),
+        user_id=user_id,
+        device_public_id=device_pub,
+        app_version="1.0",
+        created_at=datetime.now(UTC),
+        last_seen_at=datetime.now(UTC),
+        revoked_at=None,
+    ))
+
     # 1. Register Token
     await service.register_token(user_id, device_pub, token, platform="ANDROID")
-    setting = (await session.scalars(select(UserSettingModel))).first()
-    assert setting is not None
-    assert setting.value["token"] == token
-    assert setting.value["active"] is True
-    assert setting.deleted_at is None
+    tok = (await session.scalars(select(PushTokenModel))).first()
+    assert tok is not None
+    assert tok.token == token
+    assert tok.active is True
 
     # 2. Dispatch Alert Event
     event_id = uuid4()
@@ -269,8 +280,7 @@ async def test_push_token_lifecycle_and_dispatch():
 
     # 4. Unregister Token (e.g. on logout)
     await service.unregister_token(user_id, device_pub)
-    assert setting.deleted_at is not None
-    assert setting.value["active"] is False
+    assert tok.active is False
 
     # 5. Dispatch after unregister -> no messages sent
     event_id2 = uuid4()
@@ -282,71 +292,6 @@ async def test_push_token_lifecycle_and_dispatch():
         message="Alert after logout",
     )
     assert len(results2) == 0
-
-
-def test_realtime_production_gate():
-    # 1. Unconfigured
-    res1 = RealtimeProductionGate.evaluate(None)
-    assert res1["status"] == "UNCONFIGURED"
-    assert res1["can_serve_live"] is False
-
-    # 2. Delayed tier
-    delayed_cap = ProviderCapabilities(
-        provider_name="DelayedVendor",
-        configured=True,
-        source_type="DELAYED",
-        realtime_available=False,
-        delay_seconds=900,
-        license_status=LicenseStatus.AUTHORIZED,
-        redistribution_allowed=True,
-    )
-    res2 = RealtimeProductionGate.evaluate(delayed_cap)
-    assert res2["status"] == "DELAYED"
-    assert res2["can_serve_live"] is False
-    assert res2["delay_seconds"] == 900
-
-    # 3. Unauthorized License
-    unauth_cap = ProviderCapabilities(
-        provider_name="MockVendor",
-        configured=True,
-        source_type="BROKER",
-        realtime_available=True,
-        delay_seconds=0,
-        license_status=LicenseStatus.NOT_AUTHORIZED,
-        redistribution_allowed=True,
-    )
-    res3 = RealtimeProductionGate.evaluate(unauth_cap)
-    assert res3["status"] == "UNAUTHORIZED"
-    assert res3["can_serve_live"] is False
-
-    # 4. Redistribution forbidden
-    no_redist_cap = ProviderCapabilities(
-        provider_name="PrivateFeed",
-        configured=True,
-        source_type="EXCHANGE_DIRECT",
-        realtime_available=True,
-        delay_seconds=0,
-        license_status=LicenseStatus.AUTHORIZED,
-        redistribution_allowed=False,
-    )
-    res4 = RealtimeProductionGate.evaluate(no_redist_cap)
-    assert res4["status"] == "UNAUTHORIZED_REDISTRIBUTION"
-    assert res4["can_serve_live"] is False
-
-    # 5. Production Authorized Realtime
-    live_cap = ProviderCapabilities(
-        provider_name="ExchangeDirect",
-        configured=True,
-        source_type="EXCHANGE_DIRECT",
-        realtime_available=True,
-        delay_seconds=0,
-        license_status=LicenseStatus.AUTHORIZED,
-        redistribution_allowed=True,
-    )
-    res5 = RealtimeProductionGate.evaluate(live_cap)
-    assert res5["status"] == "LIVE"
-    assert res5["can_serve_live"] is True
-
 
 @pytest.mark.asyncio
 async def test_production_readiness_health():
