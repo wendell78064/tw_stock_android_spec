@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     fcm_monitoring_user_id: UUID | None = None
     fcm_dispatch_interval_seconds: float = Field(default=3.0, ge=0.5, le=60.0)
     fcm_dispatch_batch_size: int = Field(default=50, ge=1, le=500)
+    fcm_delivery_stale_seconds: float = Field(default=300.0, ge=30.0, le=3600.0)
 
     @field_validator("realtime_broker_subscription_budget", mode="before")
     @classmethod

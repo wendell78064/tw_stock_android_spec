@@ -132,6 +132,7 @@ async def lifespan(app: FastAPI):
             interval_seconds=settings.fcm_dispatch_interval_seconds,
             batch_size=settings.fcm_dispatch_batch_size,
             max_retries=settings.fcm_max_retries,
+            stale_seconds=settings.fcm_delivery_stale_seconds,
         )
         await push_dispatcher.start()
     app.state.push_dispatcher = push_dispatcher

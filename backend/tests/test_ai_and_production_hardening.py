@@ -37,56 +37,69 @@ class FakeSession:
         self.added = []
 
     async def scalar(self, statement):
-        user_id = None
-        target_id = None
-        key = None
-        for crit in getattr(statement, "_where_criteria", ()):
-            col_name = getattr(getattr(crit, "left", None), "name", None)
-            val = getattr(getattr(crit, "right", None), "value", None)
-            if col_name == "user_id":
-                user_id = val
-            elif col_name in ("portfolio_id", "id"):
-                target_id = val
-            elif col_name == "key":
-                key = val
+        res = await self.scalars(statement)
+        return res.first()
 
-        entity = getattr(statement, "column_descriptions", [{}])[0].get("entity")
-        if entity:
-            for (kind, _), value in self.objects.items():
-                if kind is entity:
-                    if user_id is not None and getattr(value, "user_id", None) != user_id:
-                        continue
-                    if target_id is not None and getattr(value, "id", None) != target_id:
-                        continue
-                    if key is not None and getattr(value, "key", None) != key:
-                        continue
-                    return value
-        return None
+    async def scalars(self, stmt):
+        entity = stmt.column_descriptions[0].get("entity") if stmt.column_descriptions else None
+        if not entity:
+            return SimpleNamespace(all=lambda: [], first=lambda: None)
 
-    async def scalars(self, statement):
-        entity = statement.column_descriptions[0].get("entity")
-        user_id = None
-        portfolio_id = None
-        key = None
-        for crit in getattr(statement, "_where_criteria", ()):
-            col_name = getattr(getattr(crit, "left", None), "name", None)
-            val = getattr(getattr(crit, "right", None), "value", None)
-            if col_name == "user_id":
-                user_id = val
-            elif col_name == "portfolio_id":
-                portfolio_id = val
-            elif col_name == "key":
-                key = val
+        matched = []
+        for (m, _), obj in self.objects.items():
+            if m is not entity:
+                continue
+            matches = True
 
-        values = [
-            value
-            for (kind, _), value in self.objects.items()
-            if kind is entity
-            and (user_id is None or getattr(value, "user_id", None) == user_id)
-            and (portfolio_id is None or getattr(value, "portfolio_id", None) == portfolio_id)
-            and (key is None or getattr(value, "key", None) == key)
-        ]
-        return SimpleNamespace(all=lambda: values, first=lambda: values[0] if values else None)
+            def check_crit(target_obj, c):
+                if hasattr(c, "left") and hasattr(c, "right"):
+                    left = getattr(c, "left", None)
+                    right = getattr(c, "right", None)
+                    col_name = getattr(left, "name", None)
+                    val = getattr(right, "value", None)
+                    modifier = getattr(c, "modifier", None)
+
+                    if modifier is not None and str(modifier) == "is_true":
+                        val_col = getattr(target_obj, col_name, None)
+                        return bool(val_col)
+
+                    if col_name and hasattr(target_obj, col_name):
+                        obj_val = getattr(target_obj, col_name)
+                        op_name = getattr(getattr(c, "operator", None), "__name__", "")
+                        right_type = getattr(getattr(c, "right", None), "__class__", None)
+                        right_name = getattr(right_type, "__name__", "")
+                        if right_name == "True_":
+                            return bool(obj_val) is True
+                        if right_name == "False_":
+                            return bool(obj_val) is False
+                        if "lt" in op_name:
+                            return obj_val is not None and val is not None and obj_val < val
+                        if isinstance(val, list | tuple | set):
+                            return obj_val in val
+                        if val is not None:
+                            return obj_val == val
+                        if modifier is not None and "is_not" in str(modifier):
+                            return obj_val is not None
+                    return True
+
+                if hasattr(c, "clauses"):
+                    op_name = getattr(getattr(c, "operator", None), "__name__", "")
+                    if "or" in op_name or getattr(c, "__class__", None).__name__ == "Or":
+                        return any(check_crit(target_obj, sub) for sub in c.clauses)
+                    else:
+                        return all(check_crit(target_obj, sub) for sub in c.clauses)
+                return True
+
+            for crit in getattr(stmt, "_where_criteria", ()):
+                if not check_crit(obj, crit):
+                    matches = False
+                    break
+            if matches:
+                matched.append(obj)
+        limit = getattr(stmt, "_limit", None)
+        if limit is not None:
+            matched = matched[:limit]
+        return SimpleNamespace(all=lambda: matched, first=lambda: matched[0] if matched else None)
 
     async def get(self, model, object_id):
         return self.objects.get((model, object_id))

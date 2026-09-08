@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -14,6 +14,7 @@ from app.repositories.push_models import PushDeliveryModel, PushEventModel, Push
 from app.services.push_notifications import (
     FakePushProvider,
     PushNotificationService,
+    drain_outbox,
 )
 
 
@@ -50,27 +51,56 @@ class MemorySession:
             if m is not entity:
                 continue
             matches = True
+            def check_crit(target_obj, c):
+                # Handle BinaryExpression (col == val, col != val, col < val)
+                if hasattr(c, "left") and hasattr(c, "right"):
+                    left = getattr(c, "left", None)
+                    right = getattr(c, "right", None)
+                    col_name = getattr(left, "name", None)
+                    val = getattr(right, "value", None)
+                    modifier = getattr(c, "modifier", None)
+
+                    if modifier is not None and str(modifier) == "is_true":
+                        val_col = getattr(target_obj, col_name, None)
+                        return bool(val_col)
+
+                    if col_name and hasattr(target_obj, col_name):
+                        obj_val = getattr(target_obj, col_name)
+                        op_name = getattr(getattr(c, "operator", None), "__name__", "")
+                        right_type = getattr(getattr(c, "right", None), "__class__", None)
+                        right_name = getattr(right_type, "__name__", "")
+                        if right_name == "True_":
+                            return bool(obj_val) is True
+                        if right_name == "False_":
+                            return bool(obj_val) is False
+                        if "lt" in op_name:
+                            return obj_val is not None and val is not None and obj_val < val
+                        if isinstance(val, list | tuple | set):
+                            return obj_val in val
+                        if val is not None:
+                            return obj_val == val
+                        if modifier is not None and "is_not" in str(modifier):
+                            return obj_val is not None
+                    return True
+
+                # Handle or_ / and_ BooleanClauseList
+                if hasattr(c, "clauses"):
+                    op_name = getattr(getattr(c, "operator", None), "__name__", "")
+                    if "or" in op_name or getattr(c, "__class__", None).__name__ == "Or":
+                        return any(check_crit(target_obj, sub) for sub in c.clauses)
+                    else:
+                        return all(check_crit(target_obj, sub) for sub in c.clauses)
+                return True
+
             for crit in getattr(stmt, "_where_criteria", ()):
-                left = getattr(crit, "left", None)
-                right = getattr(crit, "right", None)
-                col_name = getattr(left, "name", None)
-                val = getattr(right, "value", None)
-                modifier = getattr(crit, "modifier", None)
-
-                if modifier is not None and str(modifier) == "is_true":
-                    val_col = getattr(obj, col_name, None)
-                    if not bool(val_col):
-                        matches = False
-                        break
-                    continue
-
-                if col_name and hasattr(obj, col_name):
-                    obj_val = getattr(obj, col_name)
-                    if val is not None and obj_val != val:
-                        matches = False
-                        break
+                if not check_crit(obj, crit):
+                    matches = False
+                    break
             if matches:
                 matched.append(obj)
+        limit = getattr(stmt, "_limit", None)
+        if limit is not None:
+            matched = matched[:limit]
         return SimpleNamespace(all=lambda: matched, first=lambda: matched[0] if matched else None)
 
 
@@ -586,4 +616,173 @@ async def test_lifespan_dispatcher_not_started_when_fcm_disabled():
     # In main lifespan: if settings.fcm_enabled and provider.configured
     should_start = settings.fcm_enabled and provider.configured
     assert should_start is False
+
+
+@pytest.mark.asyncio
+async def test_multi_device_event_materialization_and_crash_recovery():
+    """Verify that an event fanning out to multiple active tokens creates all deliveries,
+
+    and a simulated crash mid-processing leaves sibling PENDING deliveries recoverable.
+    """
+    session = MemorySession()
+    provider = FakePushProvider()
+    user_id = uuid4()
+
+    # User with 3 active devices
+    for i in range(1, 4):
+        tok = PushTokenModel(
+            id=uuid4(),
+            user_id=user_id,
+            device_public_id=f"dev-{i}",
+            token=f"fcm-token-{i}",
+            platform="ANDROID",
+            active=True,
+        )
+        session.add(tok)
+
+    # Event in outbox
+    event = PushEventModel(
+        id=uuid4(),
+        user_id=user_id,
+        event_type="PRICE_TARGET",
+        title="Multi-device Alert",
+        body="Alert body",
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+
+    # Step 1: Run drain_outbox with batch_size=1 to simulate worker crashing after 1 delivery
+    processed_1 = await drain_outbox(session, provider, batch_size=1, max_retries=1)
+    assert processed_1 == 1
+
+    # Verify all 3 delivery records were materialized
+    all_deliveries = (await session.scalars(select(PushDeliveryModel))).all()
+    assert len(all_deliveries) == 3
+
+    sent_count = sum(1 for d in all_deliveries if d.status == "SENT")
+    pending_count = sum(1 for d in all_deliveries if d.status == "PENDING")
+    assert sent_count == 1
+    assert pending_count == 2
+
+    # Step 2: Restart/next drain_outbox iteration claims remaining 2 PENDING deliveries
+    processed_2 = await drain_outbox(session, provider, batch_size=10, max_retries=1)
+    assert processed_2 == 2
+
+    # All 3 deliveries are now SENT
+    assert len(provider.sent_messages) == 3
+    for d in all_deliveries:
+        assert d.status == "SENT"
+
+
+@pytest.mark.asyncio
+async def test_stale_sending_recovery_and_fresh_sending_exclusion():
+    """Verify stale SENDING deliveries are re-driven while fresh ones are preserved."""
+    session = MemorySession()
+    provider = FakePushProvider()
+    user_id = uuid4()
+
+    tok1 = PushTokenModel(
+        id=uuid4(),
+        user_id=user_id,
+        device_public_id="dev-1",
+        token="fcm-token-stale",
+        platform="ANDROID",
+        active=True,
+    )
+    tok2 = PushTokenModel(
+        id=uuid4(),
+        user_id=user_id,
+        device_public_id="dev-2",
+        token="fcm-token-fresh",
+        platform="ANDROID",
+        active=True,
+    )
+    session.add(tok1)
+    session.add(tok2)
+
+    event = PushEventModel(
+        id=uuid4(),
+        user_id=user_id,
+        event_type="PRICE_TARGET",
+        title="Title",
+        body="Body",
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+
+    now = datetime.now(UTC)
+
+    # Delivery 1: Stale SENDING (attempted 600s ago)
+    d_stale = PushDeliveryModel(
+        id=uuid4(),
+        event_id=event.id,
+        token_id=tok1.id,
+        status="SENDING",
+        attempts=1,
+        last_attempt_at=now - timedelta(seconds=600),
+    )
+    # Delivery 2: Fresh SENDING (attempted 10s ago)
+    d_fresh = PushDeliveryModel(
+        id=uuid4(),
+        event_id=event.id,
+        token_id=tok2.id,
+        status="SENDING",
+        attempts=1,
+        last_attempt_at=now - timedelta(seconds=10),
+    )
+    session.add(d_stale)
+    session.add(d_fresh)
+
+    # drain_outbox with stale threshold = 300s
+    processed = await drain_outbox(
+        session, provider, batch_size=10, max_retries=1, stale_seconds=300.0
+    )
+
+    # Only the stale delivery should be claimed and processed
+    assert processed == 1
+    assert d_stale.status == "SENT"
+    assert d_fresh.status == "SENDING"  # Fresh SENDING not reclaimed
+    assert len(provider.sent_messages) == 1
+    assert provider.sent_messages[0][0] == "fcm-token-stale"
+
+
+@pytest.mark.asyncio
+async def test_terminal_statuses_never_resent():
+    """Verify SENT, INVALID_TOKEN, and permanent FAILED are terminal and never re-driven."""
+    session = MemorySession()
+    provider = FakePushProvider()
+    user_id = uuid4()
+
+    tok = PushTokenModel(
+        id=uuid4(),
+        user_id=user_id,
+        device_public_id="dev-1",
+        token="fcm-token-term",
+        platform="ANDROID",
+        active=True,
+    )
+    session.add(tok)
+
+    event = PushEventModel(
+        id=uuid4(),
+        user_id=user_id,
+        event_type="PRICE_TARGET",
+        title="Title",
+        body="Body",
+        created_at=datetime.now(UTC),
+    )
+    session.add(event)
+
+    d_sent = PushDeliveryModel(
+        id=uuid4(),
+        event_id=event.id,
+        token_id=tok.id,
+        status="SENT",
+        attempts=1,
+    )
+    session.add(d_sent)
+
+    processed = await drain_outbox(session, provider, batch_size=10)
+    assert processed == 0
+    assert len(provider.sent_messages) == 0
 

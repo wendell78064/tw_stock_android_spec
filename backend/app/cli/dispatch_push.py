@@ -19,6 +19,7 @@ async def run():
                 provider=FcmPushProvider(settings),
                 batch_size=settings.fcm_dispatch_batch_size,
                 max_retries=settings.fcm_max_retries,
+                stale_seconds=settings.fcm_delivery_stale_seconds,
             )
             print(f"EVENTS_PROCESSED={processed}")
     finally:
