@@ -496,6 +496,7 @@ class DataQualityAuditService:
         duplicates = (await self.session.execute(dup_stmt)).scalar() or 0
 
         # MA240 integrity: check active stocks that have >= 240 historical prices up to target_date
+        # AND actually generated a technical snapshot on target_date (i.e. traded on target_date)
         history_counts_subq = (
             select(
                 DailyPriceModel.security_id,
@@ -508,11 +509,14 @@ class DataQualityAuditService:
 
         eligible_stmt = (
             select(func.count())
-            .select_from(SecurityModel)
+            .select_from(TechnicalSnapshotModel)
+            .join(SecurityModel, TechnicalSnapshotModel.security_id == SecurityModel.id)
             .join(history_counts_subq, SecurityModel.id == history_counts_subq.c.security_id)
             .where(
                 SecurityModel.is_active.is_(True),
                 SecurityModel.security_type == "COMMON_STOCK",
+                TechnicalSnapshotModel.trade_date == target_date,
+                TechnicalSnapshotModel.price_basis == "RAW",
                 history_counts_subq.c.price_count >= 240,
             )
         )
@@ -520,7 +524,7 @@ class DataQualityAuditService:
 
         # If snapshots exist on target_date:
         if snapshots_count > 0:
-            ma240_missing = max(0, min(snapshots_count, ma240_eligible) - ma240_with_val)
+            ma240_missing = max(0, ma240_eligible - ma240_with_val)
             stale_count = 0
             if duplicates > 0 or ma240_missing > 0:
                 status = AuditStatus.FAILED

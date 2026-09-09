@@ -119,6 +119,11 @@ def _create_mock_session_for_audit(
                 mock_result.scalar.return_value = twse_dup
             return mock_result
 
+        # History counts / MA240 eligible check
+        if "price_count" in query_str:
+            mock_result.scalar.return_value = tech_ma240_elig
+            return mock_result
+
         # Daily prices for TWSE or TPEX
         if "daily_prices" in query_str and "markets" in query_str:
             code_val = params.get("code_1") or params.get("code_2") or params.get("code")
@@ -184,15 +189,15 @@ def _create_mock_session_for_audit(
         if "from (select technical_snapshots" in query_str:
             mock_result.scalar.return_value = tech_dup
             return mock_result
+        if "price_count" in query_str:
+            mock_result.scalar.return_value = tech_ma240_elig
+            return mock_result
         if "technical_snapshots" in query_str and "join securities" in query_str:
             mock_result.first.return_value = (tech_snaps, tech_ma240_val)
             mock_result.scalar.return_value = latest_tech_date
             return mock_result
         if "select max(technical_snapshots.trade_date)" in query_str:
             mock_result.scalar.return_value = latest_tech_date
-            return mock_result
-        if "price_count >= :price_count_1" in query_str or "price_count" in query_str:
-            mock_result.scalar.return_value = tech_ma240_elig
             return mock_result
 
         # Industry strength
@@ -467,3 +472,68 @@ def test_print_human_reports_execute_without_error(capsys) -> None:
     out2 = capsys.readouterr().out
     assert "HISTORICAL GAP AUDIT: TWSE" in out2
     assert "No anomalous coverage gaps found" in out2
+
+
+@pytest.mark.asyncio
+async def test_audit_technicals_ma240_excludes_suspended_stocks() -> None:
+    # 1800 active common stocks.
+    # 1045 have >= 240 historical prices.
+    # But 4 of them are suspended on target_date, producing only 1041 snapshots with MA240.
+    # Total snapshots = 1796 (1800 - 4).
+    # Since only 1041 traded mature stocks generated snapshots on target_date,
+    # target-date eligible count is 1041.
+    # ma240_missing must be 0, and status must be COMPLETE!
+    session = _create_mock_session_for_audit(
+        tech_snaps=1796,
+        tech_ma240_val=1041,
+        tech_ma240_elig=1041,
+    )
+    service = DataQualityAuditService(session)
+    report = await service.audit_date(date(2026, 9, 8))
+
+    assert report.technicals.snapshots_count == 1796
+    assert report.technicals.ma240_eligible_count == 1041
+    assert report.technicals.ma240_valid_count == 1041
+    assert report.technicals.ma240_missing_count == 0
+    assert report.technicals.status is AuditStatus.COMPLETE
+    assert report.overall_status is AuditStatus.COMPLETE
+
+
+@pytest.mark.asyncio
+async def test_audit_technicals_ma240_detects_real_missing_failure() -> None:
+    # 1045 mature stocks traded and produced snapshots, but only 1040 have MA240 value.
+    # 5 snapshots are missing MA240 calculation -> must FAIL!
+    session = _create_mock_session_for_audit(
+        tech_snaps=1800,
+        tech_ma240_val=1040,
+        tech_ma240_elig=1045,
+    )
+    service = DataQualityAuditService(session)
+    report = await service.audit_date(date(2026, 9, 8))
+
+    assert report.technicals.snapshots_count == 1800
+    assert report.technicals.ma240_eligible_count == 1045
+    assert report.technicals.ma240_valid_count == 1040
+    assert report.technicals.ma240_missing_count == 5
+    assert report.technicals.status is AuditStatus.FAILED
+    assert report.overall_status is AuditStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_audit_technicals_immature_stocks_not_eligible_for_ma240() -> None:
+    # 1800 snapshots, but only 500 stocks have >= 240 prices.
+    # All 500 have MA240 computed. 1300 new/immature stocks do not.
+    session = _create_mock_session_for_audit(
+        tech_snaps=1800,
+        tech_ma240_val=500,
+        tech_ma240_elig=500,
+    )
+    service = DataQualityAuditService(session)
+    report = await service.audit_date(date(2026, 9, 8))
+
+    assert report.technicals.snapshots_count == 1800
+    assert report.technicals.ma240_eligible_count == 500
+    assert report.technicals.ma240_valid_count == 500
+    assert report.technicals.ma240_missing_count == 0
+    assert report.technicals.status is AuditStatus.COMPLETE
+
