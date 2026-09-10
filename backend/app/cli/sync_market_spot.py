@@ -11,8 +11,26 @@ from app.core.settings import get_settings
 from app.repositories.sql_market_spot import SqlMarketSpotRepository
 from app.services.market_spot_ingestion import DATASETS, MarketSpotIngestionService
 
+LATE_MARKET_SPOT_DATASETS = frozenset(
+    {
+        "MARKET_MARGIN",
+        "SECURITY_MARGIN",
+        "MARKET_LENDING",
+        "SECURITY_LENDING",
+    }
+)
 
-async def run(provider_name: str, start: date, end: date) -> None:
+
+def selected_datasets(only: set[str] | None) -> tuple[str, ...]:
+    return tuple(dataset for dataset in DATASETS if not only or dataset in only)
+
+
+async def run(
+    provider_name: str,
+    start: date,
+    end: date,
+    only: set[str] | None = None,
+) -> None:
     engine = create_async_engine(get_settings().database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     provider = {
@@ -23,7 +41,7 @@ async def run(provider_name: str, start: date, end: date) -> None:
     current = start
     while current <= end:
         if current.weekday() < 5:
-            for dataset in DATASETS:
+            for dataset in selected_datasets(only):
                 try:
                     async with factory() as session:
                         result = await MarketSpotIngestionService(
@@ -52,9 +70,29 @@ def main() -> None:
     parser.add_argument("--date", type=date.fromisoformat)
     parser.add_argument("--start", type=date.fromisoformat)
     parser.add_argument("--end", type=date.fromisoformat)
+    parser.add_argument("--dataset", action="append", choices=tuple(DATASETS))
+    parser.add_argument(
+        "--late",
+        action="store_true",
+        help="Synchronize only late-published margin and securities-lending datasets",
+    )
     args = parser.parse_args()
     target = args.date or date(2026, 8, 7)
-    asyncio.run(run(args.provider, args.start or target, args.end or target))
+    only = (
+        set(args.dataset)
+        if args.dataset
+        else set(LATE_MARKET_SPOT_DATASETS)
+        if args.late
+        else None
+    )
+    asyncio.run(
+        run(
+            args.provider,
+            args.start or target,
+            args.end or target,
+            only,
+        )
+    )
 
 
 if __name__ == "__main__":

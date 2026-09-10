@@ -122,6 +122,11 @@ class SqlSecurityRepository:
         return inserted, updated, inactive
 
     async def _set_industry(self, security_id: UUID, record: SecurityRecord) -> None:
+        await self.session.execute(
+            SecurityIndustryModel.__table__.delete().where(
+                SecurityIndustryModel.security_id == security_id
+            )
+        )
         if record.industry is None:
             return
         industry = await self.session.scalar(
@@ -140,11 +145,6 @@ class SqlSecurityRepository:
             await self.session.flush()
         elif industry.name != record.industry.name:
             industry.name = record.industry.name
-        await self.session.execute(
-            SecurityIndustryModel.__table__.delete().where(
-                SecurityIndustryModel.security_id == security_id
-            )
-        )
         self.session.add(
             SecurityIndustryModel(security_id=security_id, industry_id=industry.id, is_primary=True)
         )
@@ -239,4 +239,3 @@ class SqlSecurityRepository:
             data_status=DataStatus(model.data_status),
             themes=themes or [],
         )
-

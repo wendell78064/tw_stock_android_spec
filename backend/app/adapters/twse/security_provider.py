@@ -30,20 +30,26 @@ TWSE_LENDING_POLICY = ProviderPolicy(
 class TwseSecurityProvider:
     source_code = "TWSE"
     endpoint = "https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+    industry_name_endpoint = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L"
     daily_endpoint = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
 
     def __init__(self, client: httpx.AsyncClient | None = None):
         self.client = client
 
     def map_row(
-        self, row: RawRow, *, as_of: datetime, received_at: datetime
+        self,
+        row: RawRow,
+        *,
+        as_of: datetime,
+        received_at: datetime,
+        industry_name: str | None = None,
     ) -> SecurityRecord | None:
         return make_record(
             market=MarketCode.TWSE,
             code=str(row.get("公司代號", "")),
             name=str(row.get("公司簡稱", "")),
             industry_code=str(row.get("產業別", "")) or None,
-            industry_name=str(row.get("產業別名稱", "")) or None,
+            industry_name=industry_name or str(row.get("產業別名稱", "")) or None,
             listing_date=str(row.get("上市日期", "")) or None,
             source_code=self.source_code,
             as_of=as_of,
@@ -57,11 +63,26 @@ class TwseSecurityProvider:
         try:
             response = await client.get(self.endpoint)
             response.raise_for_status()
+            industry_response = await client.get(self.industry_name_endpoint)
+            industry_response.raise_for_status()
+            industry_names = {
+                str(row.get("公司代號", "")).strip(): str(row.get("產業別", "")).strip()
+                for row in industry_response.json()
+                if str(row.get("公司代號", "")).strip()
+                and str(row.get("產業別", "")).strip()
+            }
             as_of = received_at
             return [
                 record
                 for row in response.json()
-                if (record := self.map_row(row, as_of=as_of, received_at=received_at))
+                if (
+                    record := self.map_row(
+                        row,
+                        as_of=as_of,
+                        received_at=received_at,
+                        industry_name=industry_names.get(str(row.get("公司代號", "")).strip()),
+                    )
+                )
             ]
         finally:
             if close:

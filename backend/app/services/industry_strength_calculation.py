@@ -189,10 +189,10 @@ class IndustryStrengthCalculationService:
             lp = latest_prices.get(sec_id)
             bp = base_prices.get(sec_id)
 
-            if lp and lp.volume is not None:
+            if lp and lp.close is not None and lp.volume_shares is not None:
                 # Accumulate volume as turnover estimation
                 # if explicit turnover_amount not in daily_prices
-                total_turnover += Decimal(str(lp.close * lp.volume))
+                total_turnover += Decimal(str(lp.close * lp.volume_shares))
                 has_turnover = True
 
             if lp and bp and bp.close and bp.close > 0 and lp.close:
@@ -200,9 +200,12 @@ class IndustryStrengthCalculationService:
                 valid_returns.append((sec_id, ret, lp.close))
 
                 if window == 1:
-                    if lp.change and lp.change > 0:
+                    # DailyPrice has no persisted change field. For the one-day
+                    # window, the canonical direction is the same current/base
+                    # close return used by every other window.
+                    if ret > 0:
                         advancers += 1
-                    elif lp.change and lp.change < 0:
+                    elif ret < 0:
                         decliners += 1
                     else:
                         unchanged += 1

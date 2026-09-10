@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 
 from app.adapters.fake_market_data import FakeMarketDataProvider
@@ -77,3 +78,46 @@ async def test_fake_provider_is_fixed_and_has_quality_metadata() -> None:
     assert all(
         item.as_of.tzinfo is not None and item.source_code.startswith("FAKE_") for item in records
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("provider_type", "master_path", "industry_path", "master_row"),
+    [
+        (
+            TwseSecurityProvider,
+            "/v1/opendata/t187ap03_L",
+            "/v1/opendata/t187ap05_L",
+            {"公司代號": "1234", "公司簡稱": "測試", "產業別": "24"},
+        ),
+        (
+            TpexSecurityProvider,
+            "/openapi/v1/mopsfin_t187ap03_O",
+            "/openapi/v1/mopsfin_t187ap05_O",
+            {
+                "SecuritiesCompanyCode": "1234",
+                "CompanyAbbreviation": "測試",
+                "SecuritiesIndustryCode": "24",
+            },
+        ),
+    ],
+)
+async def test_official_provider_joins_industry_name_by_company_code(
+    provider_type, master_path, industry_path, master_row
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == master_path:
+            return httpx.Response(200, json=[master_row])
+        assert request.url.path == industry_path
+        return httpx.Response(
+            200,
+            json=[{"公司代號": "1234", "產業別": "半導體業"}],
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        records = await provider_type(client).list_securities()
+
+    assert len(records) == 1
+    assert records[0].industry is not None
+    assert records[0].industry.code == "24"
+    assert records[0].industry.name == "半導體業"
