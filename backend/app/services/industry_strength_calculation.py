@@ -346,6 +346,7 @@ class IndustryStrengthCalculationService:
     def _upsert_snapshot(self, item: dict, is_industry: bool) -> tuple[int, int]:
         ind_id = item["taxonomy_id"] if is_industry else None
         theme_id = item["taxonomy_id"] if not is_industry else None
+        calculated_at = datetime.now(UTC)
 
         stmt = select(TaxonomyStrengthSnapshotModel).where(
             TaxonomyStrengthSnapshotModel.trade_date == item["trade_date"],
@@ -392,6 +393,7 @@ class IndustryStrengthCalculationService:
             existing.rank = item["rank"]
             existing.data_status = item["data_status"]
             existing.as_of = item["as_of"]
+            existing.calculated_at = calculated_at
             return 0, 1
         else:
             snapshot = TaxonomyStrengthSnapshotModel(
@@ -430,6 +432,7 @@ class IndustryStrengthCalculationService:
                 algorithm_version=item["algorithm_version"],
                 data_status=item["data_status"],
                 as_of=item["as_of"],
+                calculated_at=calculated_at,
             )
             self.session.add(snapshot)
             return 1, 0
