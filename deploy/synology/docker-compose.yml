@@ -86,6 +86,9 @@ services:
       FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
       FCM_MAX_RETRIES: ${FCM_MAX_RETRIES:-3}
       FCM_MONITORING_USER_ID: ${FCM_MONITORING_USER_ID:-}
+      FCM_DISPATCH_INTERVAL_SECONDS: ${FCM_DISPATCH_INTERVAL_SECONDS:-3.0}
+      FCM_DISPATCH_BATCH_SIZE: ${FCM_DISPATCH_BATCH_SIZE:-50}
+      FCM_DELIVERY_STALE_SECONDS: ${FCM_DELIVERY_STALE_SECONDS:-300}
     volumes:
       - ${TWML_DATA_ROOT:-/volume1/docker/tw-market-ledger}/temp:/app/temp
       - ${TWML_DATA_ROOT:-/volume1/docker/tw-market-ledger}/config:/app/config:ro

@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     def empty_budget_is_unconfigured(cls, value):
         return None if value == "" else value
 
+    @field_validator("fcm_monitoring_user_id", mode="before")
+    @classmethod
+    def empty_monitoring_user_id_is_unset(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @model_validator(mode="after")
     def validate_realtime_capacity(self):
         if (
