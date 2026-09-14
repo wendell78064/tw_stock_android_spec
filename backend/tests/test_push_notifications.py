@@ -429,13 +429,25 @@ async def test_missing_credential_file_safe_when_disabled():
     assert provider.configured is False
 
     health = await provider.health()
-    assert health["status"] == "UNCONFIGURED"
+    assert health["status"] == "DISABLED"
     assert health["configured"] is False
+    assert health["enabled"] is False
 
     # Send attempt fails closed without accessing filesystem or raising exceptions
     res = await provider.send("tok-123", PushNotificationPayload("e1", "ALERT", "2330", "T", "B"))
     assert res.success is False
     assert res.error == "FCM_UNCONFIGURED"
+
+
+@pytest.mark.asyncio
+async def test_fcm_enabled_without_project_or_credential_file_is_unconfigured():
+    settings = Settings(fcm_enabled=True)
+    provider = FcmPushProvider(settings)
+
+    assert provider.configured is False
+    health = await provider.health()
+    assert health["status"] == "UNCONFIGURED"
+    assert health["enabled"] is True
 
 
 @pytest.mark.asyncio
@@ -785,4 +797,3 @@ async def test_terminal_statuses_never_resent():
     processed = await drain_outbox(session, provider, batch_size=10)
     assert processed == 0
     assert len(provider.sent_messages) == 0
-

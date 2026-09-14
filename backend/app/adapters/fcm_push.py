@@ -1,6 +1,7 @@
 """Firebase implementation of the canonical push provider; lazy, fail-closed setup."""
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 from app.core.settings import Settings
@@ -17,11 +18,25 @@ class FcmPushProvider:
 
     @property
     def configured(self) -> bool:
-        return bool(self.settings.fcm_enabled and self.settings.fcm_credentials_file)
+        return self.status == "READY"
+
+    @property
+    def status(self) -> str:
+        if not self.settings.fcm_enabled:
+            return "DISABLED"
+        if not self.settings.fcm_project_id or not self.settings.fcm_credentials_file:
+            return "UNCONFIGURED"
+        if not Path(self.settings.fcm_credentials_file).is_file():
+            return "UNCONFIGURED"
+        return "READY"
 
     async def health(self) -> dict[str, Any]:
-        return {"provider": "FCM", "configured": self.configured,
-                "status": "CONFIGURED" if self.configured else "UNCONFIGURED"}
+        return {
+            "provider": "FCM",
+            "configured": self.configured,
+            "enabled": self.settings.fcm_enabled,
+            "status": self.status,
+        }
 
     async def send(self, device_token: str,
                    payload: PushNotificationPayload) -> PushDeliveryResult:

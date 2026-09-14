@@ -579,6 +579,6 @@ def test_production_startup_lifespan_and_health_with_unconfigured_realtime(monke
         assert "components" in readiness_data
         assert readiness_data["components"]["realtime_provider"]["status"] == "UNCONFIGURED"
         assert readiness_data["components"]["ai_provider"]["status"] == "UNCONFIGURED"
-        assert readiness_data["components"]["push_provider"]["status"] == "UNCONFIGURED"
+        assert readiness_data["components"]["push_provider"]["status"] == "DISABLED"
 
     get_settings.cache_clear()
