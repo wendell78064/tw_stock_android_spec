@@ -41,6 +41,12 @@ jobs:
           cache: gradle
 
       - uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12266719
+          accept-android-sdk-licenses: true
+          packages: |-
+            platform-tools
+            platforms;android-35
 
       - name: Resolve Version and Execution Mode
         id: version_check
