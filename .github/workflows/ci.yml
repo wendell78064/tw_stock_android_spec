@@ -38,9 +38,7 @@ jobs:
         with:
           cmdline-tools-version: 12266719
           accept-android-sdk-licenses: true
-          packages: |-
-            platform-tools
-            platforms;android-35
+          packages: 'platform-tools platforms;android-35'
       - run: ./gradlew --no-daemon openApiValidate openApiGenerate lintDebug testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -67,9 +65,7 @@ jobs:
         with:
           cmdline-tools-version: 12266719
           accept-android-sdk-licenses: true
-          packages: |-
-            platform-tools
-            platforms;android-35
+          packages: 'platform-tools platforms;android-35'
       - name: Enable KVM access
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
